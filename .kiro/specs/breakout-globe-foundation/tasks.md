@@ -8,7 +8,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 7.1_
 
 - [ ] 2. Implement core data models and validation (TDD)
-  - [ ] 2.1 Create Go data models with validation
+  - [-] 2.1 Create Go data models with validation
     - Write tests for LatLng coordinate validation (bounds checking, precision)
     - Implement LatLng struct with validation methods
     - Write tests for Session model creation and validation
