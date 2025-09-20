@@ -54,7 +54,7 @@
     - Add session heartbeat mechanism for active users
     - _Requirements: 1.3, 1.4, 4.4_
 
-  - [ ] 4.2 Implement POI participant tracking
+  - [x] 4.2 Implement POI participant tracking
     - Write tests for Redis set operations for POI participants
     - Implement real-time participant counting using Redis sets
     - Write tests for participant join/leave operations with race condition handling
