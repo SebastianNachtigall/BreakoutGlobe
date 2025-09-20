@@ -61,7 +61,7 @@
     - Add capacity enforcement with atomic operations
     - _Requirements: 3.5, 3.6, 3.7_
 
-  - [ ] 4.3 Create pub/sub system for real-time events
+  - [x] 4.3 Create pub/sub system for real-time events
     - Write tests for Redis pub/sub message publishing and subscription
     - Implement event publishing for avatar movements and POI updates
     - Write tests for message serialization and deserialization
