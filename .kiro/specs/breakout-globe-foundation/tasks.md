@@ -24,22 +24,22 @@
     - Write tests for data transformation between API and frontend models
     - _Requirements: 2.1, 3.2, 5.3_
 
-- [ ] 3. Implement database layer with repository pattern (TDD)
-  - [-] 3.1 Set up database connection and migrations
+- [x] 3. Implement database layer with repository pattern (TDD)
+  - [x] 3.1 Set up database connection and migrations
     - Write tests for database connection handling and error scenarios
     - Implement database connection utilities with connection pooling
     - Create database migration files for sessions, POIs, and poi_participants tables
     - Write tests for migration execution and rollback
     - _Requirements: 6.2, 7.4_
 
-  - [ ] 3.2 Implement session repository
+  - [x] 3.2 Implement session repository
     - Write tests for session creation, retrieval, and expiration
     - Implement SessionRepository interface and concrete implementation
     - Write tests for avatar position updates and session cleanup
     - Add session expiration logic with automated cleanup
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-  - [ ] 3.3 Implement POI repository
+  - [x] 3.3 Implement POI repository
     - Write tests for POI CRUD operations and spatial queries
     - Implement POIRepository interface with spatial indexing support
     - Write tests for POI participant management (join/leave operations)
