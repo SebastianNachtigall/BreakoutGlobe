@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15
@@ -34,6 +32,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: development
     ports:
       - "8080:8080"
     environment:
@@ -48,7 +47,6 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: air -c .air.toml
 
   frontend:
     build:
