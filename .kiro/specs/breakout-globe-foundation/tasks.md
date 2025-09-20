@@ -17,7 +17,7 @@
     - Implement POI struct with GORM tags and validation
     - _Requirements: 1.1, 2.1, 3.2, 3.3_
 
-  - [-] 2.2 Create TypeScript interfaces and validation
+  - [x] 2.2 Create TypeScript interfaces and validation
     - Write tests for frontend data model validation functions
     - Implement TypeScript interfaces for Avatar, POI, and Session
     - Create client-side validation utilities for coordinates and POI data
@@ -25,7 +25,7 @@
     - _Requirements: 2.1, 3.2, 5.3_
 
 - [ ] 3. Implement database layer with repository pattern (TDD)
-  - [ ] 3.1 Set up database connection and migrations
+  - [-] 3.1 Set up database connection and migrations
     - Write tests for database connection handling and error scenarios
     - Implement database connection utilities with connection pooling
     - Create database migration files for sessions, POIs, and poi_participants tables
