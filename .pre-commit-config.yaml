@@ -1,0 +1,37 @@
+repos:
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: Frontend Lint
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      
+      - id: frontend-tests
+        name: Frontend Tests
+        entry: bash -c 'cd frontend && npm run test'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      
+      - id: backend-tests
+        name: Backend Tests
+        entry: bash -c 'cd backend && go test ./...'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+      
+      - id: go-fmt
+        name: Go Format
+        entry: bash -c 'cd backend && go fmt ./...'
+        language: system
+        files: ^backend/.*\.go$
+        pass_filenames: false
+      
+      - id: go-vet
+        name: Go Vet
+        entry: bash -c 'cd backend && go vet ./...'
+        language: system
+        files: ^backend/.*\.go$
+        pass_filenames: false
