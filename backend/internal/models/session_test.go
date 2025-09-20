@@ -19,6 +19,7 @@ func TestSession_Validate(t *testing.T) {
 			session: Session{
 				ID:         "session-123",
 				UserID:     "user-456",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedAt:  time.Now(),
 				LastActive: time.Now(),
@@ -31,6 +32,7 @@ func TestSession_Validate(t *testing.T) {
 			session: Session{
 				ID:         "",
 				UserID:     "user-456",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedAt:  time.Now(),
 				LastActive: time.Now(),
@@ -44,6 +46,7 @@ func TestSession_Validate(t *testing.T) {
 			session: Session{
 				ID:         "session-123",
 				UserID:     "",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedAt:  time.Now(),
 				LastActive: time.Now(),
@@ -53,10 +56,25 @@ func TestSession_Validate(t *testing.T) {
 			errMsg:  "user ID is required",
 		},
 		{
+			name: "empty map ID",
+			session: Session{
+				ID:         "session-123",
+				UserID:     "user-456",
+				MapID:      "",
+				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
+				CreatedAt:  time.Now(),
+				LastActive: time.Now(),
+				IsActive:   true,
+			},
+			wantErr: true,
+			errMsg:  "map ID is required",
+		},
+		{
 			name: "invalid avatar position",
 			session: Session{
 				ID:         "session-123",
 				UserID:     "user-456",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 91.0, Lng: -74.0060}, // Invalid latitude
 				CreatedAt:  time.Now(),
 				LastActive: time.Now(),
@@ -70,6 +88,7 @@ func TestSession_Validate(t *testing.T) {
 			session: Session{
 				ID:         "session-123",
 				UserID:     "user-456",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedAt:  time.Time{},
 				LastActive: time.Now(),
@@ -83,6 +102,7 @@ func TestSession_Validate(t *testing.T) {
 			session: Session{
 				ID:         "session-123",
 				UserID:     "user-456",
+				MapID:      "map-789",
 				AvatarPos:  LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedAt:  time.Now(),
 				LastActive: time.Time{},
@@ -175,6 +195,76 @@ func TestSession_UpdateAvatarPosition(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, newPos, session.AvatarPos)
 	assert.True(t, session.LastActive.After(oldLastActive))
+}
+
+func TestNewSession(t *testing.T) {
+	userID := "user-123"
+	mapID := "map-456"
+	initialPos := LatLng{Lat: 40.7128, Lng: -74.0060}
+
+	session, err := NewSession(userID, mapID, initialPos)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, session.ID)
+	assert.Equal(t, userID, session.UserID)
+	assert.Equal(t, mapID, session.MapID)
+	assert.Equal(t, initialPos, session.AvatarPos)
+	assert.True(t, session.IsActive)
+	assert.WithinDuration(t, time.Now(), session.CreatedAt, time.Second)
+	assert.WithinDuration(t, time.Now(), session.LastActive, time.Second)
+}
+
+func TestNewSession_InvalidInput(t *testing.T) {
+	tests := []struct {
+		name       string
+		userID     string
+		mapID      string
+		initialPos LatLng
+		wantErr    bool
+		errMsg     string
+	}{
+		{
+			name:       "empty user ID",
+			userID:     "",
+			mapID:      "map-456",
+			initialPos: LatLng{Lat: 40.7128, Lng: -74.0060},
+			wantErr:    true,
+			errMsg:     "user ID is required",
+		},
+		{
+			name:       "empty map ID",
+			userID:     "user-123",
+			mapID:      "",
+			initialPos: LatLng{Lat: 40.7128, Lng: -74.0060},
+			wantErr:    true,
+			errMsg:     "map ID is required",
+		},
+		{
+			name:       "invalid position",
+			userID:     "user-123",
+			mapID:      "map-456",
+			initialPos: LatLng{Lat: 91.0, Lng: -74.0060},
+			wantErr:    true,
+			errMsg:     "invalid initial position",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session, err := NewSession(tt.userID, tt.mapID, tt.initialPos)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Nil(t, session)
+				if err != nil {
+					assert.Contains(t, err.Error(), tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, session)
+			}
+		})
+	}
 }
 
 func TestSession_UpdateAvatarPosition_InvalidCoordinates(t *testing.T) {

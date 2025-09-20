@@ -10,6 +10,7 @@ import (
 // POI represents a Point of Interest on the map where users can meet
 type POI struct {
 	ID              string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
+	MapID           string    `json:"mapId" gorm:"index;type:varchar(36);not null"`
 	Name            string    `json:"name" gorm:"not null;type:varchar(255)"`
 	Description     string    `json:"description" gorm:"type:text"`
 	Position        LatLng    `json:"position" gorm:"embedded;embeddedPrefix:position_"`
@@ -19,9 +20,10 @@ type POI struct {
 }
 
 // NewPOI creates a new POI with validation and generated ID
-func NewPOI(name, description string, position LatLng, createdBy string) (*POI, error) {
+func NewPOI(mapID, name, description string, position LatLng, createdBy string) (*POI, error) {
 	poi := &POI{
 		ID:              uuid.New().String(),
+		MapID:           mapID,
 		Name:            name,
 		Description:     description,
 		Position:        position,
@@ -41,6 +43,10 @@ func NewPOI(name, description string, position LatLng, createdBy string) (*POI, 
 func (p POI) Validate() error {
 	if p.ID == "" {
 		return fmt.Errorf("POI ID is required")
+	}
+
+	if p.MapID == "" {
+		return fmt.Errorf("map ID is required")
 	}
 
 	if p.Name == "" {

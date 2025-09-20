@@ -18,6 +18,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "valid POI",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Description:     "A great place to meet",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
@@ -31,6 +32,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "valid POI without description",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -43,6 +45,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "empty POI ID",
 			poi: POI{
 				ID:              "",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -53,9 +56,24 @@ func TestPOI_Validate(t *testing.T) {
 			errMsg:  "POI ID is required",
 		},
 		{
+			name: "empty map ID",
+			poi: POI{
+				ID:              "poi-123",
+				MapID:           "",
+				Name:            "Meeting Room A",
+				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
+				CreatedBy:       "user-456",
+				MaxParticipants: 10,
+				CreatedAt:       time.Now(),
+			},
+			wantErr: true,
+			errMsg:  "map ID is required",
+		},
+		{
 			name: "empty name",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -69,6 +87,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "name too long",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "This is a very long name that exceeds the maximum allowed length for a POI name which should be limited to 255 characters to ensure database compatibility and reasonable display in the user interface and this string is definitely longer than that limit and needs to be even longer to exceed 255 characters so I'm adding more text here to make sure it's over the limit",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -82,6 +101,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "invalid position",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 91.0, Lng: -74.0060}, // Invalid latitude
 				CreatedBy:       "user-456",
@@ -95,6 +115,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "empty created by",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "",
@@ -108,6 +129,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "invalid max participants - zero",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -121,6 +143,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "invalid max participants - too high",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -134,6 +157,7 @@ func TestPOI_Validate(t *testing.T) {
 			name: "zero time created at",
 			poi: POI{
 				ID:              "poi-123",
+				MapID:           "map-789",
 				Name:            "Meeting Room A",
 				Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
 				CreatedBy:       "user-456",
@@ -162,15 +186,17 @@ func TestPOI_Validate(t *testing.T) {
 }
 
 func TestNewPOI(t *testing.T) {
+	mapID := "map-456"
 	name := "Test Meeting Room"
 	description := "A test room"
 	position := LatLng{Lat: 40.7128, Lng: -74.0060}
 	createdBy := "user-123"
 
-	poi, err := NewPOI(name, description, position, createdBy)
+	poi, err := NewPOI(mapID, name, description, position, createdBy)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, poi.ID)
+	assert.Equal(t, mapID, poi.MapID)
 	assert.Equal(t, name, poi.Name)
 	assert.Equal(t, description, poi.Description)
 	assert.Equal(t, position, poi.Position)
@@ -182,6 +208,7 @@ func TestNewPOI(t *testing.T) {
 func TestNewPOI_InvalidInput(t *testing.T) {
 	tests := []struct {
 		name        string
+		mapID       string
 		poiName     string
 		description string
 		position    LatLng
@@ -190,7 +217,18 @@ func TestNewPOI_InvalidInput(t *testing.T) {
 		errMsg      string
 	}{
 		{
+			name:        "empty map ID",
+			mapID:       "",
+			poiName:     "Test Room",
+			description: "Test",
+			position:    LatLng{Lat: 40.7128, Lng: -74.0060},
+			createdBy:   "user-123",
+			wantErr:     true,
+			errMsg:      "map ID is required",
+		},
+		{
 			name:        "empty name",
+			mapID:       "map-456",
 			poiName:     "",
 			description: "Test",
 			position:    LatLng{Lat: 40.7128, Lng: -74.0060},
@@ -200,6 +238,7 @@ func TestNewPOI_InvalidInput(t *testing.T) {
 		},
 		{
 			name:        "invalid position",
+			mapID:       "map-456",
 			poiName:     "Test Room",
 			description: "Test",
 			position:    LatLng{Lat: 91.0, Lng: -74.0060},
@@ -209,6 +248,7 @@ func TestNewPOI_InvalidInput(t *testing.T) {
 		},
 		{
 			name:        "empty created by",
+			mapID:       "map-456",
 			poiName:     "Test Room",
 			description: "Test",
 			position:    LatLng{Lat: 40.7128, Lng: -74.0060},
@@ -220,7 +260,7 @@ func TestNewPOI_InvalidInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			poi, err := NewPOI(tt.poiName, tt.description, tt.position, tt.createdBy)
+			poi, err := NewPOI(tt.mapID, tt.poiName, tt.description, tt.position, tt.createdBy)
 
 			if tt.wantErr {
 				assert.Error(t, err)

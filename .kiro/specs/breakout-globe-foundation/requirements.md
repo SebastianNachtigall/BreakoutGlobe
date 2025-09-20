@@ -84,6 +84,20 @@ The system allows users to join without authentication, place avatars on a real-
 
 ### Requirement 7
 
+**User Story:** As a workshop facilitator, I want to create and manage multiple map instances, so that I can run separate workshops or sessions with isolated user groups and POIs.
+
+#### Acceptance Criteria
+
+1. WHEN a facilitator creates a new map instance THEN the system SHALL generate a unique map ID and isolated environment
+2. WHEN users join a specific map instance THEN the system SHALL only show avatars and POIs from that map instance
+3. WHEN a user switches between map instances THEN the system SHALL maintain separate avatar positions and session state for each map
+4. WHEN POIs are created on a map instance THEN the system SHALL associate them only with that specific map instance
+5. WHEN real-time events occur THEN the system SHALL broadcast them only to users within the same map instance
+6. WHEN a map instance is deleted THEN the system SHALL clean up all associated sessions, avatars, and POIs
+7. IF a user tries to access a non-existent map instance THEN the system SHALL redirect them to a default map or show an error
+
+### Requirement 8
+
 **User Story:** As a developer, I want comprehensive error handling and logging, so that I can troubleshoot issues and maintain system reliability.
 
 #### Acceptance Criteria

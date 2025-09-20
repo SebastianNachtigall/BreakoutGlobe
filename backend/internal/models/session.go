@@ -11,6 +11,7 @@ import (
 type Session struct {
 	ID         string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
 	UserID     string    `json:"userId" gorm:"index;type:varchar(36);not null"`
+	MapID      string    `json:"mapId" gorm:"index;type:varchar(36);not null"`
 	AvatarPos  LatLng    `json:"avatarPosition" gorm:"embedded;embeddedPrefix:avatar_pos_"`
 	CreatedAt  time.Time `json:"createdAt" gorm:"not null"`
 	LastActive time.Time `json:"lastActive" gorm:"not null"`
@@ -18,9 +19,13 @@ type Session struct {
 }
 
 // NewSession creates a new session with a generated ID and current timestamp
-func NewSession(userID string, initialPos LatLng) (*Session, error) {
+func NewSession(userID, mapID string, initialPos LatLng) (*Session, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
+	}
+
+	if mapID == "" {
+		return nil, fmt.Errorf("map ID is required")
 	}
 
 	if err := initialPos.Validate(); err != nil {
@@ -31,6 +36,7 @@ func NewSession(userID string, initialPos LatLng) (*Session, error) {
 	session := &Session{
 		ID:         uuid.New().String(),
 		UserID:     userID,
+		MapID:      mapID,
 		AvatarPos:  initialPos,
 		CreatedAt:  now,
 		LastActive: now,
@@ -48,6 +54,10 @@ func (s Session) Validate() error {
 
 	if s.UserID == "" {
 		return fmt.Errorf("user ID is required")
+	}
+
+	if s.MapID == "" {
+		return fmt.Errorf("map ID is required")
 	}
 
 	if err := s.AvatarPos.Validate(); err != nil {
