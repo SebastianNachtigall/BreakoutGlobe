@@ -28,7 +28,7 @@ cd breakoutglobe
 
 2. Start the development environment:
 ```bash
-docker-compose up
+docker compose up
 ```
 
 3. Access the application:
@@ -57,7 +57,7 @@ The project follows Test-Driven Development (TDD) methodology:
 │   ├── public/            # Static assets
 │   └── Dockerfile.dev     # Frontend development container
 ├── .github/workflows/     # CI/CD pipelines
-└── docker-compose.yml     # Development environment
+└── compose.yml            # Development environment
 ```
 
 ### Testing
