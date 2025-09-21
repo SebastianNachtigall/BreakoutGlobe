@@ -141,14 +141,14 @@
     - _Requirements: 4.5, 4.6, 7.3_
 
 - [ ] 8. Create frontend map integration (TDD)
-  - [ ] 8.1 Set up MapLibre GL JS integration
+  - [x] 8.1 Set up MapLibre GL JS integration
     - Write tests for map initialization and configuration
     - Implement MapContainer component with MapLibre GL JS
     - Write tests for map interaction handling (click, zoom, pan)
     - Add responsive map sizing and mobile touch support
     - _Requirements: 5.3, 5.4_
 
-  - [ ] 8.2 Implement avatar rendering and movement
+  - [x] 8.2 Implement avatar rendering and movement
     - Write tests for avatar placement and position updates
     - Implement Avatar component with smooth movement animations
     - Write tests for click-to-move functionality with coordinate conversion
