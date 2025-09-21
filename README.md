@@ -26,12 +26,17 @@ git clone <repository-url>
 cd breakoutglobe
 ```
 
-2. Start the development environment:
+2. Set up Git hooks (recommended):
+```bash
+./scripts/setup-hooks.sh
+```
+
+3. Start the development environment:
 ```bash
 docker compose up
 ```
 
-3. Access the application:
+4. Access the application:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
 - Health check: http://localhost:8080/health
@@ -78,12 +83,23 @@ cd frontend
 npm run test:e2e
 ```
 
+### Git Hooks
+
+The project includes pre-commit hooks that automatically:
+- Check for escape character issues in Go code (e.g., `\"` instead of `"`)
+- Verify Go compilation
+- Run tests before commits
+- Check TypeScript compilation
+
+To bypass hooks temporarily: `git commit --no-verify`
+
 ### Contributing
 
 1. All features must be implemented using TDD
 2. Tests must pass before committing
 3. Follow the established project structure
 4. Use conventional commit messages
+5. Set up Git hooks to catch common issues early
 
 ## Architecture
 

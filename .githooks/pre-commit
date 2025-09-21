@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# Pre-commit hook to check for common code generation issues
+
+echo "Running pre-commit checks..."
+
+# Check for escape characters in Go files that should be regular quotes
+echo "Checking for improper escape characters in Go files..."
+
+# Find Go files with escaped quotes that should be regular quotes
+ESCAPED_QUOTES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | xargs grep -l '\\"' 2>/dev/null || true)
+
+if [ ! -z "$ESCAPED_QUOTES" ]; then
+    echo "❌ ERROR: Found improper escape characters in Go files:"
+    for file in $ESCAPED_QUOTES; do
+        echo "  - $file"
+        echo "    Lines with escaped quotes:"
+        grep -n '\\"' "$file" | head -5
+    done
+    echo ""
+    echo "Go string literals should use regular quotes (\") not escaped quotes (\\\")."
+    echo "Please fix these files before committing."
+    exit 1
+fi
+
+# Check for other common escape character issues
+echo "Checking for other escape character issues..."
+
+# Check for \' in Go files (should be ')
+ESCAPED_SINGLE_QUOTES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | xargs grep -l "\\\\'" 2>/dev/null || true)
+
+if [ ! -z "$ESCAPED_SINGLE_QUOTES" ]; then
+    echo "❌ ERROR: Found escaped single quotes in Go files:"
+    for file in $ESCAPED_SINGLE_QUOTES; do
+        echo "  - $file"
+    done
+    echo "Go character literals should use regular single quotes (') not escaped (\\\')."
+    exit 1
+fi
+
+# Check for \n, \t that might be incorrectly escaped
+DOUBLE_ESCAPED=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | xargs grep -l '\\\\n\|\\\\t\|\\\\r' 2>/dev/null || true)
+
+if [ ! -z "$DOUBLE_ESCAPED" ]; then
+    echo "❌ ERROR: Found double-escaped characters in Go files:"
+    for file in $DOUBLE_ESCAPED; do
+        echo "  - $file"
+        echo "    Lines with double-escaped characters:"
+        grep -n '\\\\n\|\\\\t\|\\\\r' "$file" | head -3
+    done
+    echo "These should likely be single-escaped (\\n, \\t, \\r) not double-escaped."
+    exit 1
+fi
+
+# Check that Go files compile
+echo "Checking Go compilation..."
+if [ -d "backend" ]; then
+    cd backend
+    if ! go build ./...; then
+        echo "❌ ERROR: Go compilation failed"
+        exit 1
+    fi
+    cd ..
+fi
+
+# Check that tests pass
+echo "Running Go tests..."
+if [ -d "backend" ]; then
+    cd backend
+    if ! go test ./... -short; then
+        echo "❌ ERROR: Go tests failed"
+        exit 1
+    fi
+    cd ..
+fi
+
+# Check TypeScript/JavaScript files for similar issues
+echo "Checking TypeScript/JavaScript files..."
+if [ -d "frontend" ]; then
+    cd frontend
+    
+    # Check for compilation
+    if [ -f "package.json" ]; then
+        echo "Checking TypeScript compilation..."
+        if ! npm run type-check 2>/dev/null; then
+            echo "⚠️  WARNING: TypeScript type checking failed (continuing anyway)"
+        fi
+    fi
+    
+    cd ..
+fi
+
+echo "✅ All pre-commit checks passed!"
+exit 0
