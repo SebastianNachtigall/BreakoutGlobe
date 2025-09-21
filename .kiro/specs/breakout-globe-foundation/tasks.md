@@ -91,12 +91,15 @@
     - _Requirements: 7.1, 7.5_
 
 - [ ] 6. Create HTTP API endpoints (TDD)
-  - [ ] 6.1 Implement session API endpoints
+  - [x] 6.1 Implement session API endpoints
     - Write tests for POST /api/sessions endpoint with session creation
     - Implement session creation endpoint with validation and error handling
     - Write tests for PUT /api/sessions/:id/avatar endpoint with position updates
     - Implement avatar position update endpoint with real-time broadcasting
     - Write tests for GET /api/sessions/:id endpoint with session retrieval
+    - Write tests for POST /api/sessions/:id/heartbeat endpoint
+    - Write tests for DELETE /api/sessions/:id endpoint
+    - Write tests for GET /api/maps/:id/sessions endpoint
     - _Requirements: 1.1, 1.2, 2.1, 2.4_
 
   - [ ] 6.2 Implement POI API endpoints

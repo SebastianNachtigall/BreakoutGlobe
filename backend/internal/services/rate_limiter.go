@@ -72,6 +72,12 @@ type RateLimiterInterface interface {
 	
 	// GetUserStats returns rate limiting statistics for a user
 	GetUserStats(ctx context.Context, userID string) (*UserRateLimitStats, error)
+	
+	// CheckRateLimit is a helper function that checks rate limit and returns appropriate error
+	CheckRateLimit(ctx context.Context, userID string, action ActionType) error
+	
+	// GetRateLimitHeaders returns HTTP headers for rate limiting information
+	GetRateLimitHeaders(ctx context.Context, userID string, action ActionType) (map[string]string, error)
 }
 
 // RateLimiter implements sliding window rate limiting using Redis sorted sets
