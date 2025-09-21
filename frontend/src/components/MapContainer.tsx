@@ -32,7 +32,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
   const markers = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
-  const animationTimeouts = useRef<globalThis.Map<string, NodeJS.Timeout>>(new globalThis.Map());
+  const animationTimeouts = useRef<globalThis.Map<string, number>>(new globalThis.Map());
 
   // Memoize click handler to prevent re-renders
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
@@ -76,7 +76,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return resolved;
   }, []);
 
-  // Create marker element with optimized styling
+  // Create marker element with maximum performance optimizations
   const createMarkerElement = useCallback((avatar: AvatarData) => {
     const markerElement = document.createElement('div');
     markerElement.className = `
@@ -90,15 +90,18 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     `;
     markerElement.textContent = avatar.sessionId.charAt(0).toUpperCase();
     markerElement.title = avatar.sessionId;
-    
-    // Optimize for map transforms
+
+    // Maximum performance optimizations for smooth zoom/pan
     markerElement.style.willChange = 'transform';
     markerElement.style.backfaceVisibility = 'hidden';
-    
+    markerElement.style.transform = 'translateZ(0)'; // Force GPU layer
+    markerElement.style.contain = 'layout style paint'; // CSS containment
+    markerElement.style.pointerEvents = 'auto';
+
     return markerElement;
   }, []);
 
-  // Animate marker movement using MapLibre's built-in animation
+  // Animate marker movement with proper easing
   const animateMarkerTo = useCallback((marker: Marker, newPosition: [number, number], sessionId: string) => {
     // Clear any existing animation timeout
     const existingTimeout = animationTimeouts.current.get(sessionId);
@@ -106,7 +109,6 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       clearTimeout(existingTimeout);
     }
 
-    // Use MapLibre's built-in smooth transition
     const currentLngLat = marker.getLngLat();
     const startTime = Date.now();
     const duration = 500; // 500ms animation
@@ -114,10 +116,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function for smooth animation
-      const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-      const easedProgress = easeInOut(progress);
+
+      // Better easing function - ease-out cubic for natural movement
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+      const easedProgress = easeOutCubic(progress);
 
       // Interpolate position
       const lng = currentLngLat.lng + (newPosition[0] - currentLngLat.lng) * easedProgress;
@@ -140,7 +142,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    // Initialize map
+    // Initialize map with maximum performance settings
     map.current = new Map({
       container: mapContainer.current,
       style: 'https://demotiles.maplibre.org/style.json',
@@ -151,7 +153,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       preserveDrawingBuffer: false,
       antialias: false,
       maxZoom: 18,
-      minZoom: 1
+      minZoom: 1,
+      // Additional performance settings
+      renderWorldCopies: false, // Don't render multiple world copies
+      optimizeForTerrain: false, // Disable terrain optimizations
+      fadeDuration: 0, // Disable fade animations for faster rendering
+      crossSourceCollisions: false // Disable collision detection between sources
     });
 
     // Add controls
@@ -160,6 +167,29 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     // Add click event listener
     map.current.on('click', handleMapClick);
+
+    // Optimize marker rendering during map movements
+    let isMoving = false;
+    
+    map.current.on('movestart', () => {
+      isMoving = true;
+      // Temporarily disable marker animations during map movement
+      markers.current.forEach(marker => {
+        const element = marker.getElement();
+        element.style.transition = 'none';
+      });
+    });
+
+    map.current.on('moveend', () => {
+      isMoving = false;
+      // Re-enable marker animations after map movement
+      setTimeout(() => {
+        markers.current.forEach(marker => {
+          const element = marker.getElement();
+          element.style.transition = 'transform 0.2s ease';
+        });
+      }, 50);
+    });
 
     // Notify parent that map is ready
     if (onMapReady) {
@@ -172,7 +202,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         // Clear all animation timeouts
         animationTimeouts.current.forEach(timeout => clearTimeout(timeout));
         animationTimeouts.current.clear();
-        
+
         // Remove all markers
         markers.current.forEach(marker => marker.remove());
         markers.current.clear();
@@ -208,7 +238,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           clearTimeout(timeout);
           animationTimeouts.current.delete(sessionId);
         }
-        
+
         marker.remove();
         markers.current.delete(sessionId);
       }
@@ -222,11 +252,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       if (!marker) {
         // Create new marker
         const markerElement = createMarkerElement(avatar);
-        marker = new Marker({ 
+        marker = new Marker({
           element: markerElement,
-          // Optimize marker performance
-          pitchAlignment: 'map',
-          rotationAlignment: 'map'
+          // Critical: Use viewport alignment for better performance during zoom/pan
+          pitchAlignment: 'viewport',
+          rotationAlignment: 'viewport',
+          // Disable marker dragging for better performance
+          draggable: false
         })
           .setLngLat(newPosition)
           .addTo(map.current!);
@@ -235,8 +267,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       } else {
         // Update existing marker position
         const currentPos = marker.getLngLat();
-        const hasPositionChanged = 
-          Math.abs(currentPos.lng - newPosition[0]) > 0.000001 || 
+        const hasPositionChanged =
+          Math.abs(currentPos.lng - newPosition[0]) > 0.000001 ||
           Math.abs(currentPos.lat - newPosition[1]) > 0.000001;
 
         if (hasPositionChanged) {

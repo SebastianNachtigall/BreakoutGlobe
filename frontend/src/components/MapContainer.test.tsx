@@ -76,7 +76,11 @@ describe('MapContainer', () => {
         preserveDrawingBuffer: false,
         antialias: false,
         maxZoom: 18,
-        minZoom: 1
+        minZoom: 1,
+        renderWorldCopies: false,
+        optimizeForTerrain: false,
+        fadeDuration: 0,
+        crossSourceCollisions: false
       });
     });
 
@@ -227,8 +231,9 @@ describe('MapContainer', () => {
       const markerOptions = markerCall[0];
       
       // Verify marker has performance optimizations
-      expect(markerOptions.pitchAlignment).toBe('map');
-      expect(markerOptions.rotationAlignment).toBe('map');
+      expect(markerOptions.pitchAlignment).toBe('viewport');
+      expect(markerOptions.rotationAlignment).toBe('viewport');
+      expect(markerOptions.draggable).toBe(false);
       
       // Verify element has proper styling
       const element = markerOptions.element;
