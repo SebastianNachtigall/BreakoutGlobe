@@ -1,0 +1,332 @@
+import React, { useState, useEffect, useCallback } from 'react';
+
+interface POICreationData {
+    name: string;
+    description: string;
+    maxParticipants: number;
+    position: { lat: number; lng: number };
+}
+
+interface POICreationModalProps {
+    isOpen: boolean;
+    position: { lat: number; lng: number };
+    onCreate: (data: POICreationData) => void;
+    onCancel: () => void;
+    isLoading?: boolean;
+}
+
+interface FormData {
+    name: string;
+    description: string;
+    maxParticipants: number;
+    latitude: number;
+    longitude: number;
+}
+
+interface FormErrors {
+    name?: string;
+    description?: string;
+    maxParticipants?: string;
+    latitude?: string;
+    longitude?: string;
+}
+
+export const POICreationModal: React.FC<POICreationModalProps> = ({
+    isOpen,
+    position,
+    onCreate,
+    onCancel,
+    isLoading = false
+}) => {
+    const [formData, setFormData] = useState<FormData>({
+        name: '',
+        description: '',
+        maxParticipants: 5,
+        latitude: position.lat,
+        longitude: position.lng
+    });
+
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+    // Reset form when modal opens/closes
+    useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                name: '',
+                description: '',
+                maxParticipants: 5,
+                latitude: position.lat,
+                longitude: position.lng
+            });
+            setErrors({});
+            setTouched({});
+        }
+    }, [isOpen, position]);
+
+    // Validation functions
+    const validateName = (name: string): string | undefined => {
+        if (!name.trim()) return 'Name is required';
+        if (name.length < 3) return 'Name must be at least 3 characters';
+        if (name.length > 100) return 'Name must be less than 100 characters';
+        return undefined;
+    };
+
+    const validateDescription = (description: string): string | undefined => {
+        if (!description.trim()) return 'Description is required';
+        if (description.length > 500) return 'Description must be less than 500 characters';
+        return undefined;
+    };
+
+    const validateMaxParticipants = (maxParticipants: number): string | undefined => {
+        if (maxParticipants < 1) return 'Must be at least 1 participant';
+        if (maxParticipants > 100) return 'Cannot exceed 100 participants';
+        return undefined;
+    };
+
+    const validateLatitude = (latitude: number): string | undefined => {
+        if (latitude < -90 || latitude > 90) return 'Latitude must be between -90 and 90';
+        return undefined;
+    };
+
+    const validateLongitude = (longitude: number): string | undefined => {
+        if (longitude < -180 || longitude > 180) return 'Longitude must be between -180 and 180';
+        return undefined;
+    };
+
+    // Validate form
+    const validateForm = useCallback((): FormErrors => {
+        return {
+            name: validateName(formData.name),
+            description: validateDescription(formData.description),
+            maxParticipants: validateMaxParticipants(formData.maxParticipants),
+            latitude: validateLatitude(formData.latitude),
+            longitude: validateLongitude(formData.longitude)
+        };
+    }, [formData]);
+
+    const handleInputChange = (field: keyof FormData, value: string | number) => {
+        const newFormData = { ...formData, [field]: value };
+        setFormData(newFormData);
+        setTouched(prev => ({ ...prev, [field]: true }));
+        
+        // Validate with the new form data
+        const newErrors = {
+            name: validateName(newFormData.name),
+            description: validateDescription(newFormData.description),
+            maxParticipants: validateMaxParticipants(newFormData.maxParticipants),
+            latitude: validateLatitude(newFormData.latitude),
+            longitude: validateLongitude(newFormData.longitude)
+        };
+        setErrors(newErrors);
+    };
+
+    const handleBlur = (field: keyof FormData) => {
+        setTouched(prev => ({ ...prev, [field]: true }));
+        
+        // Validate on blur
+        const newErrors = {
+            name: validateName(formData.name),
+            description: validateDescription(formData.description),
+            maxParticipants: validateMaxParticipants(formData.maxParticipants),
+            latitude: validateLatitude(formData.latitude),
+            longitude: validateLongitude(formData.longitude)
+        };
+        setErrors(newErrors);
+    };
+
+    const isFormValid = () => {
+        const formErrors = validateForm();
+        return !Object.values(formErrors).some(error => error !== undefined);
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Mark all fields as touched to show validation errors
+        setTouched({
+            name: true,
+            description: true,
+            maxParticipants: true,
+            latitude: true,
+            longitude: true
+        });
+
+        if (isFormValid()) {
+            onCreate({
+                name: formData.name,
+                description: formData.description,
+                maxParticipants: formData.maxParticipants,
+                position: {
+                    lat: formData.latitude,
+                    lng: formData.longitude
+                }
+            });
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            onCancel();
+        }
+    };
+
+    // Handle escape key globally when modal is open
+    useEffect(() => {
+        const handleEscapeKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                onCancel();
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscapeKey);
+            return () => document.removeEventListener('keydown', handleEscapeKey);
+        }
+    }, [isOpen, onCancel]);
+
+    const handleOverlayClick = (e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            onCancel();
+        }
+    };
+
+    if (!isOpen) {
+        return null;
+    }
+
+    return (
+        <div 
+            className="modal-overlay"
+            data-testid="modal-overlay"
+            onClick={handleOverlayClick}
+            onKeyDown={handleKeyDown}
+            tabIndex={-1}
+        >
+            <div className="modal-content" data-testid="poi-creation-modal">
+                <div className="modal-header">
+                    <h2>Create New POI</h2>
+                    <button 
+                        className="modal-close-button"
+                        onClick={onCancel}
+                        aria-label="Close modal"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="poi-creation-form">
+                    <div className="form-group">
+                        <label htmlFor="poi-name">Name *</label>
+                        <input
+                            id="poi-name"
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) => handleInputChange('name', e.target.value)}
+                            onBlur={() => handleBlur('name')}
+                            className={errors.name && touched.name ? 'error' : ''}
+                            disabled={isLoading}
+                        />
+                        <div className="field-info">
+                            <span className="char-count">{formData.name.length}/100</span>
+                        </div>
+                        {errors.name && touched.name && (
+                            <div className="error-message">{errors.name}</div>
+                        )}
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="poi-description">Description *</label>
+                        <textarea
+                            id="poi-description"
+                            value={formData.description}
+                            onChange={(e) => handleInputChange('description', e.target.value)}
+                            onBlur={() => handleBlur('description')}
+                            className={errors.description && touched.description ? 'error' : ''}
+                            rows={3}
+                            disabled={isLoading}
+                        />
+                        <div className="field-info">
+                            <span className="char-count">{formData.description.length}/500</span>
+                        </div>
+                        {errors.description && touched.description && (
+                            <div className="error-message">{errors.description}</div>
+                        )}
+                    </div>
+
+                    <div className="form-group">
+                        <label htmlFor="poi-max-participants">Max Participants *</label>
+                        <input
+                            id="poi-max-participants"
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={formData.maxParticipants}
+                            onChange={(e) => handleInputChange('maxParticipants', parseInt(e.target.value) || 0)}
+                            onBlur={() => handleBlur('maxParticipants')}
+                            className={errors.maxParticipants && touched.maxParticipants ? 'error' : ''}
+                            disabled={isLoading}
+                        />
+                        {errors.maxParticipants && touched.maxParticipants && (
+                            <div className="error-message">{errors.maxParticipants}</div>
+                        )}
+                    </div>
+
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label htmlFor="poi-latitude">Latitude</label>
+                            <input
+                                id="poi-latitude"
+                                type="number"
+                                step="any"
+                                value={formData.latitude}
+                                onChange={(e) => handleInputChange('latitude', parseFloat(e.target.value) || 0)}
+                                onBlur={() => handleBlur('latitude')}
+                                className={errors.latitude && touched.latitude ? 'error' : ''}
+                                disabled={isLoading}
+                            />
+                            {errors.latitude && touched.latitude && (
+                                <div className="error-message">{errors.latitude}</div>
+                            )}
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="poi-longitude">Longitude</label>
+                            <input
+                                id="poi-longitude"
+                                type="number"
+                                step="any"
+                                value={formData.longitude}
+                                onChange={(e) => handleInputChange('longitude', parseFloat(e.target.value) || 0)}
+                                onBlur={() => handleBlur('longitude')}
+                                className={errors.longitude && touched.longitude ? 'error' : ''}
+                                disabled={isLoading}
+                            />
+                            {errors.longitude && touched.longitude && (
+                                <div className="error-message">{errors.longitude}</div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="modal-actions">
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="cancel-button"
+                            disabled={isLoading}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="create-button"
+                            disabled={!isFormValid() || isLoading}
+                        >
+                            {isLoading ? 'Creating...' : 'Create POI'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
