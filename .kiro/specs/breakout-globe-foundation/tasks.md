@@ -102,7 +102,7 @@
     - Write tests for GET /api/maps/:id/sessions endpoint
     - _Requirements: 1.1, 1.2, 2.1, 2.4_
 
-  - [ ] 6.2 Implement POI API endpoints
+  - [x] 6.2 Implement POI API endpoints
     - Write tests for GET /api/pois endpoint with spatial filtering
     - Implement POI listing endpoint with bounds-based queries
     - Write tests for POST /api/pois endpoint with creation validation
@@ -111,7 +111,7 @@
     - Implement POI join/leave endpoints with capacity enforcement
     - _Requirements: 3.1, 3.2, 3.3, 3.5, 3.6, 3.7_
 
-  - [ ] 6.3 Add middleware for error handling and logging
+  - [x] 6.3 Add middleware for error handling and logging
     - Write tests for error handling middleware with different error types
     - Implement structured error responses with appropriate HTTP status codes
     - Write tests for request logging middleware with user context
