@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { MapContainer, AvatarData } from './components/MapContainer'
 
 function App() {
@@ -23,29 +23,37 @@ function App() {
     }
   ])
 
-  const handleAvatarMove = (position: { lat: number; lng: number }) => {
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleAvatarMove = useCallback((position: { lat: number; lng: number }) => {
     console.log('Avatar move requested:', position)
     
-    // Update current user's position
+    // Clear any existing timeout to prevent multiple state updates
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current)
+    }
+    
+    // Update current user's position with moving state
     setAvatars(prev => prev.map(avatar => 
       avatar.isCurrentUser 
         ? { ...avatar, position, isMoving: true }
         : avatar
     ))
 
-    // Reset moving state after animation
-    setTimeout(() => {
+    // Reset moving state after animation completes
+    animationTimeoutRef.current = setTimeout(() => {
       setAvatars(prev => prev.map(avatar => 
         avatar.isCurrentUser 
           ? { ...avatar, isMoving: false }
           : avatar
       ))
+      animationTimeoutRef.current = null
     }, 500)
-  }
+  }, [])
 
-  const handleMapClick = (event: { lngLat: { lng: number; lat: number } }) => {
+  const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
     console.log('Map clicked:', event.lngLat)
-  }
+  }, [])
 
   return (
     <div className="h-screen w-screen flex flex-col">

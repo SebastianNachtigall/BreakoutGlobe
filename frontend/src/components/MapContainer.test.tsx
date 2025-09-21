@@ -13,6 +13,7 @@ const mockMarker = {
   addTo: vi.fn().mockReturnThis(),
   remove: vi.fn().mockReturnThis(),
   getElement: vi.fn(() => document.createElement('div')),
+  getLngLat: vi.fn(() => ({ lng: 0, lat: 0 })),
   setPopup: vi.fn().mockReturnThis(),
   togglePopup: vi.fn().mockReturnThis()
 };
@@ -71,7 +72,11 @@ describe('MapContainer', () => {
         style: 'https://demotiles.maplibre.org/style.json',
         center: [0, 0],
         zoom: 2,
-        attributionControl: false
+        attributionControl: false,
+        preserveDrawingBuffer: false,
+        antialias: false,
+        maxZoom: 18,
+        minZoom: 1
       });
     });
 
@@ -216,14 +221,19 @@ describe('MapContainer', () => {
       
       render(<MapContainer avatars={movingAvatars} />);
       
-      // Check that Marker was called with an element that has animation classes
+      // Check that Marker was called with proper options
       expect(Marker).toHaveBeenCalled();
       const markerCall = (Marker as any).mock.calls[0];
       const markerOptions = markerCall[0];
-      const element = markerOptions.element;
       
-      expect(element.className).toContain('transition-all');
-      expect(element.className).toContain('duration-500');
+      // Verify marker has performance optimizations
+      expect(markerOptions.pitchAlignment).toBe('map');
+      expect(markerOptions.rotationAlignment).toBe('map');
+      
+      // Verify element has proper styling
+      const element = markerOptions.element;
+      expect(element.style.willChange).toBe('transform');
+      expect(element.style.backfaceVisibility).toBe('hidden');
     });
 
     it('should handle avatar collision detection', () => {
