@@ -47,39 +47,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     }
   }, [onMapClick, onAvatarMove]);
 
-  // Helper function to detect and resolve avatar collisions (only when needed)
-  const resolveCollisions = useCallback((avatars: AvatarData[]): AvatarData[] => {
-    // Skip collision detection if only one avatar or no avatars
-    if (avatars.length <= 1) {
-      return avatars;
-    }
 
-    const resolved = [...avatars];
-    const positionMap = new globalThis.Map<string, number>();
-
-    resolved.forEach((avatar, index) => {
-      const posKey = `${avatar.position.lat.toFixed(6)},${avatar.position.lng.toFixed(6)}`;
-      const existingCount = positionMap.get(posKey) || 0;
-
-      if (existingCount > 0) {
-        // Apply small offset to prevent overlap
-        const offsetDistance = 0.0001; // ~11 meters
-        const angle = (existingCount * 60) * (Math.PI / 180); // 60 degrees apart
-
-        resolved[index] = {
-          ...avatar,
-          position: {
-            lat: avatar.position.lat + (Math.sin(angle) * offsetDistance),
-            lng: avatar.position.lng + (Math.cos(angle) * offsetDistance)
-          }
-        };
-      }
-
-      positionMap.set(posKey, existingCount + 1);
-    });
-
-    return resolved;
-  }, []);
 
   // Create marker element with NO conflicting animations
   const createMarkerElement = useCallback((avatar: AvatarData) => {
@@ -108,33 +76,25 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return markerElement;
   }, []);
 
-  // Simplified, single animation system
+  // Ultra-simple animation system
   const animateMarkerTo = useCallback((marker: Marker, newPosition: [number, number], sessionId: string) => {
-    // Clear any existing animation to prevent conflicts
+    // Clear any existing animation
     const existingTimeout = animationTimeouts.current.get(sessionId);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
-      animationTimeouts.current.delete(sessionId);
     }
 
     const startPosition = marker.getLngLat();
     const startTime = Date.now();
-    const duration = 600;
-
-    // Calculate total distance for consistent speed
-    const deltaLng = newPosition[0] - startPosition.lng;
-    const deltaLat = newPosition[1] - startPosition.lat;
+    const duration = 500; // Match App timeout
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // Simple, predictable easing - ease-out
-      const easedProgress = 1 - Math.pow(1 - progress, 2);
-
-      // Linear interpolation
-      const lng = startPosition.lng + deltaLng * easedProgress;
-      const lat = startPosition.lat + deltaLat * easedProgress;
+      // Simple linear easing
+      const lng = startPosition.lng + (newPosition[0] - startPosition.lng) * progress;
+      const lat = startPosition.lat + (newPosition[1] - startPosition.lat) * progress;
 
       marker.setLngLat([lng, lat]);
 
@@ -219,39 +179,15 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     };
   }, []); // Only run once on mount
 
-  // Memoize processed avatars to prevent unnecessary recalculations
-  const processedAvatars = useMemo(() => {
-    const resolved = resolveCollisions(avatars);
-    // Sort avatars to render current user last (on top)
-    return [...resolved].sort((a, b) => {
-      if (a.isCurrentUser && !b.isCurrentUser) return 1;
-      if (!a.isCurrentUser && b.isCurrentUser) return -1;
-      return 0;
-    });
-  }, [avatars, resolveCollisions]);
+  // Simple avatar processing - NO collision detection, NO complex memoization
+  const processedAvatars = avatars;
 
-  // Update markers when avatars change
+  // Simple marker management - only animate when explicitly requested
   useEffect(() => {
     if (!map.current) return;
 
-    // Remove markers that no longer exist
-    const currentSessionIds = new Set(processedAvatars.map(avatar => avatar.sessionId));
-    markers.current.forEach((marker: Marker, sessionId: string) => {
-      if (!currentSessionIds.has(sessionId)) {
-        // Clear any pending animation
-        const timeout = animationTimeouts.current.get(sessionId);
-        if (timeout) {
-          clearTimeout(timeout);
-          animationTimeouts.current.delete(sessionId);
-        }
-
-        marker.remove();
-        markers.current.delete(sessionId);
-      }
-    });
-
     // Add or update markers
-    processedAvatars.forEach(avatar => {
+    avatars.forEach(avatar => {
       let marker = markers.current.get(avatar.sessionId);
       const newPosition: [number, number] = [avatar.position.lng, avatar.position.lat];
 
@@ -260,10 +196,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         const markerElement = createMarkerElement(avatar);
         marker = new Marker({
           element: markerElement,
-          // Critical: Use viewport alignment for better performance during zoom/pan
           pitchAlignment: 'viewport',
           rotationAlignment: 'viewport',
-          // Disable marker dragging for better performance
           draggable: false
         })
           .setLngLat(newPosition)
@@ -279,36 +213,16 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         if (hasPositionChanged) {
           if (avatar.isMoving) {
-            // Debug: Log animation start
-            console.log(`Starting animation for ${avatar.sessionId} to`, newPosition);
+            // Animate to new position
             animateMarkerTo(marker, newPosition, avatar.sessionId);
           } else {
             // Instant position update
-            console.log(`Instant position update for ${avatar.sessionId} to`, newPosition);
             marker.setLngLat(newPosition);
           }
         }
-
-        // Update marker styling if needed (no position transitions)
-        const markerElement = marker.getElement();
-        const expectedClass = `
-          w-8 h-8 rounded-full border-2 
-          ${avatar.isCurrentUser
-            ? 'bg-blue-500 border-blue-600 ring-2 ring-blue-500 ring-opacity-50'
-            : 'bg-gray-500 border-gray-600 ring-2 ring-gray-400 ring-opacity-50'
-          }
-          shadow-lg cursor-pointer hover:scale-110
-          flex items-center justify-center text-white text-xs font-bold
-        `.replace(/\s+/g, ' ').trim();
-
-        if (markerElement.className.replace(/\s+/g, ' ').trim() !== expectedClass) {
-          markerElement.className = expectedClass;
-          // Ensure only hover transitions, no position transitions
-          markerElement.style.transition = 'transform 0.2s ease';
-        }
       }
     });
-  }, [processedAvatars, createMarkerElement, animateMarkerTo]);
+  }, [avatars]);
 
   return (
     <div

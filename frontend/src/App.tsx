@@ -26,33 +26,30 @@ function App() {
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleAvatarMove = useCallback((position: { lat: number; lng: number }) => {
-    console.log('Avatar move requested:', position)
-    
     // Clear any existing timeout to prevent multiple state updates
     if (animationTimeoutRef.current) {
       clearTimeout(animationTimeoutRef.current)
     }
-    
-    // Update current user's position with moving state
-    setAvatars(prev => prev.map(avatar => 
-      avatar.isCurrentUser 
+    setAvatars(prev => prev.map(avatar =>
+      avatar.isCurrentUser
         ? { ...avatar, position, isMoving: true }
         : avatar
     ))
 
     // Reset moving state after animation completes (match MapContainer duration)
     animationTimeoutRef.current = setTimeout(() => {
-      setAvatars(prev => prev.map(avatar => 
-        avatar.isCurrentUser 
+  
+      setAvatars(prev => prev.map(avatar =>
+        avatar.isCurrentUser
           ? { ...avatar, isMoving: false }
           : avatar
       ))
       animationTimeoutRef.current = null
-    }, 650) // Slightly longer than MapContainer animation (600ms)
+    }, 500) // Match MapContainer animation duration
   }, [])
 
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
-    console.log('Map clicked:', event.lngLat)
+    // Map click handler - currently unused
   }, [])
 
   return (
