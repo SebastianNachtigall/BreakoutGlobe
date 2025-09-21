@@ -228,6 +228,10 @@ func (h *Handler) handleMessage(client *Client, msg Message) {
 		h.handleHeartbeat(ctx, client, msg)
 	case "avatar_move":
 		h.handleAvatarMove(ctx, client, msg)
+	case "poi_join":
+		h.handlePOIJoin(ctx, client, msg)
+	case "poi_leave":
+		h.handlePOILeave(ctx, client, msg)
 	default:
 		errorMsg := Message{
 			Type: "error",
@@ -467,7 +471,149 @@ func validateMessage(msg Message) error {
 		
 		return nil
 		
+	case "poi_join", "poi_leave":
+		// Validate POI messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		poiID, ok := data["poiId"].(string)
+		if !ok || poiID == "" {
+			return errors.New("poiId is required")
+		}
+		
+		return nil
+		
 	default:
 		return fmt.Errorf("unknown message type: %s", msg.Type)
 	}
+}
+
+// handlePOIJoin handles POI join events
+func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message) {
+	// Validate message
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("Invalid POI join message format", "sessionId", client.SessionID)
+		return
+	}
+	
+	poiID, ok := data["poiId"].(string)
+	if !ok || poiID == "" {
+		h.logger.Error("Missing or invalid POI ID in join message", "sessionId", client.SessionID)
+		return
+	}
+	
+	// Check rate limit
+	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionUpdateAvatar); err != nil {
+		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
+			errorMsg := Message{
+				Type: "error",
+				Data: map[string]interface{}{
+					"message": "Rate limit exceeded: " + rateLimitErr.Error(),
+				},
+				Timestamp: time.Now(),
+			}
+			client.Send <- errorMsg
+		}
+		h.logger.Warn("POI join rate limited", "sessionId", client.SessionID, "userId", client.UserID)
+		return
+	}
+	
+	// Send acknowledgment
+	ackMsg := Message{
+		Type: "poi_join_ack",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"sessionId": client.SessionID,
+			"poiId": poiID,
+			"success": true,
+		},
+	}
+	
+	select {
+	case client.Send <- ackMsg:
+	default:
+		h.logger.Warn("Failed to send POI join acknowledgment", "sessionId", client.SessionID)
+	}
+	
+	// Broadcast POI join event to other clients in the same map
+	broadcastMsg := Message{
+		Type: "poi_joined",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"sessionId": client.SessionID,
+			"userId": client.UserID,
+			"poiId": poiID,
+		},
+	}
+	
+	h.manager.BroadcastToMapExcept(client.MapID, client.SessionID, broadcastMsg)
+	
+	h.logger.Info("User joined POI", "sessionId", client.SessionID, "userId", client.UserID, "poiId", poiID)
+}
+
+// handlePOILeave handles POI leave events
+func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Message) {
+	// Validate message
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("Invalid POI leave message format", "sessionId", client.SessionID)
+		return
+	}
+	
+	poiID, ok := data["poiId"].(string)
+	if !ok || poiID == "" {
+		h.logger.Error("Missing or invalid POI ID in leave message", "sessionId", client.SessionID)
+		return
+	}
+	
+	// Check rate limit
+	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionUpdateAvatar); err != nil {
+		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
+			errorMsg := Message{
+				Type: "error",
+				Data: map[string]interface{}{
+					"message": "Rate limit exceeded: " + rateLimitErr.Error(),
+				},
+				Timestamp: time.Now(),
+			}
+			client.Send <- errorMsg
+		}
+		h.logger.Warn("POI leave rate limited", "sessionId", client.SessionID, "userId", client.UserID)
+		return
+	}
+	
+	// Send acknowledgment
+	ackMsg := Message{
+		Type: "poi_leave_ack",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"sessionId": client.SessionID,
+			"poiId": poiID,
+			"success": true,
+		},
+	}
+	
+	select {
+	case client.Send <- ackMsg:
+	default:
+		h.logger.Warn("Failed to send POI leave acknowledgment", "sessionId", client.SessionID)
+	}
+	
+	// Broadcast POI leave event to other clients in the same map
+	broadcastMsg := Message{
+		Type: "poi_left",
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"sessionId": client.SessionID,
+			"userId": client.UserID,
+			"poiId": poiID,
+		},
+	}
+	
+	h.manager.BroadcastToMapExcept(client.MapID, client.SessionID, broadcastMsg)
+	
+	h.logger.Info("User left POI", "sessionId", client.SessionID, "userId", client.UserID, "poiId", poiID)
 }

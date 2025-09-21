@@ -404,6 +404,172 @@ func (suite *WebSocketHandlerTestSuite) TestBroadcastToMap() {
 	suite.Equal("test_broadcast", msg2.Type)
 }
 
+func (suite *WebSocketHandlerTestSuite) TestPOIJoin() {
+	// Setup connection
+	session := &models.Session{
+		ID:       "session-123",
+		UserID:   "user-456",
+		MapID:    "map-789",
+		IsActive: true,
+	}
+	suite.mockSessionService.On("GetSession", mock.Anything, "session-123").Return(session, nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionUpdateAvatar).Return(nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionUpdateAvatar).Return(nil)
+	
+	// Connect to WebSocket
+	header := http.Header{}
+	header.Set("Authorization", "Bearer session-123")
+	conn, _, err := ws.DefaultDialer.Dial(suite.wsURL, header)
+	suite.NoError(err)
+	defer conn.Close()
+	
+	// Read welcome message
+	var welcomeMsg Message
+	conn.ReadJSON(&welcomeMsg)
+	
+	// Send POI join message
+	joinMsg := Message{
+		Type: "poi_join",
+		Data: map[string]interface{}{
+			"poiId": "poi-123",
+		},
+		Timestamp: time.Now(),
+	}
+	
+	err = conn.WriteJSON(joinMsg)
+	suite.NoError(err)
+	
+	// Should receive acknowledgment
+	var ackMsg Message
+	err = conn.ReadJSON(&ackMsg)
+	suite.NoError(err)
+	suite.Equal("poi_join_ack", ackMsg.Type)
+	
+	// Verify acknowledgment data
+	ackData := ackMsg.Data.(map[string]interface{})
+	suite.Equal("session-123", ackData["sessionId"])
+	suite.Equal("poi-123", ackData["poiId"])
+	suite.Equal(true, ackData["success"])
+}
+
+func (suite *WebSocketHandlerTestSuite) TestPOILeave() {
+	// Setup connection
+	session := &models.Session{
+		ID:       "session-123",
+		UserID:   "user-456",
+		MapID:    "map-789",
+		IsActive: true,
+	}
+	suite.mockSessionService.On("GetSession", mock.Anything, "session-123").Return(session, nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionUpdateAvatar).Return(nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionUpdateAvatar).Return(nil)
+	
+	// Connect to WebSocket
+	header := http.Header{}
+	header.Set("Authorization", "Bearer session-123")
+	conn, _, err := ws.DefaultDialer.Dial(suite.wsURL, header)
+	suite.NoError(err)
+	defer conn.Close()
+	
+	// Read welcome message
+	var welcomeMsg Message
+	conn.ReadJSON(&welcomeMsg)
+	
+	// Send POI leave message
+	leaveMsg := Message{
+		Type: "poi_leave",
+		Data: map[string]interface{}{
+			"poiId": "poi-123",
+		},
+		Timestamp: time.Now(),
+	}
+	
+	err = conn.WriteJSON(leaveMsg)
+	suite.NoError(err)
+	
+	// Should receive acknowledgment
+	var ackMsg Message
+	err = conn.ReadJSON(&ackMsg)
+	suite.NoError(err)
+	suite.Equal("poi_leave_ack", ackMsg.Type)
+	
+	// Verify acknowledgment data
+	ackData := ackMsg.Data.(map[string]interface{})
+	suite.Equal("session-123", ackData["sessionId"])
+	suite.Equal("poi-123", ackData["poiId"])
+	suite.Equal(true, ackData["success"])
+}
+
+func (suite *WebSocketHandlerTestSuite) TestPOIEventBroadcasting() {
+	// Setup two connections for the same map
+	session1 := &models.Session{
+		ID:       "session-1",
+		UserID:   "user-1",
+		MapID:    "map-789",
+		IsActive: true,
+	}
+	session2 := &models.Session{
+		ID:       "session-2",
+		UserID:   "user-2",
+		MapID:    "map-789",
+		IsActive: true,
+	}
+	
+	suite.mockSessionService.On("GetSession", mock.Anything, "session-1").Return(session1, nil)
+	suite.mockSessionService.On("GetSession", mock.Anything, "session-2").Return(session2, nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-1", services.ActionUpdateAvatar).Return(nil)
+	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-1", services.ActionUpdateAvatar).Return(nil)
+	
+	// Connect first client
+	header1 := http.Header{}
+	header1.Set("Authorization", "Bearer session-1")
+	conn1, _, err := ws.DefaultDialer.Dial(suite.wsURL, header1)
+	suite.NoError(err)
+	defer conn1.Close()
+	
+	// Connect second client
+	header2 := http.Header{}
+	header2.Set("Authorization", "Bearer session-2")
+	conn2, _, err := ws.DefaultDialer.Dial(suite.wsURL, header2)
+	suite.NoError(err)
+	defer conn2.Close()
+	
+	// Read welcome messages
+	var welcomeMsg1, welcomeMsg2 Message
+	conn1.ReadJSON(&welcomeMsg1)
+	conn2.ReadJSON(&welcomeMsg2)
+	
+	// Client 1 joins a POI
+	joinMsg := Message{
+		Type: "poi_join",
+		Data: map[string]interface{}{
+			"poiId": "poi-123",
+		},
+		Timestamp: time.Now(),
+	}
+	
+	err = conn1.WriteJSON(joinMsg)
+	suite.NoError(err)
+	
+	// Client 1 should receive acknowledgment
+	var ackMsg Message
+	err = conn1.ReadJSON(&ackMsg)
+	suite.NoError(err)
+	suite.Equal("poi_join_ack", ackMsg.Type)
+	
+	// Client 2 should receive broadcast of the join event
+	var broadcastMsg Message
+	err = conn2.ReadJSON(&broadcastMsg)
+	suite.NoError(err)
+	suite.Equal("poi_joined", broadcastMsg.Type)
+	
+	// Verify broadcast data
+	broadcastData := broadcastMsg.Data.(map[string]interface{})
+	suite.Equal("session-1", broadcastData["sessionId"])
+	suite.Equal("user-1", broadcastData["userId"])
+	suite.Equal("poi-123", broadcastData["poiId"])
+}
+
 func (suite *WebSocketHandlerTestSuite) TestInvalidMessageFormat() {
 	// Setup connection
 	session := &models.Session{
