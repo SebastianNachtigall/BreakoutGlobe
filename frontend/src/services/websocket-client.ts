@@ -1,3 +1,7 @@
+import { sessionStore } from '../stores/sessionStore';
+import { poiStore } from '../stores/poiStore';
+import type { POIData } from '../components/MapContainer';
+
 export enum ConnectionStatus {
   DISCONNECTED = 'disconnected',
   CONNECTING = 'connecting',
@@ -8,250 +12,138 @@ export enum ConnectionStatus {
 export interface WebSocketMessage {
   type: string;
   data: any;
-  timestamp: Date | string;
+  timestamp: Date;
 }
 
 export interface WebSocketError {
-  type: 'connection_error' | 'parse_error' | 'send_error';
   message: string;
-  originalError?: Error;
+  code?: number;
+  timestamp: Date;
 }
 
 export interface StateSync {
-  avatars?: Array<{ sessionId: string; position: { lat: number; lng: number } }>;
-  pois?: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
+  type: 'avatar' | 'poi' | 'session';
+  data: any;
+  timestamp: Date;
 }
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
-  private status: ConnectionStatus = ConnectionStatus.DISCONNECTED;
+  private url: string;
+  private sessionId: string;
+  private connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private baseReconnectDelay = 1000; // 1 second
-  private maxReconnectDelay = 30000; // 30 seconds
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 1000; // Start with 1 second
   private reconnectTimer: number | null = null;
   private messageQueue: WebSocketMessage[] = [];
-  private maxQueueSize = 100;
-  private shouldReconnect = false;
-
-  // Event callbacks
-  private statusCallbacks: ((status: ConnectionStatus) => void)[] = [];
+  private statusChangeCallbacks: ((status: ConnectionStatus) => void)[] = [];
   private messageCallbacks: ((message: WebSocketMessage) => void)[] = [];
   private errorCallbacks: ((error: WebSocketError) => void)[] = [];
   private stateSyncCallbacks: ((data: StateSync) => void)[] = [];
 
-  constructor(
-    private url: string,
-    private sessionId: string
-  ) {}
+  constructor(url: string, sessionId: string) {
+    this.url = url;
+    this.sessionId = sessionId;
+  }
 
-  // Connection management
-  connect(): void {
-    if (this.status === ConnectionStatus.CONNECTED || this.status === ConnectionStatus.CONNECTING) {
+  // Connection Management
+  async connect(): Promise<void> {
+    if (this.connectionStatus === ConnectionStatus.CONNECTED || this.connectionStatus === ConnectionStatus.CONNECTING) {
       return;
     }
 
-    this.shouldReconnect = true;
-    this.setStatus(ConnectionStatus.CONNECTING);
-    this.createWebSocket();
+    this.connectionStatus = ConnectionStatus.CONNECTING;
+    this.notifyStatusChange();
+
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(this.url);
+
+        this.ws.onopen = () => {
+          this.connectionStatus = ConnectionStatus.CONNECTED;
+          this.reconnectAttempts = 0;
+          this.reconnectDelay = 1000; // Reset delay
+          this.notifyStatusChange();
+          this.sendQueuedMessages();
+          resolve();
+        };
+
+        this.ws.onclose = (event) => {
+          this.connectionStatus = ConnectionStatus.DISCONNECTED;
+          this.ws = null;
+          this.notifyStatusChange();
+
+          // Auto-reconnect on unexpected closure
+          if (event.code !== 1000 && event.code !== 1001) {
+            this.scheduleReconnect();
+          }
+        };
+
+        this.ws.onerror = (error) => {
+          this.connectionStatus = ConnectionStatus.DISCONNECTED;
+          const wsError: WebSocketError = {
+            message: 'WebSocket connection error',
+            timestamp: new Date()
+          };
+          this.notifyError(wsError);
+          reject(error);
+        };
+
+        this.ws.onmessage = (event) => {
+          this.handleMessage(event);
+        };
+
+      } catch (error) {
+        this.connectionStatus = ConnectionStatus.DISCONNECTED;
+        const wsError: WebSocketError = {
+          message: error instanceof Error ? error.message : 'Unknown connection error',
+          timestamp: new Date()
+        };
+        this.notifyError(wsError);
+        reject(error);
+      }
+    });
   }
 
   disconnect(): void {
-    this.shouldReconnect = false;
-    this.clearReconnectTimer();
-    
-    if (this.ws) {
-      this.ws.close(1000, 'Manual disconnect');
-      this.ws = null;
-    }
-    
-    this.setStatus(ConnectionStatus.DISCONNECTED);
-    this.messageQueue = [];
-  }
-
-  private createWebSocket(): void {
-    try {
-      const wsUrl = `${this.url}?sessionId=${this.sessionId}`;
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = this.handleOpen.bind(this);
-      this.ws.onclose = this.handleClose.bind(this);
-      this.ws.onerror = this.handleError.bind(this);
-      this.ws.onmessage = this.handleMessage.bind(this);
-    } catch (error) {
-      this.handleConnectionError(error as Error);
-    }
-  }
-
-  private handleOpen(): void {
-    const wasReconnecting = this.status === ConnectionStatus.RECONNECTING;
-    this.setStatus(ConnectionStatus.CONNECTED);
-    this.reconnectAttempts = 0;
-    this.sendQueuedMessages();
-    
-    // Request state synchronization after reconnection
-    if (wasReconnecting) {
-      this.requestStateSync();
-    }
-  }
-
-  private handleClose(event: CloseEvent): void {
-    this.ws = null;
-    
-    if (!this.shouldReconnect) {
-      this.setStatus(ConnectionStatus.DISCONNECTED);
-      return;
-    }
-
-    // Don't reconnect for normal closure or manual disconnect
-    if (event.code === 1000) {
-      this.setStatus(ConnectionStatus.DISCONNECTED);
-      return;
-    }
-
-    this.setStatus(ConnectionStatus.RECONNECTING);
-    this.scheduleReconnect();
-  }
-
-  private handleError(event: Event): void {
-    const error: WebSocketError = {
-      type: 'connection_error',
-      message: 'WebSocket error occurred'
-    };
-    
-    this.notifyError(error);
-    
-    if (this.status === ConnectionStatus.CONNECTING) {
-      this.setStatus(ConnectionStatus.DISCONNECTED);
-      if (this.shouldReconnect) {
-        this.setStatus(ConnectionStatus.RECONNECTING);
-        this.scheduleReconnect();
-      }
-    }
-  }
-
-  private handleMessage(event: MessageEvent): void {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-      
-      // Handle special message types
-      if (message.type === 'sync_response') {
-        this.notifyStateSync(message.data);
-      } else {
-        this.notifyMessage(message);
-      }
-    } catch (error) {
-      const parseError: WebSocketError = {
-        type: 'parse_error',
-        message: 'Failed to parse message: ' + (error as Error).message,
-        originalError: error as Error
-      };
-      this.notifyError(parseError);
-    }
-  }
-
-  private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      this.setStatus(ConnectionStatus.DISCONNECTED);
-      this.shouldReconnect = false;
-      return;
-    }
-
-    const delay = Math.min(
-      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-      this.maxReconnectDelay
-    );
-
-    this.reconnectTimer = window.setTimeout(() => {
-      this.reconnectAttempts++;
-      this.setStatus(ConnectionStatus.CONNECTING);
-      this.createWebSocket();
-    }, delay);
-  }
-
-  private clearReconnectTimer(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-  }
 
-  // Message handling
-  send(message: WebSocketMessage): void {
-    if (this.status === ConnectionStatus.CONNECTED && this.ws) {
-      try {
-        this.ws.send(JSON.stringify(message));
-      } catch (error) {
-        const sendError: WebSocketError = {
-          type: 'send_error',
-          message: 'Failed to send message: ' + (error as Error).message,
-          originalError: error as Error
-        };
-        this.notifyError(sendError);
-        this.queueMessage(message);
-      }
-    } else {
-      this.queueMessage(message);
+    if (this.ws) {
+      this.ws.close(1000, 'Normal closure');
+      this.ws = null;
     }
-  }
 
-  private queueMessage(message: WebSocketMessage): void {
-    if (this.messageQueue.length >= this.maxQueueSize) {
-      // Remove oldest message to make room
-      this.messageQueue.shift();
-    }
-    this.messageQueue.push(message);
-  }
-
-  private sendQueuedMessages(): void {
-    while (this.messageQueue.length > 0 && this.status === ConnectionStatus.CONNECTED) {
-      const message = this.messageQueue.shift();
-      if (message) {
-        this.send(message);
-      }
-    }
-  }
-
-  private requestStateSync(): void {
-    const syncRequest: WebSocketMessage = {
-      type: 'sync_request',
-      data: {},
-      timestamp: new Date().toISOString()
-    };
-    this.send(syncRequest);
-  }
-
-  // Status management
-  private setStatus(status: ConnectionStatus): void {
-    if (this.status !== status) {
-      this.status = status;
-      this.notifyStatusChange(status);
-    }
-  }
-
-  getConnectionStatus(): ConnectionStatus {
-    return this.status;
+    this.connectionStatus = ConnectionStatus.DISCONNECTED;
+    this.notifyStatusChange();
   }
 
   isConnected(): boolean {
-    return this.status === ConnectionStatus.CONNECTED;
+    return this.connectionStatus === ConnectionStatus.CONNECTED;
   }
 
   isConnecting(): boolean {
-    return this.status === ConnectionStatus.CONNECTING;
+    return this.connectionStatus === ConnectionStatus.CONNECTING;
   }
 
   isReconnecting(): boolean {
-    return this.status === ConnectionStatus.RECONNECTING;
+    return this.connectionStatus === ConnectionStatus.RECONNECTING;
+  }
+
+  getConnectionStatus(): ConnectionStatus {
+    return this.connectionStatus;
   }
 
   getQueuedMessageCount(): number {
     return this.messageQueue.length;
   }
 
-  // Event handling
+  // Callback registration methods
   onStatusChange(callback: (status: ConnectionStatus) => void): void {
-    this.statusCallbacks.push(callback);
+    this.statusChangeCallbacks.push(callback);
   }
 
   onMessage(callback: (message: WebSocketMessage) => void): void {
@@ -266,40 +158,11 @@ export class WebSocketClient {
     this.stateSyncCallbacks.push(callback);
   }
 
-  // Remove event listeners
-  offStatusChange(callback: (status: ConnectionStatus) => void): void {
-    const index = this.statusCallbacks.indexOf(callback);
-    if (index > -1) {
-      this.statusCallbacks.splice(index, 1);
-    }
-  }
-
-  offMessage(callback: (message: WebSocketMessage) => void): void {
-    const index = this.messageCallbacks.indexOf(callback);
-    if (index > -1) {
-      this.messageCallbacks.splice(index, 1);
-    }
-  }
-
-  offError(callback: (error: WebSocketError) => void): void {
-    const index = this.errorCallbacks.indexOf(callback);
-    if (index > -1) {
-      this.errorCallbacks.splice(index, 1);
-    }
-  }
-
-  offStateSync(callback: (data: StateSync) => void): void {
-    const index = this.stateSyncCallbacks.indexOf(callback);
-    if (index > -1) {
-      this.stateSyncCallbacks.splice(index, 1);
-    }
-  }
-
-  // Notification methods
-  private notifyStatusChange(status: ConnectionStatus): void {
-    this.statusCallbacks.forEach(callback => {
+  // Helper methods for notifications
+  private notifyStatusChange(): void {
+    this.statusChangeCallbacks.forEach(callback => {
       try {
-        callback(status);
+        callback(this.connectionStatus);
       } catch (error) {
         console.error('Error in status change callback:', error);
       }
@@ -336,13 +199,264 @@ export class WebSocketClient {
     });
   }
 
-  private handleConnectionError(error: Error): void {
-    const connectionError: WebSocketError = {
-      type: 'connection_error',
-      message: 'Failed to create WebSocket connection: ' + error.message,
-      originalError: error
-    };
-    this.notifyError(connectionError);
-    this.setStatus(ConnectionStatus.DISCONNECTED);
+  // Reconnection Logic
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      return;
+    }
+
+    this.connectionStatus = ConnectionStatus.RECONNECTING;
+    this.reconnectAttempts++;
+    this.notifyStatusChange();
+
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+
+    this.reconnectTimer = setTimeout(() => {
+      this.connect().catch(() => {
+        // Connection failed, will trigger another reconnect attempt
+      });
+    }, delay);
   }
+
+  setMaxReconnectAttempts(max: number): void {
+    this.maxReconnectAttempts = max;
+  }
+
+  getReconnectAttempts(): number {
+    return this.reconnectAttempts;
+  }
+
+  // Message Handling
+  send(message: WebSocketMessage): void {
+    if (this.isConnected() && this.ws) {
+      this.ws.send(JSON.stringify(message));
+    } else {
+      // Queue message for later
+      this.messageQueue.push(message);
+    }
+  }
+
+  private sendQueuedMessages(): void {
+    while (this.messageQueue.length > 0 && this.isConnected() && this.ws) {
+      const message = this.messageQueue.shift()!;
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+
+  getQueuedMessages(): WebSocketMessage[] {
+    return [...this.messageQueue];
+  }
+
+  private handleMessage(event: MessageEvent): void {
+    try {
+      const message: WebSocketMessage = JSON.parse(event.data);
+      if (!message.timestamp) {
+        message.timestamp = new Date();
+      }
+      this.notifyMessage(message);
+      this.processMessage(message);
+    } catch (error) {
+      this.notifyError({
+        message: 'Failed to parse WebSocket message',
+        timestamp: new Date()
+      });
+    }
+  }
+
+  private processMessage(message: WebSocketMessage): void {
+    switch (message.type) {
+      case 'avatar_update':
+        this.handleAvatarUpdate(message.data);
+        break;
+      case 'avatar_move_confirmed':
+        this.handleAvatarMoveConfirmed(message.data);
+        break;
+      case 'avatar_move_rejected':
+        this.handleAvatarMoveRejected(message.data);
+        break;
+      case 'poi_update':
+        this.handlePOIUpdate(message.data);
+        break;
+      case 'poi_delete':
+        this.handlePOIDelete(message.data);
+        break;
+      case 'poi_create_confirmed':
+        this.handlePOICreateConfirmed(message.data);
+        break;
+      case 'poi_create_rejected':
+        this.handlePOICreateRejected(message.data);
+        break;
+      default:
+        // Unknown message type, ignore or log
+        break;
+    }
+  }
+
+  // Store Integration Handlers
+  private handleAvatarUpdate(data: any): void {
+    if (data.sessionId === this.sessionId) {
+      sessionStore.getState().confirmAvatarPosition(data.position);
+      this.notifyStateSync({
+        type: 'avatar',
+        data: data.position,
+        timestamp: new Date()
+      });
+    }
+  }
+
+  private handleAvatarMoveConfirmed(data: any): void {
+    if (data.sessionId === this.sessionId) {
+      sessionStore.getState().confirmAvatarPosition(data.position);
+      this.notifyStateSync({
+        type: 'avatar',
+        data: data.position,
+        timestamp: new Date()
+      });
+    }
+  }
+
+  private handleAvatarMoveRejected(data: any): void {
+    if (data.sessionId === this.sessionId) {
+      sessionStore.getState().rollbackAvatarPosition();
+      this.notifyStateSync({
+        type: 'avatar',
+        data: { rejected: true, reason: data.reason },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  private handlePOIUpdate(data: POIData): void {
+    poiStore.getState().handleRealtimeUpdate(data);
+    this.notifyStateSync({
+      type: 'poi',
+      data,
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOIDelete(data: { id: string }): void {
+    poiStore.getState().handleRealtimeDelete(data.id);
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'delete', id: data.id },
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOICreateConfirmed(data: { tempId: string; poi: POIData }): void {
+    // Remove the temporary POI and add the real one
+    poiStore.getState().rollbackPOICreation(data.tempId);
+    poiStore.getState().addPOI(data.poi);
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'create_confirmed', poi: data.poi },
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOICreateRejected(data: { tempId: string; reason: string }): void {
+    poiStore.getState().rollbackPOICreation(data.tempId);
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'create_rejected', tempId: data.tempId, reason: data.reason },
+      timestamp: new Date()
+    });
+  }
+
+  // Optimistic Update Methods
+  moveAvatar(position: { lat: number; lng: number }): void {
+    // Perform optimistic update
+    sessionStore.getState().updateAvatarPosition(position, true);
+
+    // Send to server
+    this.send({
+      type: 'avatar_move',
+      data: {
+        sessionId: this.sessionId,
+        position
+      },
+      timestamp: new Date()
+    });
+
+    // Emit state sync
+    this.notifyStateSync({
+      type: 'avatar',
+      data: { position },
+      timestamp: new Date()
+    });
+  }
+
+  createPOI(poi: POIData): void {
+    // Perform optimistic update
+    poiStore.getState().createPOIOptimistic(poi);
+
+    // Send to server
+    this.send({
+      type: 'poi_create',
+      data: {
+        tempId: poi.id,
+        poi: {
+          ...poi,
+          id: undefined // Server will assign real ID
+        }
+      },
+      timestamp: new Date()
+    });
+
+    // Emit state sync
+    this.notifyStateSync({
+      type: 'poi',
+      data: poi,
+      timestamp: new Date()
+    });
+  }
+
+  joinPOI(poiId: string): void {
+    const userId = this.sessionId;
+
+    // Perform optimistic update
+    const success = poiStore.getState().joinPOIOptimistic(poiId, userId);
+
+    if (success) {
+      // Send to server
+      this.send({
+        type: 'poi_join',
+        data: { poiId, userId },
+        timestamp: new Date()
+      });
+
+      // Emit state sync
+      this.notifyStateSync({
+        type: 'poi',
+        data: { action: 'join', poiId, userId },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  leavePOI(poiId: string): void {
+    const userId = this.sessionId;
+
+    // Perform optimistic update
+    const success = poiStore.getState().leavePOI(poiId, userId);
+
+    if (success) {
+      // Send to server
+      this.send({
+        type: 'poi_leave',
+        data: { poiId, userId },
+        timestamp: new Date()
+      });
+
+      // Emit state sync
+      this.notifyStateSync({
+        type: 'poi',
+        data: { action: 'leave', poiId, userId },
+        timestamp: new Date()
+      });
+    }
+  }
+
+
 }

@@ -170,7 +170,7 @@
     - Implement POI store with real-time updates and optimistic updates
     - _Requirements: 1.3, 2.4, 3.5, 4.1, 4.2_
 
-  - [ ] 9.2 Implement WebSocket client integration
+  - [x] 9.2 Implement WebSocket client integration
     - Write tests for WebSocket connection and event handling
     - Implement WebSocket client with automatic reconnection
     - Write tests for real-time state synchronization
