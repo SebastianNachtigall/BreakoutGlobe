@@ -120,6 +120,46 @@ describe('MapContainer', () => {
       
       expect(onMapReady).toHaveBeenCalledWith(mockMap);
     });
+
+    it('should handle click-to-move functionality', () => {
+      const onAvatarMove = vi.fn();
+      const onMapClick = vi.fn();
+      
+      render(
+        <MapContainer 
+          onMapClick={onMapClick}
+          onAvatarMove={onAvatarMove}
+        />
+      );
+      
+      // Simulate map click event
+      const clickEvent = {
+        lngLat: { lng: -74.0060, lat: 40.7128 }
+      };
+      
+      // Get the click handler that was registered
+      const clickHandler = mockMap.on.mock.calls.find(call => call[0] === 'click')[1];
+      clickHandler(clickEvent);
+      
+      expect(onMapClick).toHaveBeenCalledWith(clickEvent);
+      expect(onAvatarMove).toHaveBeenCalledWith({ lat: 40.7128, lng: -74.0060 });
+    });
+
+    it('should convert coordinates correctly for avatar movement', () => {
+      const onAvatarMove = vi.fn();
+      
+      render(<MapContainer onAvatarMove={onAvatarMove} />);
+      
+      // Simulate click with different coordinate formats
+      const clickEvent = {
+        lngLat: { lng: -122.4194, lat: 37.7749 } // San Francisco
+      };
+      
+      const clickHandler = mockMap.on.mock.calls.find(call => call[0] === 'click')[1];
+      clickHandler(clickEvent);
+      
+      expect(onAvatarMove).toHaveBeenCalledWith({ lat: 37.7749, lng: -122.4194 });
+    });
   });
 
   describe('Marker Management', () => {
@@ -139,9 +179,7 @@ describe('MapContainer', () => {
       expect(mockMarker.addTo).toHaveBeenCalledTimes(2);
     });
 
-    it('should update marker positions when avatars change', async () => {
-      const { Marker } = vi.mocked(await import('maplibre-gl'));
-      
+    it('should update marker positions when avatars change', () => {
       const initialAvatars = [
         { sessionId: 'user-1', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: false }
       ];
@@ -167,6 +205,63 @@ describe('MapContainer', () => {
       rerender(<MapContainer avatars={[]} />);
       
       expect(mockMarker.remove).toHaveBeenCalled();
+    });
+
+    it('should apply smooth movement animations to avatar markers', async () => {
+      const { Marker } = vi.mocked(await import('maplibre-gl'));
+      
+      const movingAvatars = [
+        { sessionId: 'user-1', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: false, isMoving: true }
+      ];
+      
+      render(<MapContainer avatars={movingAvatars} />);
+      
+      // Check that Marker was called with an element that has animation classes
+      expect(Marker).toHaveBeenCalled();
+      const markerCall = (Marker as any).mock.calls[0];
+      const markerOptions = markerCall[0];
+      const element = markerOptions.element;
+      
+      expect(element.className).toContain('transition-all');
+      expect(element.className).toContain('duration-500');
+    });
+
+    it('should handle avatar collision detection', () => {
+      const overlappingAvatars = [
+        { sessionId: 'user-1', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: false },
+        { sessionId: 'user-2', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: true } // Same position
+      ];
+      
+      render(<MapContainer avatars={overlappingAvatars} />);
+      
+      // Verify both markers are created but positioned to avoid overlap
+      expect(mockMarker.setLngLat).toHaveBeenCalledTimes(2);
+      
+      // Second marker should be slightly offset
+      const calls = mockMarker.setLngLat.mock.calls;
+      const [lng1, lat1] = calls[0][0];
+      const [lng2, lat2] = calls[1][0];
+      
+      // Should have small offset to prevent overlap
+      expect(Math.abs(lng1 - lng2) > 0 || Math.abs(lat1 - lat2) > 0).toBe(true);
+    });
+
+    it('should optimize marker positioning for better visibility', () => {
+      const clusteredAvatars = [
+        { sessionId: 'user-1', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: false },
+        { sessionId: 'user-2', position: { lat: 40.7129, lng: -74.0061 }, isCurrentUser: false },
+        { sessionId: 'user-3', position: { lat: 40.7127, lng: -74.0059 }, isCurrentUser: true }
+      ];
+      
+      render(<MapContainer avatars={clusteredAvatars} />);
+      
+      // All markers should be created
+      expect(mockMarker.setLngLat).toHaveBeenCalledTimes(3);
+      
+      // Current user marker should be prioritized (rendered last/on top)
+      const calls = mockMarker.setLngLat.mock.calls;
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[0]).toEqual([-74.0059, 40.7127]); // Current user position
     });
   });
 

@@ -9,6 +9,7 @@ export interface AvatarData {
     lng: number;
   };
   isCurrentUser: boolean;
+  isMoving?: boolean;
 }
 
 export interface MapContainerProps {
@@ -17,6 +18,7 @@ export interface MapContainerProps {
   avatars?: AvatarData[];
   onMapClick?: (event: { lngLat: { lng: number; lat: number } }) => void;
   onMapReady?: (map: Map) => void;
+  onAvatarMove?: (position: { lat: number; lng: number }) => void;
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -24,11 +26,41 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   initialZoom = 2,
   avatars = [],
   onMapClick,
-  onMapReady
+  onMapReady,
+  onAvatarMove
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
   const markers = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+
+  // Helper function to detect and resolve avatar collisions
+  const resolveCollisions = (avatars: AvatarData[]): AvatarData[] => {
+    const resolved = [...avatars];
+    const positionMap = new globalThis.Map<string, number>();
+    
+    resolved.forEach((avatar, index) => {
+      const posKey = `${avatar.position.lat.toFixed(6)},${avatar.position.lng.toFixed(6)}`;
+      const existingCount = positionMap.get(posKey) || 0;
+      
+      if (existingCount > 0) {
+        // Apply small offset to prevent overlap
+        const offsetDistance = 0.0001; // ~11 meters
+        const angle = (existingCount * 60) * (Math.PI / 180); // 60 degrees apart
+        
+        resolved[index] = {
+          ...avatar,
+          position: {
+            lat: avatar.position.lat + (Math.sin(angle) * offsetDistance),
+            lng: avatar.position.lng + (Math.cos(angle) * offsetDistance)
+          }
+        };
+      }
+      
+      positionMap.set(posKey, existingCount + 1);
+    });
+    
+    return resolved;
+  };
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -47,8 +79,23 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     map.current.addControl(new ScaleControl({}), 'bottom-left');
 
     // Add event listeners
-    if (onMapClick) {
-      map.current.on('click', onMapClick);
+    if (onMapClick || onAvatarMove) {
+      const handleMapClick = (event: { lngLat: { lng: number; lat: number } }) => {
+        // Call the original click handler if provided
+        if (onMapClick) {
+          onMapClick(event);
+        }
+        
+        // Handle avatar movement if provided
+        if (onAvatarMove) {
+          onAvatarMove({
+            lat: event.lngLat.lat,
+            lng: event.lngLat.lng
+          });
+        }
+      };
+      
+      map.current.on('click', handleMapClick);
     }
 
     // Notify parent that map is ready
@@ -59,10 +106,6 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     // Cleanup function
     return () => {
       if (map.current) {
-        if (onMapClick) {
-          map.current.off('click', onMapClick);
-        }
-
         // Remove all markers
         markers.current.forEach(marker => marker.remove());
         markers.current.clear();
@@ -77,8 +120,18 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   useEffect(() => {
     if (!map.current) return;
 
+    // Resolve collisions and optimize positioning
+    const resolvedAvatars = resolveCollisions(avatars);
+    
+    // Sort avatars to render current user last (on top)
+    const sortedAvatars = [...resolvedAvatars].sort((a, b) => {
+      if (a.isCurrentUser && !b.isCurrentUser) return 1;
+      if (!a.isCurrentUser && b.isCurrentUser) return -1;
+      return 0;
+    });
+
     // Remove markers that no longer exist
-    const currentSessionIds = new Set(avatars.map(avatar => avatar.sessionId));
+    const currentSessionIds = new Set(sortedAvatars.map(avatar => avatar.sessionId));
     markers.current.forEach((marker: Marker, sessionId: string) => {
       if (!currentSessionIds.has(sessionId)) {
         marker.remove();
@@ -87,12 +140,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     });
 
     // Add or update markers
-    avatars.forEach(avatar => {
+    sortedAvatars.forEach(avatar => {
       let marker = markers.current.get(avatar.sessionId);
 
       if (!marker) {
         // Create new marker
         const markerElement = document.createElement('div');
+        const animationClasses = avatar.isMoving ? 'transition-all duration-500 ease-in-out' : '';
+        
         markerElement.className = `
           w-8 h-8 rounded-full border-2 
           ${avatar.isCurrentUser
@@ -101,6 +156,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           }
           shadow-lg cursor-pointer hover:scale-110 transition-transform duration-200
           flex items-center justify-center text-white text-xs font-bold
+          ${animationClasses}
         `;
         markerElement.textContent = avatar.sessionId.charAt(0).toUpperCase();
         markerElement.title = avatar.sessionId;
@@ -111,11 +167,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         markers.current.set(avatar.sessionId, marker);
       } else {
-        // Update existing marker position
+        // Update existing marker position with smooth animation
+        const markerElement = marker.getElement();
+        const animationClasses = avatar.isMoving ? 'transition-all duration-500 ease-in-out' : '';
+        
+        // Update position
         marker.setLngLat([avatar.position.lng, avatar.position.lat]);
 
-        // Update marker styling if current user status changed
-        const markerElement = marker.getElement();
+        // Update marker styling and animation classes
         markerElement.className = `
           w-8 h-8 rounded-full border-2 
           ${avatar.isCurrentUser
@@ -124,6 +183,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           }
           shadow-lg cursor-pointer hover:scale-110 transition-transform duration-200
           flex items-center justify-center text-white text-xs font-bold
+          ${animationClasses}
         `;
       }
     });
