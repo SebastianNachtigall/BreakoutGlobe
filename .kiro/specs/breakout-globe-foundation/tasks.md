@@ -155,7 +155,7 @@
     - Add avatar collision detection and positioning optimization
     - _Requirements: 2.1, 2.2, 2.3, 2.5_
 
-  - [ ] 8.3 Create POI visualization and interaction
+  - [x] 8.3 Create POI visualization and interaction
     - Write tests for POI marker rendering and clustering
     - Implement POI markers with participant count display
     - Write tests for POI creation via right-click context menu

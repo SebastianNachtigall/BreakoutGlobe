@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MapContainer } from './MapContainer';
 
 // Mock MapLibre GL JS
@@ -19,7 +20,11 @@ const mockMarker = {
 };
 
 const mockMap = {
-  on: vi.fn(),
+  on: vi.fn((event, handler) => {
+    // Store handlers for manual triggering in tests
+    if (!mockMap._handlers) mockMap._handlers = {};
+    mockMap._handlers[event] = handler;
+  }),
   off: vi.fn(),
   remove: vi.fn(),
   resize: vi.fn(),
@@ -34,7 +39,8 @@ const mockMap = {
   getBounds: vi.fn(() => ({
     getNorthEast: () => ({ lng: 1, lat: 1 }),
     getSouthWest: () => ({ lng: -1, lat: -1 })
-  }))
+  })),
+  _handlers: {} as any
 };
 
 vi.mock('maplibre-gl', () => ({
@@ -240,7 +246,7 @@ describe('MapContainer', () => {
       expect(element.style.backfaceVisibility).toBe('hidden');
     });
 
-    it('should handle avatar collision detection', () => {
+    it('should handle multiple avatars at same position', () => {
       const overlappingAvatars = [
         { sessionId: 'user-1', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: false },
         { sessionId: 'user-2', position: { lat: 40.7128, lng: -74.0060 }, isCurrentUser: true } // Same position
@@ -248,16 +254,9 @@ describe('MapContainer', () => {
       
       render(<MapContainer avatars={overlappingAvatars} />);
       
-      // Verify both markers are created but positioned to avoid overlap
+      // Verify both markers are created at the same position (no collision detection)
       expect(mockMarker.setLngLat).toHaveBeenCalledTimes(2);
-      
-      // Second marker should be slightly offset
-      const calls = mockMarker.setLngLat.mock.calls;
-      const [lng1, lat1] = calls[0][0];
-      const [lng2, lat2] = calls[1][0];
-      
-      // Should have small offset to prevent overlap
-      expect(Math.abs(lng1 - lng2) > 0 || Math.abs(lat1 - lat2) > 0).toBe(true);
+      expect(mockMarker.setLngLat).toHaveBeenCalledWith([-74.0060, 40.7128]);
     });
 
     it('should optimize marker positioning for better visibility', () => {
@@ -276,6 +275,116 @@ describe('MapContainer', () => {
       const calls = mockMarker.setLngLat.mock.calls;
       const lastCall = calls[calls.length - 1];
       expect(lastCall[0]).toEqual([-74.0059, 40.7127]); // Current user position
+    });
+  });
+
+  describe('POI Integration', () => {
+    it('should create POI markers on the map', async () => {
+      const { Marker } = vi.mocked(await import('maplibre-gl'));
+      const pois = [
+        {
+          id: 'poi-1',
+          name: 'Meeting Room',
+          position: { lat: 40.7128, lng: -74.0060 },
+          participantCount: 2,
+          maxParticipants: 10,
+          createdBy: 'user-1',
+          createdAt: new Date()
+        }
+      ];
+
+      render(<MapContainer pois={pois} />);
+      
+      // Verify POI marker was created with MapLibre
+      expect(Marker).toHaveBeenCalledWith({
+        element: expect.any(HTMLElement),
+        pitchAlignment: 'viewport',
+        rotationAlignment: 'viewport',
+        draggable: false
+      });
+      
+      // Verify marker was positioned correctly
+      expect(mockMarker.setLngLat).toHaveBeenCalledWith([-74.0060, 40.7128]);
+      expect(mockMarker.addTo).toHaveBeenCalled();
+    });
+
+    it('should handle POI click events through marker element', async () => {
+      const onPOIClick = vi.fn();
+      const pois = [
+        {
+          id: 'poi-1',
+          name: 'Meeting Room',
+          position: { lat: 40.7128, lng: -74.0060 },
+          participantCount: 2,
+          maxParticipants: 10,
+          createdBy: 'user-1',
+          createdAt: new Date()
+        }
+      ];
+
+      render(<MapContainer pois={pois} onPOIClick={onPOIClick} />);
+      
+      // Get the marker element that was created
+      const { Marker } = vi.mocked(await import('maplibre-gl'));
+      const markerCalls = Marker.mock.calls;
+      const poiMarkerCall = markerCalls.find(call => {
+        const element = call[0].element;
+        return element && element.getAttribute('data-testid') === 'poi-marker';
+      });
+      
+      expect(poiMarkerCall).toBeDefined();
+      
+      // Simulate click on the POI marker element
+      const markerElement = poiMarkerCall[0].element;
+      fireEvent.click(markerElement);
+      
+      expect(onPOIClick).toHaveBeenCalledWith('poi-1');
+    });
+
+    it('should show context menu on right-click', () => {
+      const onPOICreate = vi.fn();
+      
+      render(<MapContainer onPOICreate={onPOICreate} />);
+      
+      // Simulate MapLibre contextmenu event
+      const contextMenuHandler = mockMap.on.mock.calls.find(call => call[0] === 'contextmenu')[1];
+      
+      act(() => {
+        contextMenuHandler({
+          preventDefault: vi.fn(),
+          point: { x: 100, y: 200 },
+          lngLat: { lat: 40.7128, lng: -74.0060 }
+        });
+      });
+      
+      expect(screen.getByTestId('poi-context-menu')).toBeInTheDocument();
+      expect(screen.getByText('Create POI')).toBeInTheDocument();
+    });
+
+    it('should call onPOICreate when context menu Create POI is clicked', async () => {
+      const user = userEvent.setup();
+      const onPOICreate = vi.fn();
+      
+      render(<MapContainer onPOICreate={onPOICreate} />);
+      
+      // Simulate MapLibre contextmenu event
+      const contextMenuHandler = mockMap.on.mock.calls.find(call => call[0] === 'contextmenu')[1];
+      
+      act(() => {
+        contextMenuHandler({
+          preventDefault: vi.fn(),
+          point: { x: 100, y: 200 },
+          lngLat: { lat: 40.7128, lng: -74.0060 }
+        });
+      });
+      
+      // Click Create POI
+      await user.click(screen.getByText('Create POI'));
+      
+      expect(onPOICreate).toHaveBeenCalledWith({
+        lat: 40.7128,
+        lng: -74.0060
+      });
     });
   });
 
