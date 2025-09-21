@@ -76,7 +76,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return resolved;
   }, []);
 
-  // Create marker element with maximum performance optimizations
+  // Create marker element with NO conflicting animations
   const createMarkerElement = useCallback((avatar: AvatarData) => {
     const markerElement = document.createElement('div');
     markerElement.className = `
@@ -85,41 +85,44 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         ? 'bg-blue-500 border-blue-600 ring-2 ring-blue-500 ring-opacity-50'
         : 'bg-gray-500 border-gray-600 ring-2 ring-gray-400 ring-opacity-50'
       }
-      shadow-lg cursor-pointer hover:scale-110 transition-transform duration-200
+      shadow-lg cursor-pointer hover:scale-110
       flex items-center justify-center text-white text-xs font-bold
     `;
     markerElement.textContent = avatar.sessionId.charAt(0).toUpperCase();
     markerElement.title = avatar.sessionId;
 
-    // Maximum performance optimizations for smooth zoom/pan
+    // Performance optimizations - NO CSS transitions for position
     markerElement.style.willChange = 'transform';
     markerElement.style.backfaceVisibility = 'hidden';
-    markerElement.style.transform = 'translateZ(0)'; // Force GPU layer
-    markerElement.style.contain = 'layout style paint'; // CSS containment
+    markerElement.style.transform = 'translateZ(0)';
+    markerElement.style.contain = 'layout style paint';
     markerElement.style.pointerEvents = 'auto';
+    // CRITICAL: Only allow hover transitions, no position transitions
+    markerElement.style.transition = 'transform 0.2s ease'; // Only for hover scale
 
     return markerElement;
   }, []);
 
-  // Animate marker movement with proper easing
+  // Single, clean animation system with proper easing
   const animateMarkerTo = useCallback((marker: Marker, newPosition: [number, number], sessionId: string) => {
-    // Clear any existing animation timeout
+    // Clear any existing animation timeout to prevent conflicts
     const existingTimeout = animationTimeouts.current.get(sessionId);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
+      animationTimeouts.current.delete(sessionId);
     }
 
     const currentLngLat = marker.getLngLat();
     const startTime = Date.now();
-    const duration = 500; // 500ms animation
+    const duration = 600; // Slightly longer for smoother feel
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // Better easing function - ease-out cubic for natural movement
-      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
-      const easedProgress = easeOutCubic(progress);
+      // Clean ease-out-quart for very natural movement
+      const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+      const easedProgress = easeOutQuart(progress);
 
       // Interpolate position
       const lng = currentLngLat.lng + (newPosition[0] - currentLngLat.lng) * easedProgress;
@@ -156,7 +159,6 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       minZoom: 1,
       // Additional performance settings
       renderWorldCopies: false, // Don't render multiple world copies
-      optimizeForTerrain: false, // Disable terrain optimizations
       fadeDuration: 0, // Disable fade animations for faster rendering
       crossSourceCollisions: false // Disable collision detection between sources
     });
@@ -169,11 +171,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     map.current.on('click', handleMapClick);
 
     // Optimize marker rendering during map movements
-    let isMoving = false;
-    
     map.current.on('movestart', () => {
-      isMoving = true;
-      // Temporarily disable marker animations during map movement
+      // Disable hover transitions during map movement for better performance
       markers.current.forEach(marker => {
         const element = marker.getElement();
         element.style.transition = 'none';
@@ -181,12 +180,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     });
 
     map.current.on('moveend', () => {
-      isMoving = false;
-      // Re-enable marker animations after map movement
+      // Re-enable only hover transitions (not position transitions)
       setTimeout(() => {
         markers.current.forEach(marker => {
           const element = marker.getElement();
-          element.style.transition = 'transform 0.2s ease';
+          element.style.transition = 'transform 0.2s ease'; // Only for hover
         });
       }, 50);
     });
@@ -281,7 +279,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           }
         }
 
-        // Update marker styling if needed
+        // Update marker styling if needed (no position transitions)
         const markerElement = marker.getElement();
         const expectedClass = `
           w-8 h-8 rounded-full border-2 
@@ -289,12 +287,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
             ? 'bg-blue-500 border-blue-600 ring-2 ring-blue-500 ring-opacity-50'
             : 'bg-gray-500 border-gray-600 ring-2 ring-gray-400 ring-opacity-50'
           }
-          shadow-lg cursor-pointer hover:scale-110 transition-transform duration-200
+          shadow-lg cursor-pointer hover:scale-110
           flex items-center justify-center text-white text-xs font-bold
         `.replace(/\s+/g, ' ').trim();
 
         if (markerElement.className.replace(/\s+/g, ' ').trim() !== expectedClass) {
           markerElement.className = expectedClass;
+          // Ensure only hover transitions, no position transitions
+          markerElement.style.transition = 'transform 0.2s ease';
         }
       }
     });

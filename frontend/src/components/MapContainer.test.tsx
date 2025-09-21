@@ -78,7 +78,6 @@ describe('MapContainer', () => {
         maxZoom: 18,
         minZoom: 1,
         renderWorldCopies: false,
-        optimizeForTerrain: false,
         fadeDuration: 0,
         crossSourceCollisions: false
       });
