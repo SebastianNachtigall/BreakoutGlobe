@@ -40,7 +40,7 @@ function App() {
         : avatar
     ))
 
-    // Reset moving state after animation completes
+    // Reset moving state after animation completes (match MapContainer duration)
     animationTimeoutRef.current = setTimeout(() => {
       setAvatars(prev => prev.map(avatar => 
         avatar.isCurrentUser 
@@ -48,7 +48,7 @@ function App() {
           : avatar
       ))
       animationTimeoutRef.current = null
-    }, 500)
+    }, 650) // Slightly longer than MapContainer animation (600ms)
   }, [])
 
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {

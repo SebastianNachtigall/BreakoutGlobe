@@ -47,8 +47,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     }
   }, [onMapClick, onAvatarMove]);
 
-  // Helper function to detect and resolve avatar collisions
+  // Helper function to detect and resolve avatar collisions (only when needed)
   const resolveCollisions = useCallback((avatars: AvatarData[]): AvatarData[] => {
+    // Skip collision detection if only one avatar or no avatars
+    if (avatars.length <= 1) {
+      return avatars;
+    }
+
     const resolved = [...avatars];
     const positionMap = new globalThis.Map<string, number>();
 
@@ -103,35 +108,38 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     return markerElement;
   }, []);
 
-  // Single, clean animation system with proper easing
+  // Simplified, single animation system
   const animateMarkerTo = useCallback((marker: Marker, newPosition: [number, number], sessionId: string) => {
-    // Clear any existing animation timeout to prevent conflicts
+    // Clear any existing animation to prevent conflicts
     const existingTimeout = animationTimeouts.current.get(sessionId);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
       animationTimeouts.current.delete(sessionId);
     }
 
-    const currentLngLat = marker.getLngLat();
+    const startPosition = marker.getLngLat();
     const startTime = Date.now();
-    const duration = 600; // Slightly longer for smoother feel
+    const duration = 600;
+
+    // Calculate total distance for consistent speed
+    const deltaLng = newPosition[0] - startPosition.lng;
+    const deltaLat = newPosition[1] - startPosition.lat;
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
-      // Clean ease-out-quart for very natural movement
-      const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
-      const easedProgress = easeOutQuart(progress);
+      // Simple, predictable easing - ease-out
+      const easedProgress = 1 - Math.pow(1 - progress, 2);
 
-      // Interpolate position
-      const lng = currentLngLat.lng + (newPosition[0] - currentLngLat.lng) * easedProgress;
-      const lat = currentLngLat.lat + (newPosition[1] - currentLngLat.lat) * easedProgress;
+      // Linear interpolation
+      const lng = startPosition.lng + deltaLng * easedProgress;
+      const lat = startPosition.lat + deltaLat * easedProgress;
 
       marker.setLngLat([lng, lat]);
 
       if (progress < 1) {
-        const timeoutId = setTimeout(animate, 16); // ~60fps
+        const timeoutId = setTimeout(animate, 16);
         animationTimeouts.current.set(sessionId, timeoutId);
       } else {
         animationTimeouts.current.delete(sessionId);
@@ -271,10 +279,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         if (hasPositionChanged) {
           if (avatar.isMoving) {
-            // Animate to new position
+            // Debug: Log animation start
+            console.log(`Starting animation for ${avatar.sessionId} to`, newPosition);
             animateMarkerTo(marker, newPosition, avatar.sessionId);
           } else {
             // Instant position update
+            console.log(`Instant position update for ${avatar.sessionId} to`, newPosition);
             marker.setLngLat(newPosition);
           }
         }
