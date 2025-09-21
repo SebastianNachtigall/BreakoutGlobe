@@ -76,7 +76,7 @@
     - Add session expiration and cleanup functionality
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.4_
 
-  - [ ] 5.2 Create POI management service
+  - [x] 5.2 Create POI management service
     - Write tests for POI creation with duplicate location checking
     - Implement POIService with CRUD operations and spatial queries
     - Write tests for POI join/leave operations with capacity limits
