@@ -55,7 +55,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const markers = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
   const poiMarkers = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
   const animationTimeouts = useRef<globalThis.Map<string, number>>(new globalThis.Map());
-  
+
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     position: { x: number; y: number };
@@ -108,17 +108,17 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   const createPOIMarkerElement = useCallback((poi: POIData) => {
     const markerElement = document.createElement('div');
     const isFull = poi.participantCount >= poi.maxParticipants;
-    
+
     markerElement.className = `
       w-12 h-12 rounded-lg border-2 cursor-pointer
       flex flex-col items-center justify-center text-white text-xs font-bold
       shadow-lg hover:scale-105 transition-transform duration-200
-      ${isFull 
-        ? 'bg-red-500 border-red-600 cursor-not-allowed' 
+      ${isFull
+        ? 'bg-red-500 border-red-600 cursor-not-allowed'
         : 'bg-green-500 border-green-600'
       }
     `;
-    
+
     markerElement.innerHTML = `
       <div class="text-center leading-tight">
         <div class="truncate max-w-10">${poi.name}</div>
@@ -127,10 +127,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         </div>
       </div>
     `;
-    
+
     markerElement.title = `${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`;
     markerElement.setAttribute('data-testid', 'poi-marker');
-    
+
     // Add click handler
     markerElement.addEventListener('click', () => {
       if (!isFull && onPOIClick) {
@@ -213,7 +213,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     // Add right-click context menu
     const handleContextMenu = (event: any) => {
       event.preventDefault();
-      
+
       if (onPOICreate) {
         setContextMenu({
           position: {
@@ -264,7 +264,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         // Remove all markers
         markers.current.forEach(marker => marker.remove());
         markers.current.clear();
-        
+
         // Remove all POI markers
         poiMarkers.current.forEach(marker => marker.remove());
         poiMarkers.current.clear();
@@ -362,10 +362,10 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         const updatedElement = createPOIMarkerElement(poi);
         const currentPos = marker.getLngLat();
         const newPosition: [number, number] = [poi.position.lng, poi.position.lat];
-        
+
         // Update element
         marker.getElement().replaceWith(updatedElement);
-        
+
         // Update position if changed
         const hasPositionChanged =
           Math.abs(currentPos.lng - newPosition[0]) > 0.000001 ||
@@ -402,7 +402,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         data-testid="map-container"
         className="w-full h-full"
       />
-      
+
       {/* Context menu */}
       {contextMenu && (
         <POIContextMenu
