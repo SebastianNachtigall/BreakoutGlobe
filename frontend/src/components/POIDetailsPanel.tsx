@@ -23,6 +23,7 @@ export interface POIDetailsPanelProps {
   onLeave: (poiId: string) => void;
   onClose: () => void;
   isLoading?: boolean;
+  position?: { x: number; y: number };
 }
 
 export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
@@ -32,7 +33,8 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
   onJoin,
   onLeave,
   onClose,
-  isLoading = false
+  isLoading = false,
+  position
 }) => {
   const isFull = poi.participantCount >= poi.maxParticipants;
   const isNearFull = poi.participantCount >= poi.maxParticipants - 1 && !isFull;
@@ -74,8 +76,23 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
     return 'Join';
   };
 
+  const panelStyle = position ? {
+    position: 'absolute' as const,
+    left: `${position.x + 20}px`, // Offset to the right of the POI marker
+    top: `${position.y - 50}px`,  // Offset above the POI marker
+    zIndex: 1000,
+  } : {
+    position: 'absolute' as const,
+    top: '20px',
+    right: '20px',
+    zIndex: 1000,
+  };
+
   return (
-    <div className="poi-details-panel bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-w-sm">
+    <div 
+      className="poi-details-panel bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-w-sm"
+      style={panelStyle}
+    >
       <div className="poi-header flex justify-between items-start mb-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">{poi.name}</h3>
@@ -109,25 +126,21 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
 
       <div className="poi-participants mb-4">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Participants</h4>
-        {poi.participants.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">No participants yet</p>
-        ) : (
-          <ul className="space-y-1 max-h-32 overflow-y-auto">
+        {poi.participants && poi.participants.length > 0 ? (
+          <ul className="space-y-1">
             {poi.participants.map((participant) => (
-              <li
-                key={participant.id}
-                className={`text-sm px-2 py-1 rounded ${
-                  participant.id === currentUserId
-                    ? 'bg-blue-100 text-blue-800 font-medium'
-                    : 'text-gray-700'
-                }`}
+              <li 
+                key={participant.id} 
+                className="text-sm text-gray-700"
                 data-testid={participant.id === currentUserId ? 'current-user' : undefined}
               >
                 {participant.name}
-                {participant.id === currentUserId && ' (You)'}
+                {participant.id === currentUserId && <span className="text-blue-600 font-medium"> (You)</span>}
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="text-sm text-gray-500 italic">No participants yet</p>
         )}
       </div>
 

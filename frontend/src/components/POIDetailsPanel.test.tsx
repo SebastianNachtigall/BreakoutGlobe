@@ -96,6 +96,25 @@ describe('POIDetailsPanel', () => {
     expect(mockOnJoin).toHaveBeenCalledWith('poi-1');
   });
 
+  it('should not call onJoin when join button is clicked and POI is full', async () => {
+    const user = userEvent.setup();
+    const fullPOI = {
+      ...mockPOI,
+      participantCount: 10,
+      participants: Array.from({ length: 10 }, (_, i) => ({
+        id: `user-${i + 1}`,
+        name: `User ${i + 1}`
+      }))
+    };
+
+    render(<POIDetailsPanel {...defaultProps} poi={fullPOI} />);
+    
+    const joinButton = screen.getByText('Join (Full)');
+    await user.click(joinButton);
+    
+    expect(mockOnJoin).not.toHaveBeenCalled();
+  });
+
   it('should call onLeave when leave button is clicked', async () => {
     const user = userEvent.setup();
     render(<POIDetailsPanel {...defaultProps} isUserParticipant={true} />);
@@ -188,5 +207,30 @@ describe('POIDetailsPanel', () => {
     render(<POIDetailsPanel {...defaultProps} poi={nearFullPOI} />);
     
     expect(screen.getByText(/almost full/i)).toBeInTheDocument();
+  });
+
+  it('should position panel at specified coordinates when position prop is provided', () => {
+    const position = { x: 100, y: 200 };
+    const { container } = render(<POIDetailsPanel {...defaultProps} position={position} />);
+    
+    const panel = container.querySelector('.poi-details-panel');
+    
+    expect(panel).toHaveStyle({
+      position: 'absolute',
+      left: '120px', // x + 20px offset
+      top: '150px',  // y - 50px offset
+    });
+  });
+
+  it('should use default positioning when no position prop is provided', () => {
+    const { container } = render(<POIDetailsPanel {...defaultProps} />);
+    
+    const panel = container.querySelector('.poi-details-panel');
+    
+    expect(panel).toHaveStyle({
+      position: 'absolute',
+      top: '20px',
+      right: '20px',
+    });
   });
 });

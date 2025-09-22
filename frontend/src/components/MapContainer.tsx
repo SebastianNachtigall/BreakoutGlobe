@@ -110,7 +110,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     const isFull = poi.participantCount >= poi.maxParticipants;
 
     markerElement.className = `
-      w-12 h-12 rounded-lg border-2 cursor-pointer
+      w-20 h-12 rounded-lg border-2 cursor-pointer
       flex flex-col items-center justify-center text-white text-xs font-bold
       shadow-lg hover:scale-105 transition-transform duration-200
       ${isFull
@@ -121,7 +121,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     markerElement.innerHTML = `
       <div class="text-center leading-tight">
-        <div class="truncate max-w-10">${poi.name}</div>
+        <div class="truncate max-w-20">${poi.name}</div>
         <div class="text-xs opacity-90">
           ${poi.participantCount}/${poi.maxParticipants}
         </div>
@@ -132,7 +132,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     markerElement.setAttribute('data-testid', 'poi-marker');
 
     // Add click handler
-    markerElement.addEventListener('click', () => {
+    markerElement.addEventListener('click', (event) => {
+      event.stopPropagation(); // Prevent map click handler from firing
       if (!isFull && onPOIClick) {
         onPOIClick(poi.id);
       }

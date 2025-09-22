@@ -9,7 +9,8 @@ export interface POIMarkerProps {
 export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
   const isFull = poi.participantCount >= poi.maxParticipants;
 
-  const handleClick = () => {
+  const handleClick = (event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent map click handler from firing
     if (!isFull) {
       onPOIClick(poi.id);
     }
@@ -19,7 +20,7 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
     <div
       data-testid="poi-marker"
       className={`
-        w-12 h-12 rounded-lg border-2 cursor-pointer
+        w-20 h-12 rounded-lg border-2 cursor-pointer
         flex flex-col items-center justify-center text-white text-xs font-bold
         shadow-lg hover:scale-105 transition-transform duration-200
         ${isFull 
@@ -31,7 +32,7 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
       title={`${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`}
     >
       <div className="text-center leading-tight">
-        <div className="truncate max-w-10">{poi.name}</div>
+        <div className="truncate max-w-20">{poi.name}</div>
         <div className="text-xs opacity-90">
           {poi.participantCount}/{poi.maxParticipants}
         </div>
