@@ -217,8 +217,21 @@ function App() {
   // Handle POI join/leave with auto-leave functionality
   const handleJoinPOI = useCallback((poiId: string) => {
     if (!wsClient) return
+    
+    // Find the POI to get its position
+    const poi = poiState.pois.find(p => p.id === poiId)
+    if (poi) {
+      // Move avatar to POI location (slightly offset to avoid overlap with marker)
+      const offsetPosition = {
+        lat: poi.position.lat + 0.0001, // Small offset north
+        lng: poi.position.lng + 0.0001  // Small offset east
+      }
+      handleAvatarMove(offsetPosition)
+    }
+    
+    // Join the POI
     wsClient.joinPOIWithAutoLeave(poiId)
-  }, [wsClient])
+  }, [wsClient, poiState.pois, handleAvatarMove])
 
   const handleLeavePOI = useCallback((poiId: string) => {
     if (!wsClient) return
@@ -282,7 +295,7 @@ function App() {
             <POIDetailsPanel
               poi={selectedPOI}
               currentUserId={sessionState.sessionId || ''}
-              isUserParticipant={selectedPOI.participants?.some(p => p.id === sessionState.sessionId) || false}
+              isUserParticipant={poiState.currentUserPOI === selectedPOI.id}
               onJoin={() => handleJoinPOI(selectedPOI.id)}
               onLeave={() => handleLeavePOI(selectedPOI.id)}
               onClose={() => setSelectedPOI(null)}
