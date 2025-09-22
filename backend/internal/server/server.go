@@ -13,6 +13,8 @@ import (
 type Server struct {
 	config *config.Config
 	router *gin.Engine
+	// Simple in-memory storage for POI participants (for testing)
+	poiParticipants map[string]map[string]string // poiId -> sessionId -> username
 }
 
 func New(cfg *config.Config) *Server {
@@ -31,6 +33,7 @@ func New(cfg *config.Config) *Server {
 	s := &Server{
 		config: cfg,
 		router: router,
+		poiParticipants: make(map[string]map[string]string),
 	}
 	
 	s.setupRoutes()
@@ -141,7 +144,25 @@ func (s *Server) updateAvatarPosition(c *gin.Context) {
 func (s *Server) getPOIs(c *gin.Context) {
 	mapID := c.Query("mapId")
 	
-	// Return some mock POIs with participant information
+	// Helper function to get participant info for a POI
+	getParticipantInfo := func(poiID string) ([]gin.H, int) {
+		participants := []gin.H{}
+		if poiParticipants, exists := s.poiParticipants[poiID]; exists {
+			for sessionID, username := range poiParticipants {
+				participants = append(participants, gin.H{
+					"id":   sessionID,
+					"name": username,
+				})
+			}
+		}
+		return participants, len(participants)
+	}
+	
+	// Get participant info for each POI
+	poi1Participants, poi1Count := getParticipantInfo("poi-1")
+	poi2Participants, poi2Count := getParticipantInfo("poi-2")
+	
+	// Return some mock POIs with real participant information
 	pois := []gin.H{
 		{
 			"id":              "poi-1",
@@ -151,8 +172,8 @@ func (s *Server) getPOIs(c *gin.Context) {
 			"position":        gin.H{"lat": 40.7130, "lng": -74.0062},
 			"createdBy":       "user-1",
 			"maxParticipants": 10,
-			"participantCount": 0,
-			"participants": []gin.H{},
+			"participantCount": poi1Count,
+			"participants":     poi1Participants,
 		},
 		{
 			"id":              "poi-2",
@@ -162,8 +183,8 @@ func (s *Server) getPOIs(c *gin.Context) {
 			"position":        gin.H{"lat": 40.7125, "lng": -74.0058},
 			"createdBy":       "user-2",
 			"maxParticipants": 5,
-			"participantCount": 0,
-			"participants": []gin.H{},
+			"participantCount": poi2Count,
+			"participants":     poi2Participants,
 		},
 	}
 	
@@ -210,7 +231,7 @@ func (s *Server) joinPOI(c *gin.Context) {
 	poiID := c.Param("poiId")
 	
 	var req struct {
-		UserID string `json:"userId"`
+		SessionID string `json:"sessionId"`
 	}
 	
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -218,10 +239,19 @@ func (s *Server) joinPOI(c *gin.Context) {
 		return
 	}
 	
+	// Initialize POI participants map if it doesn't exist
+	if s.poiParticipants[poiID] == nil {
+		s.poiParticipants[poiID] = make(map[string]string)
+	}
+	
+	// Add participant with a generated username
+	username := "User-" + req.SessionID
+	s.poiParticipants[poiID][req.SessionID] = username
+	
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"poiId":   poiID,
-		"userId":  req.UserID,
+		"userId":  req.SessionID,
 	})
 }
 
@@ -229,7 +259,7 @@ func (s *Server) leavePOI(c *gin.Context) {
 	poiID := c.Param("poiId")
 	
 	var req struct {
-		UserID string `json:"userId"`
+		SessionID string `json:"sessionId"`
 	}
 	
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -237,10 +267,15 @@ func (s *Server) leavePOI(c *gin.Context) {
 		return
 	}
 	
+	// Remove participant if they exist
+	if s.poiParticipants[poiID] != nil {
+		delete(s.poiParticipants[poiID], req.SessionID)
+	}
+	
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"poiId":   poiID,
-		"userId":  req.UserID,
+		"userId":  req.SessionID,
 	})
 }
 

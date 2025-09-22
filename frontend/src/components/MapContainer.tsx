@@ -31,6 +31,10 @@ export interface POIData {
   participants?: POIParticipant[];
   createdBy: string;
   createdAt: Date;
+  // Discussion timer fields
+  discussionStartTime?: Date | null;
+  isDiscussionActive?: boolean;
+  discussionDuration?: number; // in seconds
 }
 
 export interface MapContainerProps {

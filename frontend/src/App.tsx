@@ -214,8 +214,18 @@ function App() {
     }
   }, [poiState.pois])
 
+  // Update selectedPOI when POI data changes in the store
+  useEffect(() => {
+    if (selectedPOI) {
+      const updatedPOI = poiState.pois.find(p => p.id === selectedPOI.id)
+      if (updatedPOI) {
+        setSelectedPOI(updatedPOI)
+      }
+    }
+  }, [poiState.pois, selectedPOI])
+
   // Handle POI join/leave with auto-leave functionality
-  const handleJoinPOI = useCallback((poiId: string) => {
+  const handleJoinPOI = useCallback(async (poiId: string) => {
     if (!wsClient) return
     
     // Find the POI to get its position
@@ -229,9 +239,25 @@ function App() {
       handleAvatarMove(offsetPosition)
     }
     
-    // Join the POI
-    wsClient.joinPOIWithAutoLeave(poiId)
-  }, [wsClient, poiState.pois, handleAvatarMove])
+    // Join the POI via HTTP API (since WebSocket doesn't work with mock backend)
+    try {
+      const response = await fetch(`http://localhost:8080/api/pois/${poiId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionState.sessionId })
+      })
+      
+      if (response.ok) {
+        // Update local state
+        poiState.joinPOIWithAutoLeave(poiId, sessionState.sessionId || '')
+        
+        // Refresh POI data to get updated participant list
+        await loadPOIs()
+      }
+    } catch (error) {
+      console.error('Failed to join POI:', error)
+    }
+  }, [wsClient, poiState, handleAvatarMove, sessionState.sessionId])
 
   const handleLeavePOI = useCallback((poiId: string) => {
     if (!wsClient) return

@@ -21,6 +21,10 @@ export interface POIState {
   getPOIById: (id: string) => POIData | undefined;
   setPOIs: (pois: POIData[]) => void;
   
+  // Discussion timer management
+  updateDiscussionTimer: (poiId: string, duration: number) => void;
+  getDiscussionTimerState: (poiId: string) => { isActive: boolean; duration: number; startTime: Date | null } | null;
+  
   // Participant management
   joinPOI: (poiId: string, userId: string) => boolean;
   leavePOI: (poiId: string, userId: string) => boolean;
@@ -64,8 +68,15 @@ export const poiStore = create<POIState>()(
       ...initialState,
       
       addPOI: (poi: POIData) => {
+        const poiWithTimer = {
+          ...poi,
+          discussionStartTime: poi.discussionStartTime || null,
+          isDiscussionActive: poi.isDiscussionActive || false,
+          discussionDuration: poi.discussionDuration || 0
+        };
+        
         set((state) => ({
-          pois: [...state.pois, poi],
+          pois: [...state.pois, poiWithTimer],
           error: null,
         }));
       },
@@ -100,10 +111,21 @@ export const poiStore = create<POIState>()(
           return false;
         }
         
+        const newParticipantCount = poi.participantCount + 1;
+        
         set((state) => ({
           pois: state.pois.map(p => 
             p.id === poiId 
-              ? { ...p, participantCount: p.participantCount + 1 }
+              ? { 
+                  ...p, 
+                  participantCount: newParticipantCount,
+                  // Start discussion timer if reaching 2 participants
+                  discussionStartTime: newParticipantCount >= 2 && !p.isDiscussionActive 
+                    ? new Date() 
+                    : p.discussionStartTime,
+                  isDiscussionActive: newParticipantCount >= 2,
+                  discussionDuration: p.discussionDuration || 0
+                }
               : p
           ),
           currentUserPOI: poiId,
@@ -120,10 +142,20 @@ export const poiStore = create<POIState>()(
           return false;
         }
         
+        const newParticipantCount = Math.max(0, poi.participantCount - 1);
+        
         set((state) => ({
           pois: state.pois.map(p => 
             p.id === poiId 
-              ? { ...p, participantCount: Math.max(0, p.participantCount - 1) }
+              ? { 
+                  ...p, 
+                  participantCount: newParticipantCount,
+                  // Pause discussion timer if dropping below 2 participants
+                  isDiscussionActive: newParticipantCount >= 2,
+                  // Reset timer if no participants left
+                  discussionStartTime: newParticipantCount === 0 ? null : p.discussionStartTime,
+                  discussionDuration: newParticipantCount === 0 ? 0 : p.discussionDuration || 0
+                }
               : p
           ),
           currentUserPOI: state.currentUserPOI === poiId ? null : state.currentUserPOI,
@@ -311,6 +343,32 @@ export const poiStore = create<POIState>()(
         set((state) => ({
           pois: state.pois.filter(poi => poi.id !== poiId),
         }));
+      },
+      
+      // Discussion timer management
+      updateDiscussionTimer: (poiId: string, duration: number) => {
+        set((state) => ({
+          pois: state.pois.map(p => 
+            p.id === poiId 
+              ? { ...p, discussionDuration: duration }
+              : p
+          ),
+        }));
+      },
+      
+      getDiscussionTimerState: (poiId: string) => {
+        const state = get();
+        const poi = state.pois.find(p => p.id === poiId);
+        
+        if (!poi) {
+          return null;
+        }
+        
+        return {
+          isActive: poi.isDiscussionActive || false,
+          duration: poi.discussionDuration || 0,
+          startTime: poi.discussionStartTime || null
+        };
       },
       
       reset: () => {

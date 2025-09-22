@@ -18,7 +18,10 @@ const mockPOI = {
     { id: 'user-1', name: 'Alice Johnson' },
     { id: 'user-2', name: 'Bob Smith' },
     { id: 'user-3', name: 'Carol Davis' }
-  ]
+  ],
+  discussionStartTime: null,
+  isDiscussionActive: false,
+  discussionDuration: 0
 };
 
 const defaultProps = {
@@ -231,6 +234,91 @@ describe('POIDetailsPanel', () => {
       position: 'absolute',
       top: '20px',
       right: '20px',
+    });
+  });
+
+  describe('Discussion Timer', () => {
+    it('should show "No active discussion" when discussion is not active', () => {
+      const inactivePOI = {
+        ...mockPOI,
+        participantCount: 1,
+        isDiscussionActive: false,
+        discussionDuration: 0
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={inactivePOI} />);
+      
+      expect(screen.getByText(/no active discussion/i)).toBeInTheDocument();
+    });
+
+    it('should show discussion timer when discussion is active', () => {
+      const activePOI = {
+        ...mockPOI,
+        participantCount: 3,
+        isDiscussionActive: true,
+        discussionDuration: 120, // 2 minutes
+        discussionStartTime: new Date()
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={activePOI} />);
+      
+      expect(screen.getByText(/discussion active for: 2 minutes/i)).toBeInTheDocument();
+    });
+
+    it('should format timer correctly for seconds only', () => {
+      const activePOI = {
+        ...mockPOI,
+        participantCount: 2,
+        isDiscussionActive: true,
+        discussionDuration: 45, // 45 seconds
+        discussionStartTime: new Date()
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={activePOI} />);
+      
+      expect(screen.getByText(/discussion active for: 45 seconds/i)).toBeInTheDocument();
+    });
+
+    it('should format timer correctly for minutes and seconds', () => {
+      const activePOI = {
+        ...mockPOI,
+        participantCount: 4,
+        isDiscussionActive: true,
+        discussionDuration: 185, // 3 minutes 5 seconds
+        discussionStartTime: new Date()
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={activePOI} />);
+      
+      expect(screen.getByText(/discussion active for: 3 minutes 5 seconds/i)).toBeInTheDocument();
+    });
+
+    it('should show timer for exactly 1 minute', () => {
+      const activePOI = {
+        ...mockPOI,
+        participantCount: 2,
+        isDiscussionActive: true,
+        discussionDuration: 60, // 1 minute
+        discussionStartTime: new Date()
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={activePOI} />);
+      
+      expect(screen.getByText(/discussion active for: 1 minute/i)).toBeInTheDocument();
+    });
+
+    it('should show timer for exactly 1 second', () => {
+      const activePOI = {
+        ...mockPOI,
+        participantCount: 2,
+        isDiscussionActive: true,
+        discussionDuration: 1, // 1 second
+        discussionStartTime: new Date()
+      };
+
+      render(<POIDetailsPanel {...defaultProps} poi={activePOI} />);
+      
+      expect(screen.getByText(/discussion active for: 1 second/i)).toBeInTheDocument();
     });
   });
 });

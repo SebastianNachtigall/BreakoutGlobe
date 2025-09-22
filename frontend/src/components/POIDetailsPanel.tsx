@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import type { POIData, POIParticipant } from './MapContainer';
+import type { POIData } from './MapContainer';
 
 export interface POIDetailsPanelProps {
   poi: POIData;
@@ -11,6 +11,22 @@ export interface POIDetailsPanelProps {
   isLoading?: boolean;
   position?: { x: number; y: number };
 }
+
+// Helper function to format discussion time
+const formatDiscussionTime = (durationInSeconds: number): string => {
+  const minutes = Math.floor(durationInSeconds / 60);
+  const seconds = durationInSeconds % 60;
+
+  if (minutes === 0) {
+    return seconds === 1 ? '1 second' : `${seconds} seconds`;
+  } else if (seconds === 0) {
+    return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+  } else {
+    const minuteText = minutes === 1 ? '1 minute' : `${minutes} minutes`;
+    const secondText = seconds === 1 ? '1 second' : `${seconds} seconds`;
+    return `${minuteText} ${secondText}`;
+  }
+};
 
 export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
   poi,
@@ -75,7 +91,7 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="poi-details-panel bg-white border border-gray-300 rounded-lg shadow-lg p-4 max-w-sm"
       style={panelStyle}
     >
@@ -115,8 +131,8 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         {poi.participants && poi.participants.length > 0 ? (
           <ul className="space-y-1">
             {poi.participants.map((participant) => (
-              <li 
-                key={participant.id} 
+              <li
+                key={participant.id}
                 className="text-sm text-gray-700"
                 data-testid={participant.id === currentUserId ? 'current-user' : undefined}
               >
@@ -130,17 +146,28 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         )}
       </div>
 
+      <div className="poi-discussion-timer mb-4">
+        <div className="text-sm text-gray-600">
+          {poi.isDiscussionActive ? (
+            <span className="text-green-600 font-medium">
+              Discussion active for: {formatDiscussionTime(poi.discussionDuration || 0)}
+            </span>
+          ) : (
+            <span className="text-gray-500 italic">No active discussion</span>
+          )}
+        </div>
+      </div>
+
       <div className="poi-actions">
         <button
           onClick={isUserParticipant ? handleLeave : handleJoin}
           disabled={(!isUserParticipant && isFull) || isLoading}
-          className={`w-full py-2 px-4 rounded-md font-medium text-sm transition-colors ${
-            isUserParticipant
+          className={`w-full py-2 px-4 rounded-md font-medium text-sm transition-colors ${isUserParticipant
               ? 'bg-red-600 hover:bg-red-700 text-white disabled:bg-red-400'
               : isFull
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
-          }`}
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
+            }`}
         >
           {getActionButtonText()}
         </button>
