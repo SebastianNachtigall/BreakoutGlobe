@@ -51,7 +51,9 @@ function App() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              position: mockSession.position
+              userId: `user-${Date.now()}`, // Generate a unique user ID
+              mapId: 'default-map', // Use a default map ID for now
+              avatarPosition: mockSession.position
             }),
           })
           
@@ -173,7 +175,9 @@ function App() {
       ...poiData,
       id: `temp-${Date.now()}`, // Temporary ID for optimistic update
       position: poiCreationPosition,
-      participantCount: 0
+      participantCount: 0,
+      createdBy: sessionState.sessionId || 'anonymous',
+      createdAt: new Date()
     }
 
     try {

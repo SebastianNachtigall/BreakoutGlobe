@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 
 	"breakoutglobe/internal/config"
 )
@@ -46,7 +47,7 @@ func (s *Server) setupRoutes() {
 		})
 	})
 	
-	// API routes will be added here
+	// API status
 	api := s.router.Group("/api")
 	{
 		api.GET("/status", func(c *gin.Context) {
@@ -54,9 +55,217 @@ func (s *Server) setupRoutes() {
 				"message": "BreakoutGlobe API is running",
 			})
 		})
+		
+		// Simple session endpoints for testing
+		api.POST("/sessions", s.createSession)
+		api.GET("/sessions/:sessionId", s.getSession)
+		api.PUT("/sessions/:sessionId/avatar", s.updateAvatarPosition)
+		
+		// Simple POI endpoints for testing
+		api.GET("/pois", s.getPOIs)
+		api.POST("/pois", s.createPOI)
+		api.POST("/pois/:poiId/join", s.joinPOI)
+		api.POST("/pois/:poiId/leave", s.leavePOI)
 	}
+	
+	// WebSocket endpoint (simple echo for now)
+	s.router.GET("/ws", s.handleWebSocket)
 }
 
 func (s *Server) Start(addr string) error {
 	return s.router.Run(addr)
+}
+
+// Simple handlers for testing integration
+
+func (s *Server) createSession(c *gin.Context) {
+	var req struct {
+		UserID         string `json:"userId"`
+		MapID          string `json:"mapId"`
+		AvatarPosition struct {
+			Lat float64 `json:"lat"`
+			Lng float64 `json:"lng"`
+		} `json:"avatarPosition"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	sessionID := "session-" + req.UserID + "-" + req.MapID
+	
+	c.JSON(http.StatusCreated, gin.H{
+		"sessionId":      sessionID,
+		"userId":         req.UserID,
+		"mapId":          req.MapID,
+		"avatarPosition": req.AvatarPosition,
+		"isActive":       true,
+	})
+}
+
+func (s *Server) getSession(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	
+	c.JSON(http.StatusOK, gin.H{
+		"sessionId":      sessionID,
+		"userId":         "test-user",
+		"mapId":          "default-map",
+		"avatarPosition": gin.H{"lat": 40.7128, "lng": -74.0060},
+		"isActive":       true,
+	})
+}
+
+func (s *Server) updateAvatarPosition(c *gin.Context) {
+	sessionID := c.Param("sessionId")
+	
+	var req struct {
+		Position struct {
+			Lat float64 `json:"lat"`
+			Lng float64 `json:"lng"`
+		} `json:"position"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"sessionId": sessionID,
+		"position":  req.Position,
+	})
+}
+
+func (s *Server) getPOIs(c *gin.Context) {
+	mapID := c.Query("mapId")
+	
+	// Return some mock POIs
+	pois := []gin.H{
+		{
+			"id":              "poi-1",
+			"mapId":           mapID,
+			"name":            "Meeting Room A",
+			"description":     "A comfortable meeting room",
+			"position":        gin.H{"lat": 40.7130, "lng": -74.0062},
+			"createdBy":       "user-1",
+			"maxParticipants": 10,
+			"participantCount": 2,
+		},
+		{
+			"id":              "poi-2",
+			"mapId":           mapID,
+			"name":            "Coffee Corner",
+			"description":     "Grab a coffee and chat",
+			"position":        gin.H{"lat": 40.7125, "lng": -74.0058},
+			"createdBy":       "user-2",
+			"maxParticipants": 5,
+			"participantCount": 1,
+		},
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"mapId": mapID,
+		"pois":  pois,
+		"count": len(pois),
+	})
+}
+
+func (s *Server) createPOI(c *gin.Context) {
+	var req struct {
+		MapID           string `json:"mapId"`
+		Name            string `json:"name"`
+		Description     string `json:"description"`
+		Position        struct {
+			Lat float64 `json:"lat"`
+			Lng float64 `json:"lng"`
+		} `json:"position"`
+		CreatedBy       string `json:"createdBy"`
+		MaxParticipants int    `json:"maxParticipants"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	poiID := "poi-" + req.Name + "-" + req.CreatedBy
+	
+	c.JSON(http.StatusCreated, gin.H{
+		"id":              poiID,
+		"mapId":           req.MapID,
+		"name":            req.Name,
+		"description":     req.Description,
+		"position":        req.Position,
+		"createdBy":       req.CreatedBy,
+		"maxParticipants": req.MaxParticipants,
+		"participantCount": 0,
+	})
+}
+
+func (s *Server) joinPOI(c *gin.Context) {
+	poiID := c.Param("poiId")
+	
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"poiId":   poiID,
+		"userId":  req.UserID,
+	})
+}
+
+func (s *Server) leavePOI(c *gin.Context) {
+	poiID := c.Param("poiId")
+	
+	var req struct {
+		UserID string `json:"userId"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"poiId":   poiID,
+		"userId":  req.UserID,
+	})
+}
+
+func (s *Server) handleWebSocket(c *gin.Context) {
+	// Simple WebSocket echo server for testing
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true // Allow all origins for testing
+		},
+	}
+	
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to upgrade connection"})
+		return
+	}
+	defer conn.Close()
+	
+	for {
+		messageType, message, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		
+		// Echo the message back
+		if err := conn.WriteMessage(messageType, message); err != nil {
+			break
+		}
+	}
 }
