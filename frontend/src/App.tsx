@@ -260,8 +260,8 @@ function App() {
         {/* Map Container */}
         <div className="flex-1 relative">
           <MapContainer
-            initialCenter={[sessionState.avatarPosition.lng, sessionState.avatarPosition.lat]}
-            initialZoom={10}
+            initialCenter={[10.0, 54.0]}
+            initialZoom={4}
             avatars={avatars}
             pois={poiState.pois || []}
             onMapClick={handleMapClick}
@@ -275,6 +275,7 @@ function App() {
             <POIDetailsPanel
               poi={selectedPOI}
               currentUserId={sessionState.sessionId || ''}
+              isUserParticipant={selectedPOI.participants?.some(p => p.id === sessionState.sessionId) || false}
               onJoin={() => handleJoinPOI(selectedPOI.id)}
               onLeave={() => handleLeavePOI(selectedPOI.id)}
               onClose={() => setSelectedPOI(null)}

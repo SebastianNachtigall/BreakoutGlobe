@@ -189,7 +189,26 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     // Initialize map with maximum performance settings
     map.current = new Map({
       container: mapContainer.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: {
+        version: 8,
+        sources: {
+          'osm': {
+            type: 'raster',
+            tiles: [
+              'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+          }
+        },
+        layers: [
+          {
+            id: 'osm',
+            type: 'raster',
+            source: 'osm'
+          }
+        ]
+      },
       center: initialCenter,
       zoom: initialZoom,
       attributionControl: false,
@@ -199,7 +218,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       maxZoom: 18,
       minZoom: 1,
       // Additional performance settings
-      renderWorldCopies: false, // Don't render multiple world copies
+      renderWorldCopies: true, // Enable world wrapping to prevent grey areas
       fadeDuration: 0, // Disable fade animations for faster rendering
       crossSourceCollisions: false // Disable collision detection between sources
     });

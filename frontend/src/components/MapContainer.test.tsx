@@ -75,7 +75,26 @@ describe('MapContainer', () => {
       
       expect(Map).toHaveBeenCalledWith({
         container: expect.any(HTMLElement),
-        style: 'https://demotiles.maplibre.org/style.json',
+        style: {
+          version: 8,
+          sources: {
+            'osm': {
+              type: 'raster',
+              tiles: [
+                'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors'
+            }
+          },
+          layers: [
+            {
+              id: 'osm',
+              type: 'raster',
+              source: 'osm'
+            }
+          ]
+        },
         center: [0, 0],
         zoom: 2,
         attributionControl: false,
@@ -83,7 +102,7 @@ describe('MapContainer', () => {
         antialias: false,
         maxZoom: 18,
         minZoom: 1,
-        renderWorldCopies: false,
+        renderWorldCopies: true,
         fadeDuration: 0,
         crossSourceCollisions: false
       });
