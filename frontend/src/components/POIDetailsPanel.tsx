@@ -1,19 +1,5 @@
 import React, { useEffect } from 'react';
-
-export interface POIParticipant {
-  id: string;
-  name: string;
-}
-
-export interface POIData {
-  id: string;
-  name: string;
-  description: string;
-  maxParticipants: number;
-  participantCount: number;
-  position: { lat: number; lng: number };
-  participants: POIParticipant[];
-}
+import type { POIData, POIParticipant } from './MapContainer';
 
 export interface POIDetailsPanelProps {
   poi: POIData;

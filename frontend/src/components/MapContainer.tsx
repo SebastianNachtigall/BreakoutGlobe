@@ -13,6 +13,11 @@ export interface AvatarData {
   isMoving?: boolean;
 }
 
+export interface POIParticipant {
+  id: string;
+  name: string;
+}
+
 export interface POIData {
   id: string;
   name: string;
@@ -23,6 +28,7 @@ export interface POIData {
   };
   participantCount: number;
   maxParticipants: number;
+  participants?: POIParticipant[];
   createdBy: string;
   createdAt: Date;
 }

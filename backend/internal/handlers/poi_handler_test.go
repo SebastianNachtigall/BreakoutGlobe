@@ -149,6 +149,12 @@ func (suite *POIHandlerTestSuite) TestGetPOIs() {
 	// Mock expectations
 	suite.mockPOIService.On("GetPOIsForMap", mock.AnythingOfType("*gin.Context"), mapID).Return(expectedPOIs, nil)
 	
+	// Mock participant information for each POI
+	for _, poi := range expectedPOIs {
+		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(2, nil)
+		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1", "session-2"}, nil)
+	}
+	
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/api/pois?mapId="+mapID, nil)
 	w := httptest.NewRecorder()
@@ -167,6 +173,14 @@ func (suite *POIHandlerTestSuite) TestGetPOIs() {
 	suite.Equal(expectedPOIs[0].Name, response.POIs[0].Name)
 	suite.Equal(expectedPOIs[1].ID, response.POIs[1].ID)
 	suite.Equal(expectedPOIs[1].Name, response.POIs[1].Name)
+	
+	// Verify participant information is included
+	suite.Equal(2, response.POIs[0].ParticipantCount)
+	suite.Equal(2, len(response.POIs[0].Participants))
+	suite.Equal("session-1", response.POIs[0].Participants[0].ID)
+	suite.Equal("User-session-1", response.POIs[0].Participants[0].Name)
+	suite.Equal("session-2", response.POIs[0].Participants[1].ID)
+	suite.Equal("User-session-2", response.POIs[0].Participants[1].Name)
 }
 
 func (suite *POIHandlerTestSuite) TestGetPOIsWithBounds() {
@@ -192,6 +206,12 @@ func (suite *POIHandlerTestSuite) TestGetPOIsWithBounds() {
 	
 	// Mock expectations
 	suite.mockPOIService.On("GetPOIsInBounds", mock.AnythingOfType("*gin.Context"), mapID, bounds).Return(expectedPOIs, nil)
+	
+	// Mock participant information for each POI
+	for _, poi := range expectedPOIs {
+		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(1, nil)
+		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1"}, nil)
+	}
 	
 	// Create request with bounds query parameters
 	req := httptest.NewRequest(http.MethodGet, "/api/pois?mapId="+mapID+"&minLat=40.7000&maxLat=40.8000&minLng=-74.1000&maxLng=-73.9000", nil)

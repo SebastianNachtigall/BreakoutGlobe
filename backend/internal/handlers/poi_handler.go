@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,14 +102,22 @@ type GetPOIResponse struct {
 
 // POIInfo represents POI information in list responses
 type POIInfo struct {
-	ID              string        `json:"id"`
-	MapID           string        `json:"mapId"`
-	Name            string        `json:"name"`
-	Description     string        `json:"description"`
-	Position        models.LatLng `json:"position"`
-	CreatedBy       string        `json:"createdBy"`
-	MaxParticipants int           `json:"maxParticipants"`
-	CreatedAt       time.Time     `json:"createdAt"`
+	ID              string             `json:"id"`
+	MapID           string             `json:"mapId"`
+	Name            string             `json:"name"`
+	Description     string             `json:"description"`
+	Position        models.LatLng      `json:"position"`
+	CreatedBy       string             `json:"createdBy"`
+	MaxParticipants int                `json:"maxParticipants"`
+	ParticipantCount int               `json:"participantCount"`
+	Participants    []ParticipantInfo  `json:"participants"`
+	CreatedAt       time.Time          `json:"createdAt"`
+}
+
+// ParticipantInfo represents a participant in a POI
+type ParticipantInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // GetPOIsResponse represents the response for getting POIs
@@ -225,18 +234,48 @@ func (h *POIHandler) GetPOIs(c *gin.Context) {
 		return
 	}
 	
-	// Convert to response format
+	// Convert to response format with participant information
 	poiInfos := make([]POIInfo, len(pois))
 	for i, poi := range pois {
+		// Get participant count
+		participantCount, err := h.poiService.GetPOIParticipantCount(c, poi.ID)
+		if err != nil {
+			// Log error but don't fail the request
+			participantCount = 0
+		}
+		
+		// Get participant details
+		participantIDs, err := h.poiService.GetPOIParticipants(c, poi.ID)
+		if err != nil {
+			// Log error but don't fail the request
+			participantIDs = []string{}
+		}
+		
+		// Convert participant IDs to participant info
+		participants := make([]ParticipantInfo, len(participantIDs))
+		for j, participantID := range participantIDs {
+			// For now, use session ID as display name
+			// TODO: Enhance this when we add proper user authentication
+			// For now, use a simplified display name based on session ID
+			// TODO: Enhance this when we add proper user authentication
+			displayName := fmt.Sprintf("User-%s", participantID)
+			participants[j] = ParticipantInfo{
+				ID:   participantID,
+				Name: displayName,
+			}
+		}
+		
 		poiInfos[i] = POIInfo{
-			ID:              poi.ID,
-			MapID:           poi.MapID,
-			Name:            poi.Name,
-			Description:     poi.Description,
-			Position:        poi.Position,
-			CreatedBy:       poi.CreatedBy,
-			MaxParticipants: poi.MaxParticipants,
-			CreatedAt:       poi.CreatedAt,
+			ID:               poi.ID,
+			MapID:            poi.MapID,
+			Name:             poi.Name,
+			Description:      poi.Description,
+			Position:         poi.Position,
+			CreatedBy:        poi.CreatedBy,
+			MaxParticipants:  poi.MaxParticipants,
+			ParticipantCount: participantCount,
+			Participants:     participants,
+			CreatedAt:        poi.CreatedAt,
 		}
 	}
 	
