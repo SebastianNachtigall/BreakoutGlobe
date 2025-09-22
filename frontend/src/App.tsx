@@ -128,8 +128,8 @@ function App() {
         throw new Error('Failed to load POIs')
       }
       
-      const pois = await response.json()
-      poiStore.getState().setPOIs(pois)
+      const data = await response.json()
+      poiStore.getState().setPOIs(data.pois || [])
       
     } catch (error) {
       console.error('Failed to load POIs:', error)
@@ -263,7 +263,7 @@ function App() {
             initialCenter={[sessionState.avatarPosition.lng, sessionState.avatarPosition.lat]}
             initialZoom={10}
             avatars={avatars}
-            pois={poiState.pois}
+            pois={poiState.pois || []}
             onMapClick={handleMapClick}
             onAvatarMove={handleAvatarMove}
             onPOIClick={handlePOIClick}

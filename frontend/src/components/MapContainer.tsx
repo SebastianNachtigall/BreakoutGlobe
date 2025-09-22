@@ -331,7 +331,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     if (!map.current) return;
 
     // Remove POI markers that no longer exist
-    const currentPOIIds = new Set(pois.map(poi => poi.id));
+    const currentPOIIds = new Set((pois || []).map(poi => poi.id));
     poiMarkers.current.forEach((marker: Marker, poiId: string) => {
       if (!currentPOIIds.has(poiId)) {
         marker.remove();

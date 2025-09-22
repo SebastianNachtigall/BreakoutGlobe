@@ -1,38 +1,33 @@
 import React from 'react';
-import { useWebSocket } from '../hooks/useWebSocket';
+import { ConnectionStatus as WSConnectionStatus } from '../services/websocket-client';
 
 interface ConnectionStatusProps {
-    url: string;
-    sessionId: string;
+    status: WSConnectionStatus;
+    sessionId: string | null;
     compact?: boolean;
     className?: string;
 }
 
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
-    url,
+    status,
     sessionId,
     compact = false,
     className = ''
 }) => {
-    const {
-        connectionStatus,
-        isConnected,
-        isConnecting,
-        isReconnecting,
-        queuedMessageCount,
-        lastError,
-        connect
-    } = useWebSocket({ url, sessionId, autoConnect: true });
+    const connectionStatus = status;
+    const isConnected = status === WSConnectionStatus.CONNECTED;
+    const isConnecting = status === WSConnectionStatus.CONNECTING;
+    const isReconnecting = status === WSConnectionStatus.RECONNECTING;
 
     const getStatusText = () => {
         switch (connectionStatus) {
-            case 'connected':
+            case WSConnectionStatus.CONNECTED:
                 return 'Connected';
-            case 'connecting':
+            case WSConnectionStatus.CONNECTING:
                 return 'Connecting...';
-            case 'reconnecting':
+            case WSConnectionStatus.RECONNECTING:
                 return 'Reconnecting...';
-            case 'disconnected':
+            case WSConnectionStatus.DISCONNECTED:
                 return 'Disconnected';
             default:
                 return 'Unknown';
@@ -41,21 +36,17 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
 
     const getStatusIcon = () => {
         switch (connectionStatus) {
-            case 'connected':
+            case WSConnectionStatus.CONNECTED:
                 return '🟢';
-            case 'connecting':
+            case WSConnectionStatus.CONNECTING:
                 return '🟡';
-            case 'reconnecting':
+            case WSConnectionStatus.RECONNECTING:
                 return '🟠';
-            case 'disconnected':
+            case WSConnectionStatus.DISCONNECTED:
                 return '🔴';
             default:
                 return '⚪';
         }
-    };
-
-    const handleRetry = () => {
-        connect();
     };
 
     const statusClasses = [
@@ -82,28 +73,12 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
             <div className="status-content">
                 <span className="status-icon">{getStatusIcon()}</span>
                 <span className="status-text">{getStatusText()}</span>
-                
-                {queuedMessageCount > 0 && (
-                    <span className="queued-count">
-                        ({queuedMessageCount} queued)
+                {sessionId && (
+                    <span className="session-id">
+                        ({sessionId.slice(-8)})
                     </span>
                 )}
             </div>
-
-            {lastError && (
-                <div className="error-message">
-                    {lastError.message}
-                </div>
-            )}
-
-            {!isConnected && !isConnecting && !isReconnecting && (
-                <button 
-                    onClick={handleRetry}
-                    className="retry-button"
-                >
-                    Retry
-                </button>
-            )}
         </div>
     );
 };
