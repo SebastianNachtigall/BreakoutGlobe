@@ -378,13 +378,33 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         poiMarkers.current.set(poi.id, marker);
       } else {
-        // Update existing POI marker (recreate element to update content)
-        const updatedElement = createPOIMarkerElement(poi);
+        // Update existing POI marker content without replacing the element
+        const currentElement = marker.getElement();
         const currentPos = marker.getLngLat();
         const newPosition: [number, number] = [poi.position.lng, poi.position.lat];
+        const isFull = poi.participantCount >= poi.maxParticipants;
 
-        // Update element
-        marker.getElement().replaceWith(updatedElement);
+        // Update the element's content and styling
+        currentElement.className = `
+          w-20 h-12 rounded-lg border-2 cursor-pointer
+          flex flex-col items-center justify-center text-white text-xs font-bold
+          shadow-lg hover:scale-105 transition-transform duration-200
+          ${isFull
+            ? 'bg-red-500 border-red-600 cursor-not-allowed'
+            : 'bg-green-500 border-green-600'
+          }
+        `;
+
+        currentElement.innerHTML = `
+          <div class="text-center leading-tight">
+            <div class="truncate max-w-20">${poi.name}</div>
+            <div class="text-xs opacity-90">
+              ${poi.participantCount}/${poi.maxParticipants}
+            </div>
+          </div>
+        `;
+
+        currentElement.title = `${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`;
 
         // Update position if changed
         const hasPositionChanged =
