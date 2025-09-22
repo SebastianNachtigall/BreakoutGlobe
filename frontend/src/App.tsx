@@ -1,84 +1,312 @@
-import React, { useState, useCallback, useRef } from 'react'
-import { MapContainer, AvatarData } from './components/MapContainer'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { MapContainer, AvatarData, POIData } from './components/MapContainer'
+import { ConnectionStatus } from './components/ConnectionStatus'
+import { NotificationCenter } from './components/NotificationCenter'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { POICreationModal } from './components/POICreationModal'
+import { POIDetailsPanel } from './components/POIDetailsPanel'
+import { sessionStore } from './stores/sessionStore'
+import { poiStore } from './stores/poiStore'
+import { errorStore } from './stores/errorStore'
+import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
+
+// Mock data for development
+const mockSession = {
+  id: 'session-123',
+  avatarId: 'avatar-456',
+  position: { lat: 40.7128, lng: -74.0060 }
+}
 
 function App() {
-  const [avatars, setAvatars] = useState<AvatarData[]>([
-    {
-      sessionId: 'current-user',
-      position: { lat: 40.7128, lng: -74.0060 }, // New York
-      isCurrentUser: true,
-      isMoving: false
-    },
-    {
-      sessionId: 'other-user-1',
-      position: { lat: 51.5074, lng: -0.1278 }, // London
-      isCurrentUser: false,
-      isMoving: false
-    },
-    {
-      sessionId: 'other-user-2',
-      position: { lat: 35.6762, lng: 139.6503 }, // Tokyo
-      isCurrentUser: false,
-      isMoving: false
-    }
-  ])
-
-  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleAvatarMove = useCallback((position: { lat: number; lng: number }) => {
-    // Clear any existing timeout to prevent multiple state updates
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current)
-    }
-    setAvatars(prev => prev.map(avatar =>
-      avatar.isCurrentUser
-        ? { ...avatar, position, isMoving: true }
-        : avatar
-    ))
-
-    // Reset moving state after animation completes (match MapContainer duration)
-    animationTimeoutRef.current = setTimeout(() => {
+  // Store subscriptions
+  const sessionState = sessionStore()
+  const poiState = poiStore()
+  const errorState = errorStore()
   
-      setAvatars(prev => prev.map(avatar =>
-        avatar.isCurrentUser
-          ? { ...avatar, isMoving: false }
-          : avatar
-      ))
-      animationTimeoutRef.current = null
-    }, 500) // Match MapContainer animation duration
+  // Local component state
+  const [wsClient, setWsClient] = useState<WebSocketClient | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<WSConnectionStatus>(WSConnectionStatus.DISCONNECTED)
+  const [isInitialized, setIsInitialized] = useState(false)
+  const [selectedPOI, setSelectedPOI] = useState<POIData | null>(null)
+  const [showPOICreation, setShowPOICreation] = useState(false)
+  const [poiCreationPosition, setPOICreationPosition] = useState<{ lat: number; lng: number } | null>(null)
+  
+  const initializationRef = useRef(false)
+
+  // Initialize session and WebSocket connection
+  useEffect(() => {
+    if (initializationRef.current) return
+    initializationRef.current = true
+
+    const initializeApp = async () => {
+      try {
+        // Create or restore session
+        let sessionId = sessionState.sessionId
+        
+        if (!sessionId) {
+          // Create new session via API
+          const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              position: mockSession.position
+            }),
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to create session')
+          }
+          
+          const sessionData = await response.json()
+          sessionId = sessionData.sessionId || sessionData.id
+          
+          // Update session store
+          sessionStore.getState().createSession(sessionId, sessionData.position || mockSession.position)
+        }
+
+        // Initialize WebSocket connection
+        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`
+        const client = new WebSocketClient(wsUrl, sessionId)
+        
+        // Set up WebSocket event handlers
+        client.onStatusChange((status) => {
+          setConnectionStatus(status)
+        })
+        
+        client.onError((error) => {
+          errorStore.getState().addError({
+            id: Date.now().toString(),
+            message: error.message,
+            type: 'websocket',
+            severity: 'error',
+            timestamp: error.timestamp
+          })
+        })
+        
+        // Connect WebSocket
+        await client.connect()
+        setWsClient(client)
+        
+        // Load initial POIs
+        await loadPOIs()
+        
+        setIsInitialized(true)
+        
+      } catch (error) {
+        console.error('Failed to initialize app:', error)
+        errorStore.getState().addError({
+          id: Date.now().toString(),
+          message: error instanceof Error ? error.message : 'Failed to initialize application',
+          type: 'api',
+          severity: 'error',
+          timestamp: new Date()
+        })
+      }
+    }
+
+    initializeApp()
+    
+    // Cleanup on unmount
+    return () => {
+      if (wsClient) {
+        wsClient.disconnect()
+      }
+    }
   }, [])
 
+  // Load POIs from API
+  const loadPOIs = async () => {
+    try {
+      poiStore.getState().setLoading(true)
+      
+      const response = await fetch('/api/pois')
+      if (!response.ok) {
+        throw new Error('Failed to load POIs')
+      }
+      
+      const pois = await response.json()
+      poiStore.getState().setPOIs(pois)
+      
+    } catch (error) {
+      console.error('Failed to load POIs:', error)
+      poiStore.getState().setError(error instanceof Error ? error.message : 'Failed to load POIs')
+    } finally {
+      poiStore.getState().setLoading(false)
+    }
+  }
+
+  // Handle avatar movement
+  const handleAvatarMove = useCallback((position: { lat: number; lng: number }) => {
+    if (!wsClient || !wsClient.isConnected()) {
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: 'Cannot move avatar: not connected to server',
+        type: 'network',
+        severity: 'warning',
+        timestamp: new Date()
+      })
+      return
+    }
+
+    // Use WebSocket client for optimistic updates
+    wsClient.moveAvatar(position)
+  }, [wsClient])
+
+  // Handle map click for avatar movement
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
-    // Map click handler - currently unused
+    handleAvatarMove({ lat: event.lngLat.lat, lng: event.lngLat.lng })
+  }, [handleAvatarMove])
+
+  // Handle POI creation from context menu
+  const handlePOICreate = useCallback((position: { lat: number; lng: number }) => {
+    setPOICreationPosition(position)
+    setShowPOICreation(true)
   }, [])
 
-  return (
-    <div className="h-screen w-screen flex flex-col">
-      {/* Header */}
-      <div className="bg-blue-600 text-white p-4 shadow-lg">
-        <h1 className="text-2xl font-bold">BreakoutGlobe</h1>
-        <p className="text-blue-100">Interactive Workshop Platform</p>
-      </div>
+  // Handle POI creation submission
+  const handleCreatePOISubmit = useCallback(async (poiData: Omit<POIData, 'id' | 'participantCount'>) => {
+    if (!wsClient || !poiCreationPosition) return
 
-      {/* Map Container */}
-      <div className="flex-1 relative">
-        <MapContainer
-          initialCenter={[0, 20]} // Center on Atlantic
-          initialZoom={2}
-          avatars={avatars}
-          onMapClick={handleMapClick}
-          onAvatarMove={handleAvatarMove}
-        />
-      </div>
+    const newPOI: POIData = {
+      ...poiData,
+      id: `temp-${Date.now()}`, // Temporary ID for optimistic update
+      position: poiCreationPosition,
+      participantCount: 0
+    }
 
-      {/* Status Bar */}
-      <div className="bg-gray-800 text-white p-2 text-sm">
-        <div className="flex justify-between items-center">
-          <span>Connected Users: {avatars.length}</span>
-          <span>Click anywhere on the map to move your avatar</span>
+    try {
+      // Use WebSocket client for optimistic updates
+      wsClient.createPOI(newPOI)
+      
+      setShowPOICreation(false)
+      setPOICreationPosition(null)
+      
+    } catch (error) {
+      console.error('Failed to create POI:', error)
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: error instanceof Error ? error.message : 'Failed to create POI',
+        type: 'api',
+        severity: 'error',
+        timestamp: new Date()
+      })
+    }
+  }, [wsClient, poiCreationPosition])
+
+  // Handle POI selection
+  const handlePOIClick = useCallback((poiId: string) => {
+    const poi = poiState.pois.find(p => p.id === poiId)
+    if (poi) {
+      setSelectedPOI(poi)
+    }
+  }, [poiState.pois])
+
+  // Handle POI join/leave
+  const handleJoinPOI = useCallback((poiId: string) => {
+    if (!wsClient) return
+    wsClient.joinPOI(poiId)
+  }, [wsClient])
+
+  const handleLeavePOI = useCallback((poiId: string) => {
+    if (!wsClient) return
+    wsClient.leavePOI(poiId)
+  }, [wsClient])
+
+  // Convert session state to avatar data for MapContainer
+  const avatars: AvatarData[] = [
+    {
+      sessionId: sessionState.sessionId || 'current-user',
+      position: sessionState.avatarPosition,
+      isCurrentUser: true,
+      isMoving: sessionState.isMoving
+    }
+    // TODO: Add other users' avatars from real-time updates
+  ]
+
+  if (!isInitialized) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing BreakoutGlobe...</p>
         </div>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <ErrorBoundary>
+      <div className="h-screen w-screen flex flex-col">
+        {/* Header */}
+        <div className="bg-blue-600 text-white p-4 shadow-lg">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">BreakoutGlobe</h1>
+              <p className="text-blue-100">Interactive Workshop Platform</p>
+            </div>
+            <ConnectionStatus 
+              status={connectionStatus}
+              sessionId={sessionState.sessionId}
+            />
+          </div>
+        </div>
+
+        {/* Map Container */}
+        <div className="flex-1 relative">
+          <MapContainer
+            initialCenter={[sessionState.avatarPosition.lng, sessionState.avatarPosition.lat]}
+            initialZoom={10}
+            avatars={avatars}
+            pois={poiState.pois}
+            onMapClick={handleMapClick}
+            onAvatarMove={handleAvatarMove}
+            onPOIClick={handlePOIClick}
+            onPOICreate={handlePOICreate}
+          />
+          
+          {/* POI Details Panel */}
+          {selectedPOI && (
+            <POIDetailsPanel
+              poi={selectedPOI}
+              currentUserId={sessionState.sessionId || ''}
+              onJoin={() => handleJoinPOI(selectedPOI.id)}
+              onLeave={() => handleLeavePOI(selectedPOI.id)}
+              onClose={() => setSelectedPOI(null)}
+            />
+          )}
+        </div>
+
+        {/* Status Bar */}
+        <div className="bg-gray-800 text-white p-2 text-sm">
+          <div className="flex justify-between items-center">
+            <span>Connected Users: {avatars.length}</span>
+            <span>
+              {connectionStatus === WSConnectionStatus.CONNECTED 
+                ? 'Click to move • Right-click to create POI'
+                : 'Connecting...'
+              }
+            </span>
+          </div>
+        </div>
+
+        {/* Modals */}
+        {showPOICreation && poiCreationPosition && (
+          <POICreationModal
+            position={poiCreationPosition}
+            onSubmit={handleCreatePOISubmit}
+            onCancel={() => {
+              setShowPOICreation(false)
+              setPOICreationPosition(null)
+            }}
+          />
+        )}
+
+        {/* Notifications */}
+        <NotificationCenter />
+      </div>
+    </ErrorBoundary>
   )
 }
 
