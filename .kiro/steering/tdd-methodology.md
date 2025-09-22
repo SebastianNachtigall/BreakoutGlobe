@@ -6,6 +6,23 @@
 
 This project strictly follows Test-Driven Development methodology. You MUST always follow the Red-Green-Refactor cycle:
 
+## MANDATORY TEST EXECUTION RULES
+
+### Rule 1: Test After Every Change
+- **MUST** run relevant tests after every single code modification
+- **NEVER** make multiple changes without running tests in between
+- **NEVER** leave tests in a broken state for more than one commit
+
+### Rule 2: Full Test Suite Before Major Changes
+- **MUST** run full test suite before making breaking changes (like changing data types)
+- **MUST** fix all failing tests immediately after breaking changes
+- **NEVER** proceed with new features while tests are failing
+
+### Rule 3: Small Incremental Changes
+- Make the smallest possible change that moves toward the goal
+- If a change affects multiple files, fix tests for each file immediately
+- **NEVER** make sweeping changes across multiple modules without immediate test fixes
+
 ## TDD Process
 
 ### 1. Red Phase
@@ -52,9 +69,43 @@ This project strictly follows Test-Driven Development methodology. You MUST alwa
 - All refactoring must maintain green test status
 - Tests should be readable and describe business requirements
 
+## ENFORCEMENT RULES
+
+### Before Any Implementation:
+1. **MUST** run `go test ./... -- --run` (backend) or `npm test -- --run` (frontend)
+2. **MUST** ensure all tests pass before starting new work
+3. **MUST** write failing test for new functionality first
+
+### During Implementation:
+1. **MUST** run tests after each logical change (every 5-10 lines of code)
+2. **MUST** fix any failing tests immediately before continuing
+3. **MUST** never commit code with failing tests
+
+### After Implementation:
+1. **MUST** run full test suite before considering task complete
+2. **MUST** ensure 100% of tests pass
+3. **MUST** refactor only while maintaining green tests
+
+### Breaking Changes Protocol:
+1. **MUST** identify all affected test files before making the change
+2. **MUST** fix tests in small batches (1-3 files at a time)
+3. **MUST** run tests after each batch of fixes
+4. **NEVER** make additional feature changes while fixing broken tests
+
 This rule applies to:
 - All backend Go code
 - All frontend TypeScript code  
 - All integration tests
 - All API endpoint implementations
 - All service layer implementations
+
+## VIOLATION CONSEQUENCES
+
+Violating these TDD rules leads to:
+- Technical debt accumulation
+- Cascade failures across test suites
+- Lost development velocity
+- Reduced confidence in codebase
+- Difficult debugging sessions
+
+**These rules are non-negotiable for maintaining code quality and development velocity.**
