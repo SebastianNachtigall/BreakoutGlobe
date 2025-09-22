@@ -141,7 +141,7 @@ func (s *Server) updateAvatarPosition(c *gin.Context) {
 func (s *Server) getPOIs(c *gin.Context) {
 	mapID := c.Query("mapId")
 	
-	// Return some mock POIs
+	// Return some mock POIs with participant information
 	pois := []gin.H{
 		{
 			"id":              "poi-1",
@@ -151,7 +151,8 @@ func (s *Server) getPOIs(c *gin.Context) {
 			"position":        gin.H{"lat": 40.7130, "lng": -74.0062},
 			"createdBy":       "user-1",
 			"maxParticipants": 10,
-			"participantCount": 2,
+			"participantCount": 0,
+			"participants": []gin.H{},
 		},
 		{
 			"id":              "poi-2",
@@ -161,7 +162,8 @@ func (s *Server) getPOIs(c *gin.Context) {
 			"position":        gin.H{"lat": 40.7125, "lng": -74.0058},
 			"createdBy":       "user-2",
 			"maxParticipants": 5,
-			"participantCount": 1,
+			"participantCount": 0,
+			"participants": []gin.H{},
 		},
 	}
 	
