@@ -47,6 +47,11 @@ describe('poiStore', () => {
       expect(state.pois).toHaveLength(1);
       expect(state.pois[0]).toEqual(mockPOI);
     });
+    
+    it('should initialize with no current user POI', () => {
+      const state = poiStore.getState();
+      expect(state.currentUserPOI).toBeNull();
+    });
 
     it('should update an existing POI', () => {
       poiStore.getState().addPOI(mockPOI);
@@ -140,6 +145,116 @@ describe('poiStore', () => {
       const state = poiStore.getState();
       const poi = state.pois.find(p => p.id === mockPOI.id);
       expect(poi?.participantCount).toBe(0); // Unchanged
+    });
+  });
+
+  describe('Auto-Leave Functionality', () => {
+    const mockPOI2: POIData = {
+      id: 'poi-2',
+      name: 'Coffee Corner',
+      description: 'A place for coffee breaks',
+      position: { lat: 40.7589, lng: -73.9851 },
+      participantCount: 1,
+      maxParticipants: 5,
+      createdBy: 'user-789',
+      createdAt: new Date()
+    };
+
+    beforeEach(() => {
+      poiStore.getState().addPOI(mockPOI);
+      poiStore.getState().addPOI(mockPOI2);
+    });
+
+    it('should track current user POI when joining', () => {
+      const userId = 'user-456';
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      
+      const state = poiStore.getState();
+      expect(state.currentUserPOI).toBe(mockPOI.id);
+    });
+
+    it('should clear current user POI when leaving', () => {
+      const userId = 'user-456';
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      poiStore.getState().leavePOI(mockPOI.id, userId);
+      
+      const state = poiStore.getState();
+      expect(state.currentUserPOI).toBeNull();
+    });
+
+    it('should auto-leave current POI when joining a different POI', () => {
+      const userId = 'user-456';
+      
+      // Join first POI
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      let state = poiStore.getState();
+      expect(state.currentUserPOI).toBe(mockPOI.id);
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(4);
+      
+      // Join second POI with auto-leave
+      poiStore.getState().joinPOIWithAutoLeave(mockPOI2.id, userId);
+      state = poiStore.getState();
+      
+      // Should be in second POI
+      expect(state.currentUserPOI).toBe(mockPOI2.id);
+      expect(state.pois.find(p => p.id === mockPOI2.id)?.participantCount).toBe(2);
+      
+      // Should have left first POI
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(3);
+    });
+
+    it('should not auto-leave when joining the same POI', () => {
+      const userId = 'user-456';
+      
+      // Join POI
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      let state = poiStore.getState();
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(4);
+      
+      // Join same POI with auto-leave (should not double-join)
+      poiStore.getState().joinPOIWithAutoLeave(mockPOI.id, userId);
+      state = poiStore.getState();
+      
+      // Should still be in the POI with same count
+      expect(state.currentUserPOI).toBe(mockPOI.id);
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(5); // Joined again
+    });
+
+    it('should leave current POI when calling leaveCurrentPOI', () => {
+      const userId = 'user-456';
+      
+      // Join POI
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      let state = poiStore.getState();
+      expect(state.currentUserPOI).toBe(mockPOI.id);
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(4);
+      
+      // Leave current POI
+      const result = poiStore.getState().leaveCurrentPOI(userId);
+      state = poiStore.getState();
+      
+      expect(result).toBe(true);
+      expect(state.currentUserPOI).toBeNull();
+      expect(state.pois.find(p => p.id === mockPOI.id)?.participantCount).toBe(3);
+    });
+
+    it('should return false when trying to leave current POI if not in any POI', () => {
+      const userId = 'user-456';
+      
+      const result = poiStore.getState().leaveCurrentPOI(userId);
+      const state = poiStore.getState();
+      
+      expect(result).toBe(false);
+      expect(state.currentUserPOI).toBeNull();
+    });
+
+    it('should return current user POI', () => {
+      const userId = 'user-456';
+      
+      expect(poiStore.getState().getCurrentUserPOI()).toBeNull();
+      
+      poiStore.getState().joinPOI(mockPOI.id, userId);
+      expect(poiStore.getState().getCurrentUserPOI()).toBe(mockPOI.id);
     });
   });
 

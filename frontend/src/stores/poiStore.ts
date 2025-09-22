@@ -8,6 +8,9 @@ export interface POIState {
   isLoading: boolean;
   error: string | null;
   
+  // User participation tracking
+  currentUserPOI: string | null;
+  
   // Optimistic update tracking
   optimisticOperations: Map<string, 'create' | 'join' | 'leave'>;
   
@@ -22,6 +25,11 @@ export interface POIState {
   joinPOI: (poiId: string, userId: string) => boolean;
   leavePOI: (poiId: string, userId: string) => boolean;
   
+  // Auto-leave functionality
+  joinPOIWithAutoLeave: (poiId: string, userId: string) => boolean;
+  leaveCurrentPOI: (userId: string) => boolean;
+  getCurrentUserPOI: () => string | null;
+  
   // Loading and error states
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -30,6 +38,7 @@ export interface POIState {
   createPOIOptimistic: (poi: POIData) => void;
   rollbackPOICreation: (poiId: string) => void;
   joinPOIOptimistic: (poiId: string, userId: string) => boolean;
+  joinPOIOptimisticWithAutoLeave: (poiId: string, userId: string) => boolean;
   rollbackJoinPOI: (poiId: string, userId: string) => void;
   confirmJoinPOI: (poiId: string, userId: string) => void;
   
@@ -45,6 +54,7 @@ const initialState = {
   pois: [],
   isLoading: false,
   error: null,
+  currentUserPOI: null,
   optimisticOperations: new Map<string, 'create' | 'join' | 'leave'>(),
 };
 
@@ -96,6 +106,7 @@ export const poiStore = create<POIState>()(
               ? { ...p, participantCount: p.participantCount + 1 }
               : p
           ),
+          currentUserPOI: poiId,
         }));
         
         return true;
@@ -115,9 +126,47 @@ export const poiStore = create<POIState>()(
               ? { ...p, participantCount: Math.max(0, p.participantCount - 1) }
               : p
           ),
+          currentUserPOI: state.currentUserPOI === poiId ? null : state.currentUserPOI,
         }));
         
         return true;
+      },
+      
+      // Auto-leave functionality
+      joinPOIWithAutoLeave: (poiId: string, userId: string) => {
+        const state = get();
+        
+        // First, leave current POI if user is in one
+        if (state.currentUserPOI && state.currentUserPOI !== poiId) {
+          get().leavePOI(state.currentUserPOI, userId);
+        }
+        
+        // Then join the new POI
+        const success = get().joinPOI(poiId, userId);
+        if (success) {
+          set({ currentUserPOI: poiId });
+        }
+        
+        return success;
+      },
+      
+      leaveCurrentPOI: (userId: string) => {
+        const state = get();
+        
+        if (!state.currentUserPOI) {
+          return false;
+        }
+        
+        const success = get().leavePOI(state.currentUserPOI, userId);
+        if (success) {
+          set({ currentUserPOI: null });
+        }
+        
+        return success;
+      },
+      
+      getCurrentUserPOI: () => {
+        return get().currentUserPOI;
       },
       
       setLoading: (loading: boolean) => {
@@ -165,6 +214,51 @@ export const poiStore = create<POIState>()(
               ? { ...p, participantCount: p.participantCount + 1 }
               : p
           ),
+          optimisticOperations: newOperations,
+        });
+        
+        return true;
+      },
+      
+      joinPOIOptimisticWithAutoLeave: (poiId: string, userId: string) => {
+        const state = get();
+        
+        // First, handle auto-leave from current POI
+        if (state.currentUserPOI && state.currentUserPOI !== poiId) {
+          // Remove from current POI optimistically
+          const currentPOI = state.pois.find(p => p.id === state.currentUserPOI);
+          if (currentPOI && currentPOI.participantCount > 0) {
+            const newOperations = new Map(state.optimisticOperations);
+            newOperations.set(`${state.currentUserPOI}-${userId}`, 'leave');
+            
+            set({
+              pois: state.pois.map(p => 
+                p.id === state.currentUserPOI 
+                  ? { ...p, participantCount: Math.max(0, p.participantCount - 1) }
+                  : p
+              ),
+              optimisticOperations: newOperations,
+            });
+          }
+        }
+        
+        // Then join the new POI
+        const poi = get().pois.find(p => p.id === poiId);
+        if (!poi || poi.participantCount >= poi.maxParticipants) {
+          return false;
+        }
+        
+        const newState = get();
+        const newOperations = new Map(newState.optimisticOperations);
+        newOperations.set(`${poiId}-${userId}`, 'join');
+        
+        set({
+          pois: newState.pois.map(p => 
+            p.id === poiId 
+              ? { ...p, participantCount: p.participantCount + 1 }
+              : p
+          ),
+          currentUserPOI: poiId,
           optimisticOperations: newOperations,
         });
         
@@ -224,6 +318,7 @@ export const poiStore = create<POIState>()(
           pois: [],
           isLoading: false,
           error: null,
+          currentUserPOI: null,
           optimisticOperations: new Map(),
         });
       },

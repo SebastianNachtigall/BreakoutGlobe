@@ -156,10 +156,17 @@ function App() {
     wsClient.moveAvatar(position)
   }, [wsClient])
 
-  // Handle map click for avatar movement
+  // Handle map click for avatar movement and auto-leave
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
+    // Move avatar to clicked location
     handleAvatarMove({ lat: event.lngLat.lat, lng: event.lngLat.lng })
-  }, [handleAvatarMove])
+    
+    // Auto-leave current POI and close details panel
+    if (wsClient) {
+      wsClient.leaveCurrentPOI()
+    }
+    setSelectedPOI(null)
+  }, [handleAvatarMove, wsClient])
 
   // Handle POI creation from context menu
   const handlePOICreate = useCallback((position: { lat: number; lng: number }) => {
@@ -207,10 +214,10 @@ function App() {
     }
   }, [poiState.pois])
 
-  // Handle POI join/leave
+  // Handle POI join/leave with auto-leave functionality
   const handleJoinPOI = useCallback((poiId: string) => {
     if (!wsClient) return
-    wsClient.joinPOI(poiId)
+    wsClient.joinPOIWithAutoLeave(poiId)
   }, [wsClient])
 
   const handleLeavePOI = useCallback((poiId: string) => {

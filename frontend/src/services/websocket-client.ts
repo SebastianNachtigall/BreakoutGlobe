@@ -458,5 +458,39 @@ export class WebSocketClient {
     }
   }
 
+  // Auto-leave functionality for POI switching
+  joinPOIWithAutoLeave(poiId: string): void {
+    const userId = this.sessionId;
+
+    // Perform optimistic update with auto-leave
+    const success = poiStore.getState().joinPOIOptimisticWithAutoLeave(poiId, userId);
+
+    if (success) {
+      // Send to server
+      this.send({
+        type: 'poi_join',
+        data: { poiId, userId },
+        timestamp: new Date()
+      });
+
+      // Emit state sync
+      this.notifyStateSync({
+        type: 'poi',
+        data: { action: 'join', poiId, userId },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  // Leave current POI (for map clicks)
+  leaveCurrentPOI(): void {
+    const userId = this.sessionId;
+    const currentPOI = poiStore.getState().getCurrentUserPOI();
+
+    if (currentPOI) {
+      this.leavePOI(currentPOI);
+    }
+  }
+
 
 }
