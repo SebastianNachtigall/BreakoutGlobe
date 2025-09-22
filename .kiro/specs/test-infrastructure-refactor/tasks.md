@@ -6,8 +6,8 @@ This implementation plan transforms our brittle test infrastructure into a resil
 
 ## Implementation Tasks
 
-- [ ] 1. Core Test Infrastructure Foundation
-  - [ ] 1.1 Create testdata package with model builders
+- [x] 1. Core Test Infrastructure Foundation
+  - [x] 1.1 Create testdata package with model builders
     - Write tests for UserBuilder with fluent API (WithEmail, WithRole, etc.)
     - Implement UserBuilder with UUID generation and sensible defaults
     - Write tests for POIBuilder with relationship support (WithCreator, WithMap)
@@ -19,7 +19,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add UUID utility functions (GenerateUUID, ParseUUID) with tests
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 1.2 Create mock abstraction layer
+  - [x] 1.2 Create mock abstraction layer
     - Write tests for MockSetup with automatic context handling
     - Implement MockSetup that hides context.backgroundCtx complexity
     - Write tests for MockPOIServiceBuilder with fluent expectations
@@ -31,7 +31,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add automatic mock verification in test cleanup
     - _Requirements: 3.1, 3.2, 3.3_
 
-  - [ ] 1.3 Create assertion helpers package
+  - [x] 1.3 Create assertion helpers package
     - Write tests for POIResponse assertion helper with field validation
     - Implement POIResponse helper that ignores timestamps and focuses on business data
     - Write tests for HTTPStatus helper with detailed error messages
