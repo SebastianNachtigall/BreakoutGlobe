@@ -43,8 +43,8 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add UUID assertion helpers for consistent ID validation
     - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 2. Test Scenario Builders
-  - [ ] 2.1 Implement POI test scenario builder
+- [-] 2. Test Scenario Builders
+  - [x] 2.1 Implement POI test scenario builder
     - Write tests for POITestScenario with fluent configuration
     - Implement POITestScenario with WithValidUser, WithMap methods
     - Write tests for POI creation scenarios (success, rate limit, validation errors)

@@ -427,8 +427,8 @@ func (m *MockPOIService) ValidatePOI(ctx context.Context, poiID string) (*models
 	return args.Get(0).(*models.POI), args.Error(1)
 }
 
-func (m *MockPOIService) UpdatePOI(ctx context.Context, poiID string, updates map[string]interface{}) (*models.POI, error) {
-	args := m.Called(ctx, poiID, updates)
+func (m *MockPOIService) UpdatePOI(ctx context.Context, poiID string, updateData services.POIUpdateData) (*models.POI, error) {
+	args := m.Called(ctx, poiID, updateData)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
