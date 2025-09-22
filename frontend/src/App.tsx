@@ -45,7 +45,7 @@ function App() {
         
         if (!sessionId) {
           // Create new session via API
-          const response = await fetch('/api/sessions', {
+          const response = await fetch('http://localhost:8080/api/sessions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -123,7 +123,7 @@ function App() {
     try {
       poiStore.getState().setLoading(true)
       
-      const response = await fetch('/api/pois')
+      const response = await fetch('http://localhost:8080/api/pois?mapId=default-map')
       if (!response.ok) {
         throw new Error('Failed to load POIs')
       }
