@@ -4,6 +4,22 @@
 
 This implementation plan transforms our brittle test infrastructure into a resilient, maintainable system that supports proper TDD practices. This work is a prerequisite for the user-profile-system implementation.
 
+## Strategic Approach
+
+**Integration Test Focus**: We implement integration tests for stable infrastructure components (database, Redis, WebSocket) while avoiding business logic that will change with the upcoming user profile system. This approach validates core infrastructure patterns without creating technical debt from tests that will need to be rewritten when authentication and permissions are implemented.
+
+**Stable Areas for Integration Testing**:
+- Database layer (repositories, migrations, queries)
+- Redis integration (session presence, pub/sub, rate limiting)  
+- WebSocket infrastructure (connections, broadcasting, lifecycle)
+- Cross-layer coordination (HTTP → Service → DB → Redis → WebSocket)
+
+**Areas to Avoid in Integration Tests**:
+- User authentication flows (will be replaced)
+- Permission-based business rules (will change with roles)
+- Profile-specific functionality (doesn't exist yet)
+- Temporary user ID patterns (will be replaced with proper auth)
+
 ## Implementation Tasks
 
 - [x] 1. Core Test Infrastructure Foundation
@@ -117,42 +133,59 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Verify all service tests pass with improved readability and maintainability
     - _Requirements: 2.1, 2.2, 2.3_
 
-- [ ] 4. Integration Test Infrastructure
-  - [ ] 4.1 Implement test database management
-    - Write tests for testdb.Setup with isolated database creation
-    - Implement testdb.Setup that creates unique test databases per test
+- [ ] 4. Infrastructure Integration Tests (Strategic Focus)
+  - [ ] 4.1 Implement database integration infrastructure
+    - Write tests for testdb.Setup with isolated PostgreSQL database creation
+    - Implement testdb.Setup that creates unique test databases per test using Docker
     - Write tests for automatic cleanup with t.Cleanup integration
     - Implement automatic database cleanup that runs after each test
-    - Write tests for migration running with AutoMigrate integration
+    - Write tests for migration execution with real GORM AutoMigrate
     - Implement automatic migration execution for test databases
-    - Write tests for fixture seeding with SeedFixtures helper
-    - Implement SeedFixtures that loads test data into database
-    - Add Docker support for containerized test databases in CI
+    - Write tests for repository layer with real PostgreSQL queries
+    - Implement database fixture builders for stable core models (POI, Session)
+    - Add Docker Compose integration for CI database testing
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 4.2 Create integration test examples
-    - Write integration test for POI creation with real database persistence
-    - Implement TestPOICreation_Integration using real services and database
-    - Write integration test for session management with real Redis
-    - Implement TestSessionLifecycle_Integration with real state management
-    - Write integration test for WebSocket communication with real connections
-    - Implement TestWebSocketEvents_Integration with real message passing
-    - Write integration test for rate limiting with real Redis backend
-    - Implement TestRateLimit_Integration with real rate limit enforcement
-    - Add performance benchmarks for critical integration test paths
+  - [ ] 4.2 Implement Redis integration infrastructure
+    - Write tests for Redis connection management with real Redis instance
+    - Implement Redis test setup with isolated keyspaces per test
+    - Write tests for session presence management with real TTL and expiration
+    - Implement POI participant tracking with real Redis sets and atomic operations
+    - Write tests for pub/sub event flow with real Redis channels
+    - Implement rate limiting integration with real Redis sliding window
+    - Write tests for Redis cleanup and connection pooling
+    - Add Redis performance benchmarks for critical operations
+    - Implement Redis Docker integration for CI testing
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 4.3 Implement test performance optimization
-    - Write tests for parallel test execution with database isolation
-    - Implement parallel-safe test database management
-    - Write tests for test data caching with fixture reuse
-    - Implement fixture caching to speed up test setup
-    - Write tests for selective integration testing with unit test fallbacks
-    - Implement smart test selection based on changed code
-    - Write tests for CI/CD integration with containerized dependencies
-    - Implement Docker Compose setup for CI test environments
-    - Add test execution time monitoring and optimization
+  - [ ] 4.3 Implement WebSocket integration infrastructure
+    - Write tests for real HTTP server with WebSocket upgrade handling
+    - Implement WebSocket integration tests with actual network connections
+    - Write tests for multi-client WebSocket communication and broadcasting
+    - Implement connection lifecycle management with real connection cleanup
+    - Write tests for message serialization/deserialization over real WebSocket
+    - Implement WebSocket reconnection testing with network simulation
+    - Write tests for WebSocket authentication and session management
+    - Add WebSocket performance testing with concurrent connections
+    - Implement WebSocket error handling and recovery testing
     - _Requirements: 4.1, 4.2, 4.3_
+
+  - [ ] 4.4 Create infrastructure flow integration tests
+    - Write integration test for complete POI creation flow (HTTP → Service → DB → Redis → WebSocket)
+    - Implement end-to-end session management flow with real persistence and presence
+    - Write integration test for rate limiting enforcement across all layers
+    - Implement real-time event broadcasting integration (DB change → Redis pub/sub → WebSocket)
+    - Write integration test for error propagation and recovery across infrastructure layers
+    - Implement performance testing for complete request flows under load
+    - Write integration test for Docker Compose environment validation
+    - Add integration test for database migration and Redis setup in containerized environment
+    - Implement CI/CD integration test pipeline with real infrastructure dependencies
+    - _Requirements: 4.1, 4.2, 4.3_
+
+  **STRATEGIC NOTE**: These integration tests focus on infrastructure patterns and coordination, 
+  avoiding business rules that will change with the upcoming user profile system. Tests validate 
+  database persistence, Redis operations, WebSocket communication, and cross-layer integration 
+  without depending on authentication or permission logic that will be replaced.
 
 - [ ] 5. Documentation and Training
   - [ ] 5.1 Create test infrastructure documentation
@@ -236,6 +269,9 @@ This implementation plan transforms our brittle test infrastructure into a resil
 4. **Performance**: Unit tests remain fast (<100ms each), integration tests <1s each
 5. **Coverage**: Maintain or improve test coverage with more meaningful tests
 6. **Developer Experience**: Writing tests becomes enjoyable rather than painful
+7. **Infrastructure Confidence**: Integration tests validate database, Redis, and WebSocket coordination
+8. **Future-Proof Foundation**: Test patterns work with current temporary auth and future user profile system
+9. **Deployment Validation**: Integration tests verify Docker Compose and containerized environment setup
 
 ## Dependencies
 
@@ -252,13 +288,22 @@ This implementation plan transforms our brittle test infrastructure into a resil
 **Mitigation**: Implement incrementally, validate each phase before proceeding
 
 **Risk**: New patterns are not adopted consistently
-**Mitigation**: Provide clear documentation, examples, and enforce in code reviews
+**Mitigation**: Provide clear documentation, examples, and enforce in code reviews via steering rules
 
 **Risk**: Integration tests become too slow
-**Mitigation**: Keep unit tests as primary, use integration tests selectively for critical paths
+**Mitigation**: Keep unit tests as primary, use integration tests selectively for infrastructure validation
 
 **Risk**: Test infrastructure becomes over-engineered
 **Mitigation**: Focus on solving actual pain points, avoid premature optimization
 
 **Risk**: Regression in test coverage during migration
 **Mitigation**: Monitor coverage continuously, migrate tests incrementally
+
+**Risk**: Integration tests create technical debt when user profile system is implemented
+**Mitigation**: Focus integration tests on infrastructure patterns, avoid business logic that will change
+
+**Risk**: Integration tests fail to catch real infrastructure issues
+**Mitigation**: Use real database, Redis, and WebSocket connections, not mocks or in-memory alternatives
+
+**Risk**: Docker/containerization complexity slows down test execution
+**Mitigation**: Optimize container startup, use test-specific lightweight configurations, implement parallel test execution
