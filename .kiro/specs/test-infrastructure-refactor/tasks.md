@@ -93,7 +93,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Verify all POI handler tests pass with new infrastructure
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 3.2 Migrate Session handler tests
+  - [x] 3.2 Migrate Session handler tests
     - Write tests for migrated CreateSession using SessionTestScenario
     - Migrate TestCreateSession to use new builder pattern with validation
     - Write tests for migrated UpdateAvatarPosition using position scenarios
