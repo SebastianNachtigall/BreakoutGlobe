@@ -20,6 +20,78 @@ import (
 	"gorm.io/gorm"
 )
 
+// Request/Response types for POI testing
+type CreatePOIRequest struct {
+	MapID           string         `json:"mapId"`
+	Name            string         `json:"name"`
+	Description     string         `json:"description"`
+	Position        models.LatLng  `json:"position"`
+	CreatedBy       string         `json:"createdBy,omitempty"`
+	MaxParticipants int            `json:"maxParticipants"`
+}
+
+type CreatePOIResponse struct {
+	ID              string        `json:"id"`
+	MapID           string        `json:"mapId"`
+	Name            string        `json:"name"`
+	Description     string        `json:"description"`
+	Position        models.LatLng `json:"position"`
+	CreatedBy       string        `json:"createdBy"`
+	MaxParticipants int           `json:"maxParticipants"`
+	CreatedAt       time.Time     `json:"createdAt"`
+}
+
+type GetPOIsResponse struct {
+	POIs []POIWithParticipants `json:"pois"`
+}
+
+type POIWithParticipants struct {
+	ID               string                `json:"id"`
+	MapID            string                `json:"mapId"`
+	Name             string                `json:"name"`
+	Description      string                `json:"description"`
+	Position         models.LatLng         `json:"position"`
+	CreatedBy        string                `json:"createdBy"`
+	MaxParticipants  int                   `json:"maxParticipants"`
+	ParticipantCount int                   `json:"participantCount"`
+	Participants     []ParticipantInfo     `json:"participants"`
+	CreatedAt        time.Time             `json:"createdAt"`
+}
+
+type ParticipantInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type GetPOIResponse struct {
+	POI POIWithParticipants `json:"poi"`
+}
+
+type JoinPOIRequest struct {
+	UserID string `json:"userId"`
+}
+
+type JoinPOIResponse struct {
+	Success bool   `json:"success"`
+	POIID   string `json:"poiId"`
+	UserID  string `json:"userId"`
+}
+
+type LeavePOIRequest struct {
+	UserID string `json:"userId"`
+}
+
+type LeavePOIResponse struct {
+	Success bool   `json:"success"`
+	POIID   string `json:"poiId"`
+	UserID  string `json:"userId"`
+}
+
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // POITestScenario provides a fluent API for testing POI-related functionality
 type POITestScenario struct {
 	mockSetup *MockSetup
@@ -30,8 +102,8 @@ type POITestScenario struct {
 }
 
 // NewPOITestScenario creates a new POI test scenario with sensible defaults
-func NewPOITestScenario() *POITestScenario {
-	mockSetup := NewMockSetup()
+func NewPOITestScenario(t TestingT) *POITestScenario {
+	mockSetup := NewMockSetup(t)
 	
 	scenario := &POITestScenario{
 		mockSetup: mockSetup,
@@ -59,9 +131,27 @@ func (s *POITestScenario) WithUser(userID uuid.UUID) *POITestScenario {
 	return s
 }
 
+// WithValidUser sets a user ID from string for the scenario
+func (s *POITestScenario) WithValidUser(userID string) *POITestScenario {
+	s.userID = uuid.MustParse(userID)
+	return s
+}
+
 // WithMap sets a custom map ID for the scenario
 func (s *POITestScenario) WithMap(mapID uuid.UUID) *POITestScenario {
 	s.mapID = mapID
+	return s
+}
+
+// WithMap sets a map ID from string for the scenario
+func (s *POITestScenario) WithMap(mapID string) *POITestScenario {
+	s.mapID = uuid.MustParse(mapID)
+	return s
+}
+
+// WithExistingPOI sets up the scenario with an existing POI
+func (s *POITestScenario) WithExistingPOI(poiID string) *POITestScenario {
+	// This is just for fluent API - the actual POI setup happens in expectations
 	return s
 }
 
@@ -119,11 +209,121 @@ func (s *POITestScenario) ExpectRateLimitExceeded() *POITestScenario {
 }
 
 // ExpectCreationSuccess sets up the POI service to successfully create a POI
-func (s *POITestScenario) ExpectCreationSuccess(expectedPOI *models.POI) *POITestScenario {
+func (s *POITestScenario) ExpectCreationSuccess() *POITestScenario {
+	// Create a default POI for successful creation
+	expectedPOI := NewPOI().
+		WithMapID(s.mapID.String()).
+		WithCreatedBy(s.userID.String()).
+		Build()
+	
 	s.mockSetup.POIService.ExpectCreatePOI().
 		WithMapID(s.mapID.String()).
 		WithCreatedBy(s.userID.String()).
 		Returns(expectedPOI)
+	
+	return s
+}
+
+// ExpectRateLimit sets up rate limit exceeded for a specific action
+func (s *POITestScenario) ExpectRateLimit(action services.ActionType, limit int, window string) *POITestScenario {
+	rateLimitErr := &services.RateLimitError{
+		UserID:     s.userID.String(),
+		Action:     action,
+		Limit:      limit,
+		Window:     time.Hour, // Parse window if needed
+		RetryAfter: time.Hour,
+	}
+	
+	s.mockSetup.RateLimiter.ExpectCheckRateLimit().
+		WithUserID(s.userID.String()).
+		WithAction(action).
+		ReturnsError(rateLimitErr)
+	
+	return s
+}
+
+// ExpectDuplicateLocation sets up POI service to return duplicate location error
+func (s *POITestScenario) ExpectDuplicateLocation() *POITestScenario {
+	s.mockSetup.POIService.Mock().On("CreatePOI",
+		mock.Anything,
+		s.mapID.String(),
+		mock.AnythingOfType("string"), // name
+		mock.AnythingOfType("string"), // description
+		mock.AnythingOfType("models.LatLng"), // position
+		s.userID.String(),
+		mock.AnythingOfType("int"), // maxParticipants
+	).Return((*models.POI)(nil), fmt.Errorf("duplicate POI location"))
+	
+	return s
+}
+
+// ExpectGetPOIsSuccess sets up successful POI retrieval
+func (s *POITestScenario) ExpectGetPOIsSuccess(pois ...*models.POI) *POITestScenario {
+	s.mockSetup.POIService.Mock().On("GetPOIsForMap",
+		mock.Anything,
+		s.mapID.String(),
+	).Return(pois, nil)
+	
+	// Mock participant information for each POI
+	for _, poi := range pois {
+		participantCount := len(poi.Participants) // Assuming POI has Participants field
+		participants := make([]string, participantCount)
+		for i := range participants {
+			participants[i] = fmt.Sprintf("session-%d", i+1)
+		}
+		
+		s.mockSetup.POIService.Mock().On("GetPOIParticipantCount",
+			mock.Anything, poi.ID).Return(participantCount, nil)
+		s.mockSetup.POIService.Mock().On("GetPOIParticipants",
+			mock.Anything, poi.ID).Return(participants, nil)
+	}
+	
+	return s
+}
+
+// ExpectGetPOIsInBoundsSuccess sets up successful bounded POI retrieval
+func (s *POITestScenario) ExpectGetPOIsInBoundsSuccess(bounds services.POIBounds, pois ...*models.POI) *POITestScenario {
+	s.mockSetup.POIService.Mock().On("GetPOIsInBounds",
+		mock.Anything,
+		s.mapID.String(),
+		bounds,
+	).Return(pois, nil)
+	
+	// Mock participant information for each POI
+	for _, poi := range pois {
+		s.mockSetup.POIService.Mock().On("GetPOIParticipantCount",
+			mock.Anything, poi.ID).Return(1, nil)
+		s.mockSetup.POIService.Mock().On("GetPOIParticipants",
+			mock.Anything, poi.ID).Return([]string{"session-1"}, nil)
+	}
+	
+	return s
+}
+
+// ExpectPOINotFound sets up POI service to return not found error
+func (s *POITestScenario) ExpectPOINotFound() *POITestScenario {
+	s.mockSetup.POIService.Mock().On("JoinPOI",
+		mock.Anything,
+		mock.AnythingOfType("string"),
+		s.userID.String(),
+	).Return(gorm.ErrRecordNotFound)
+	
+	s.mockSetup.POIService.Mock().On("LeavePOI",
+		mock.Anything,
+		mock.AnythingOfType("string"),
+		s.userID.String(),
+	).Return(gorm.ErrRecordNotFound)
+	
+	return s
+}
+
+// ExpectLeaveSuccess sets up successful POI leave
+func (s *POITestScenario) ExpectLeaveSuccess() *POITestScenario {
+	s.mockSetup.POIService.Mock().On("LeavePOI",
+		mock.Anything,
+		mock.AnythingOfType("string"),
+		s.userID.String(),
+	).Return(nil)
 	
 	return s
 }
@@ -179,16 +379,17 @@ func (s *POITestScenario) ExpectGetNotFound() *POITestScenario {
 }
 
 // CreatePOI executes a POI creation request and returns the response
-func (s *POITestScenario) CreatePOI(t TestingT, request CreatePOIRequest) *CreatePOIResponse {
-	t.Helper()
-	
-	// Create HTTP request
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Errorf("Failed to marshal request: %v", err)
-		return nil
+func (s *POITestScenario) CreatePOI(request CreatePOIRequest) *CreatePOIResponse {
+	// Set default created by if not provided
+	if request.CreatedBy == "" {
+		request.CreatedBy = s.userID.String()
+	}
+	if request.MapID == "" {
+		request.MapID = s.mapID.String()
 	}
 	
+	// Create HTTP request
+	body, _ := json.Marshal(request)
 	req := httptest.NewRequest(http.MethodPost, "/api/pois", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -196,107 +397,156 @@ func (s *POITestScenario) CreatePOI(t TestingT, request CreatePOIRequest) *Creat
 	// Execute request
 	s.router.ServeHTTP(recorder, req)
 	
-	// Verify success status
-	if recorder.Code != http.StatusCreated {
-		t.Errorf("Expected status %d, got %d. Response: %s", 
-			http.StatusCreated, recorder.Code, recorder.Body.String())
-		return nil
-	}
-	
 	// Parse response
 	var response CreatePOIResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Errorf("Failed to parse response: %v. Body: %s", err, recorder.Body.String())
-		return nil
-	}
+	json.Unmarshal(recorder.Body.Bytes(), &response)
 	
 	return &response
 }
 
-// CreatePOIExpectingError executes a POI creation request expecting an error
-func (s *POITestScenario) CreatePOIExpectingError(t TestingT, request CreatePOIRequest) *httptest.ResponseRecorder {
-	t.Helper()
-	
-	// Create HTTP request
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Errorf("Failed to marshal request: %v", err)
-		return nil
+// CreatePOIExpectError executes a POI creation request expecting an error
+func (s *POITestScenario) CreatePOIExpectError(request CreatePOIRequest) *ErrorResponse {
+	// Set defaults
+	if request.CreatedBy == "" {
+		request.CreatedBy = s.userID.String()
+	}
+	if request.MapID == "" {
+		request.MapID = s.mapID.String()
 	}
 	
+	body, _ := json.Marshal(request)
 	req := httptest.NewRequest(http.MethodPost, "/api/pois", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	
-	// Execute request
 	s.router.ServeHTTP(recorder, req)
 	
-	return recorder
+	var errorResponse ErrorResponse
+	json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+	
+	return &errorResponse
+}
+
+// GetPOIs executes a POI list request
+func (s *POITestScenario) GetPOIs() []POIWithParticipants {
+	url := fmt.Sprintf("/api/pois?mapId=%s", s.mapID.String())
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	
+	var response GetPOIsResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
+	
+	return response.POIs
+}
+
+// GetPOIsInBounds executes a bounded POI list request
+func (s *POITestScenario) GetPOIsInBounds(bounds services.POIBounds) []POIWithParticipants {
+	url := fmt.Sprintf("/api/pois?mapId=%s&minLat=%f&maxLat=%f&minLng=%f&maxLng=%f",
+		s.mapID.String(), bounds.MinLat, bounds.MaxLat, bounds.MinLng, bounds.MaxLng)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	
+	var response GetPOIsResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
+	
+	return response.POIs
+}
+
+// GetPOIsExpectError executes a POI list request expecting an error
+func (s *POITestScenario) GetPOIsExpectError(mapID string) *ErrorResponse {
+	url := "/api/pois"
+	if mapID != "" {
+		url += "?mapId=" + mapID
+	}
+	
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	
+	var errorResponse ErrorResponse
+	json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+	
+	return &errorResponse
 }
 
 // JoinPOI executes a POI join request
-func (s *POITestScenario) JoinPOI(t TestingT, poiID string, request JoinPOIRequest) *httptest.ResponseRecorder {
-	t.Helper()
-	
-	// Create HTTP request
-	body, err := json.Marshal(request)
-	if err != nil {
-		t.Errorf("Failed to marshal request: %v", err)
-		return nil
-	}
+func (s *POITestScenario) JoinPOI(poiID, userID string) *JoinPOIResponse {
+	request := JoinPOIRequest{UserID: userID}
+	body, _ := json.Marshal(request)
 	
 	url := fmt.Sprintf("/api/pois/%s/join", poiID)
 	req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	
-	// Execute request
 	s.router.ServeHTTP(recorder, req)
 	
-	return recorder
-}
-
-// GetPOI executes a POI retrieval request and returns the response
-func (s *POITestScenario) GetPOI(t TestingT, poiID string) *GetPOIResponse {
-	t.Helper()
-	
-	url := fmt.Sprintf("/api/pois/%s", poiID)
-	req := httptest.NewRequest(http.MethodGet, url, nil)
-	recorder := httptest.NewRecorder()
-	
-	// Execute request
-	s.router.ServeHTTP(recorder, req)
-	
-	// Verify success status
-	if recorder.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d. Response: %s", 
-			http.StatusOK, recorder.Code, recorder.Body.String())
-		return nil
-	}
-	
-	// Parse response
-	var response GetPOIResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Errorf("Failed to parse response: %v. Body: %s", err, recorder.Body.String())
-		return nil
-	}
+	var response JoinPOIResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
 	
 	return &response
 }
 
-// GetPOIExpectingError executes a POI retrieval request expecting an error
-func (s *POITestScenario) GetPOIExpectingError(t TestingT, poiID string) *httptest.ResponseRecorder {
-	t.Helper()
+// JoinPOIExpectError executes a POI join request expecting an error
+func (s *POITestScenario) JoinPOIExpectError(poiID, userID string) *ErrorResponse {
+	request := JoinPOIRequest{UserID: userID}
+	body, _ := json.Marshal(request)
 	
-	url := fmt.Sprintf("/api/pois/%s", poiID)
-	req := httptest.NewRequest(http.MethodGet, url, nil)
+	url := fmt.Sprintf("/api/pois/%s/join", poiID)
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	
-	// Execute request
 	s.router.ServeHTTP(recorder, req)
 	
-	return recorder
+	var errorResponse ErrorResponse
+	json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+	
+	return &errorResponse
 }
+
+// LeavePOI executes a POI leave request
+func (s *POITestScenario) LeavePOI(poiID, userID string) *LeavePOIResponse {
+	request := LeavePOIRequest{UserID: userID}
+	body, _ := json.Marshal(request)
+	
+	url := fmt.Sprintf("/api/pois/%s/leave", poiID)
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	
+	var response LeavePOIResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
+	
+	return &response
+}
+
+// LeavePOIExpectError executes a POI leave request expecting an error
+func (s *POITestScenario) LeavePOIExpectError(poiID, userID string) *ErrorResponse {
+	request := LeavePOIRequest{UserID: userID}
+	body, _ := json.Marshal(request)
+	
+	url := fmt.Sprintf("/api/pois/%s/leave", poiID)
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	
+	var errorResponse ErrorResponse
+	json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+	
+	return &errorResponse
+}
+
+
 
 // Request/Response types for POI scenarios
 

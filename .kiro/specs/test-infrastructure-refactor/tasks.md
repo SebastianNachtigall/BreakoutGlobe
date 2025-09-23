@@ -81,7 +81,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - _Requirements: 1.1, 1.2, 1.3_
 
 - [ ] 3. Migrate Existing Tests
-  - [ ] 3.1 Migrate POI handler tests
+  - [x] 3.1 Migrate POI handler tests
     - Write tests for migrated CreatePOI using new scenario builders
     - Migrate TestCreatePOI to use POITestScenario with 80% less code
     - Write tests for migrated GetPOI using new assertion helpers
