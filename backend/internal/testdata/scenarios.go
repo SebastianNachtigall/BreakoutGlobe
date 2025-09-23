@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"time"
 
 	"breakoutglobe/internal/handlers"
 	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/services"
+	"breakoutglobe/internal/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	ws "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 )
@@ -655,4 +659,332 @@ type GetSessionResponse struct {
 // UpdateAvatarPositionRequest represents an avatar position update request
 type UpdateAvatarPositionRequest struct {
 	Position models.LatLng `json:"position"`
+}
+
+// WebSocketTestScenario provides a fluent API for testing WebSocket functionality
+type WebSocketTestScenario struct {
+	mockSetup   *MockSetup
+	sessionID   string
+	userID      uuid.UUID
+	mapID       uuid.UUID
+	handler     *websocket.Handler
+	server      *httptest.Server
+	wsURL       string
+}
+
+// NewWebSocketTestScenario creates a new WebSocket test scenario with sensible defaults
+func NewWebSocketTestScenario() *WebSocketTestScenario {
+	mockSetup := NewMockSetup()
+	
+	scenario := &WebSocketTestScenario{
+		mockSetup: mockSetup,
+		sessionID: GenerateUUID().String(),
+		userID:    GenerateUUID(),
+		mapID:     GenerateUUID(),
+	}
+	
+	// Create WebSocket handler with mocks
+	scenario.handler = websocket.NewHandler(
+		mockSetup.SessionService.Mock(),
+		mockSetup.RateLimiter.Mock(),
+	)
+	
+	// Setup HTTP server with WebSocket endpoint
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/ws", scenario.handler.HandleWebSocket)
+	
+	scenario.server = httptest.NewServer(router)
+	scenario.wsURL = "ws" + strings.TrimPrefix(scenario.server.URL, "http") + "/ws"
+	
+	return scenario
+}
+
+// WithSession sets a custom session ID for the scenario
+func (s *WebSocketTestScenario) WithSession(sessionID string) *WebSocketTestScenario {
+	s.sessionID = sessionID
+	return s
+}
+
+// WithUser sets a custom user ID for the scenario
+func (s *WebSocketTestScenario) WithUser(userID uuid.UUID) *WebSocketTestScenario {
+	s.userID = userID
+	return s
+}
+
+// WithMap sets a custom map ID for the scenario
+func (s *WebSocketTestScenario) WithMap(mapID uuid.UUID) *WebSocketTestScenario {
+	s.mapID = mapID
+	return s
+}
+
+// ExpectConnectionSuccess sets up the session service to allow WebSocket connection
+func (s *WebSocketTestScenario) ExpectConnectionSuccess() *WebSocketTestScenario {
+	session := NewSession().
+		WithID(s.sessionID).
+		WithUser(s.userID).
+		WithMap(s.mapID).
+		WithActive(true).
+		Build()
+	
+	s.mockSetup.SessionService.Mock().On("GetSession", 
+		mock.Anything, 
+		s.sessionID,
+	).Return(session, nil)
+	
+	return s
+}
+
+// ExpectConnectionFailure sets up the session service to reject WebSocket connection
+func (s *WebSocketTestScenario) ExpectConnectionFailure() *WebSocketTestScenario {
+	s.mockSetup.SessionService.Mock().On("GetSession", 
+		mock.Anything, 
+		s.sessionID,
+	).Return(nil, fmt.Errorf("session not found"))
+	
+	return s
+}
+
+// ExpectHeartbeatSuccess sets up the session service to handle heartbeat successfully
+func (s *WebSocketTestScenario) ExpectHeartbeatSuccess() *WebSocketTestScenario {
+	s.mockSetup.SessionService.Mock().On("SessionHeartbeat", 
+		mock.Anything, 
+		s.sessionID,
+	).Return(nil)
+	
+	return s
+}
+
+// ExpectHeartbeatError sets up the session service to return error for heartbeat
+func (s *WebSocketTestScenario) ExpectHeartbeatError() *WebSocketTestScenario {
+	s.mockSetup.SessionService.Mock().On("SessionHeartbeat", 
+		mock.Anything, 
+		s.sessionID,
+	).Return(fmt.Errorf("heartbeat failed"))
+	
+	return s
+}
+
+// ExpectAvatarMoveSuccess sets up services for successful avatar movement
+func (s *WebSocketTestScenario) ExpectAvatarMoveSuccess() *WebSocketTestScenario {
+	// Rate limiter allows the movement
+	s.mockSetup.RateLimiter.ExpectCheckRateLimit().
+		WithUserID(s.userID.String()).
+		WithAction(services.ActionUpdateAvatar).
+		Returns()
+	
+	// Session service updates position successfully
+	s.mockSetup.SessionService.Mock().On("UpdateAvatarPosition", 
+		mock.Anything, 
+		s.sessionID,
+		mock.AnythingOfType("models.LatLng"),
+	).Return(nil)
+	
+	return s
+}
+
+// ExpectAvatarMoveRateLimited sets up rate limiter to reject avatar movement
+func (s *WebSocketTestScenario) ExpectAvatarMoveRateLimited() *WebSocketTestScenario {
+	// Rate limiter rejects the movement
+	s.mockSetup.RateLimiter.ExpectCheckRateLimit().
+		WithUserID(s.userID.String()).
+		WithAction(services.ActionUpdateAvatar).
+		ReturnsRateLimitExceeded()
+	
+	return s
+}
+
+// Connect establishes a WebSocket connection and returns the connection and welcome message
+func (s *WebSocketTestScenario) Connect(t TestingT) (*ws.Conn, *WebSocketMessage) {
+	t.Helper()
+	
+	// Setup authorization header
+	header := http.Header{}
+	header.Set("Authorization", fmt.Sprintf("Bearer %s", s.sessionID))
+	
+	// Connect to WebSocket
+	conn, _, err := ws.DefaultDialer.Dial(s.wsURL, header)
+	if err != nil {
+		t.Errorf("Failed to connect to WebSocket: %v", err)
+		return nil, nil
+	}
+	
+	// Read welcome message
+	var welcomeMsg WebSocketMessage
+	if err := conn.ReadJSON(&welcomeMsg); err != nil {
+		conn.Close()
+		t.Errorf("Failed to read welcome message: %v", err)
+		return nil, nil
+	}
+	
+	return conn, &welcomeMsg
+}
+
+// ConnectExpectingError attempts to connect expecting a failure
+func (s *WebSocketTestScenario) ConnectExpectingError(t TestingT) error {
+	t.Helper()
+	
+	// Setup authorization header
+	header := http.Header{}
+	header.Set("Authorization", fmt.Sprintf("Bearer %s", s.sessionID))
+	
+	// Try to connect to WebSocket
+	conn, resp, err := ws.DefaultDialer.Dial(s.wsURL, header)
+	if conn != nil {
+		conn.Close()
+	}
+	
+	if err == nil {
+		t.Errorf("Expected connection to fail, but it succeeded")
+		return fmt.Errorf("connection unexpectedly succeeded")
+	}
+	
+	if resp != nil && resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+	
+	return err
+}
+
+// ConnectWithoutAuth attempts to connect without authorization header
+func (s *WebSocketTestScenario) ConnectWithoutAuth(t TestingT) error {
+	t.Helper()
+	
+	// Try to connect without authorization
+	conn, resp, err := ws.DefaultDialer.Dial(s.wsURL, nil)
+	if conn != nil {
+		conn.Close()
+	}
+	
+	if err == nil {
+		t.Errorf("Expected connection to fail, but it succeeded")
+		return fmt.Errorf("connection unexpectedly succeeded")
+	}
+	
+	if resp != nil && resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", resp.StatusCode)
+	}
+	
+	return err
+}
+
+// SendHeartbeat sends a heartbeat message and verifies no error response
+func (s *WebSocketTestScenario) SendHeartbeat(t TestingT, conn *ws.Conn) {
+	t.Helper()
+	
+	heartbeatMsg := WebSocketMessage{
+		Type: "heartbeat",
+		Data: map[string]interface{}{},
+	}
+	
+	if err := conn.WriteJSON(heartbeatMsg); err != nil {
+		t.Errorf("Failed to send heartbeat: %v", err)
+		return
+	}
+	
+	// Give some time for processing
+	time.Sleep(100 * time.Millisecond)
+}
+
+// SendHeartbeatExpectingError sends a heartbeat and expects an error response
+func (s *WebSocketTestScenario) SendHeartbeatExpectingError(t TestingT, conn *ws.Conn) *WebSocketMessage {
+	t.Helper()
+	
+	heartbeatMsg := WebSocketMessage{
+		Type: "heartbeat",
+		Data: map[string]interface{}{},
+	}
+	
+	if err := conn.WriteJSON(heartbeatMsg); err != nil {
+		t.Errorf("Failed to send heartbeat: %v", err)
+		return nil
+	}
+	
+	// Read error response
+	var errorMsg WebSocketMessage
+	if err := conn.ReadJSON(&errorMsg); err != nil {
+		t.Errorf("Failed to read error response: %v", err)
+		return nil
+	}
+	
+	return &errorMsg
+}
+
+// SendAvatarMove sends an avatar movement message
+func (s *WebSocketTestScenario) SendAvatarMove(t TestingT, conn *ws.Conn, position models.LatLng) {
+	t.Helper()
+	
+	moveMsg := WebSocketMessage{
+		Type: "avatar_move",
+		Data: map[string]interface{}{
+			"position": map[string]interface{}{
+				"lat": position.Lat,
+				"lng": position.Lng,
+			},
+		},
+	}
+	
+	if err := conn.WriteJSON(moveMsg); err != nil {
+		t.Errorf("Failed to send avatar move: %v", err)
+		return
+	}
+	
+	// Give some time for processing
+	time.Sleep(100 * time.Millisecond)
+}
+
+// SendAvatarMoveExpectingError sends avatar movement and expects an error response
+func (s *WebSocketTestScenario) SendAvatarMoveExpectingError(t TestingT, conn *ws.Conn, position models.LatLng) *WebSocketMessage {
+	t.Helper()
+	
+	moveMsg := WebSocketMessage{
+		Type: "avatar_move",
+		Data: map[string]interface{}{
+			"position": map[string]interface{}{
+				"lat": position.Lat,
+				"lng": position.Lng,
+			},
+		},
+	}
+	
+	if err := conn.WriteJSON(moveMsg); err != nil {
+		t.Errorf("Failed to send avatar move: %v", err)
+		return nil
+	}
+	
+	// Read error response
+	var errorMsg WebSocketMessage
+	if err := conn.ReadJSON(&errorMsg); err != nil {
+		t.Errorf("Failed to read error response: %v", err)
+		return nil
+	}
+	
+	return &errorMsg
+}
+
+// ReceiveMessage reads a message from the WebSocket connection
+func (s *WebSocketTestScenario) ReceiveMessage(t TestingT, conn *ws.Conn) *WebSocketMessage {
+	t.Helper()
+	
+	var msg WebSocketMessage
+	if err := conn.ReadJSON(&msg); err != nil {
+		t.Errorf("Failed to receive message: %v", err)
+		return nil
+	}
+	
+	return &msg
+}
+
+// Cleanup closes the test server
+func (s *WebSocketTestScenario) Cleanup() {
+	if s.server != nil {
+		s.server.Close()
+	}
+}
+
+// WebSocketMessage represents a WebSocket message for testing
+type WebSocketMessage struct {
+	Type      string                 `json:"type"`
+	Data      map[string]interface{} `json:"data"`
+	Timestamp time.Time              `json:"timestamp,omitempty"`
 }

@@ -487,3 +487,191 @@ func TestSessionTestScenario_SessionHeartbeat(t *testing.T) {
 }
 
 // Request/Response types for Session scenarios - using the ones from scenarios.go
+
+func TestWebSocketTestScenario(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("creates scenario with defaults", func(t *testing.T) {
+		scenario := NewWebSocketTestScenario()
+
+		assert.NotNil(t, scenario)
+		assert.NotEmpty(t, scenario.sessionID)
+		assert.NotEmpty(t, scenario.userID)
+		assert.NotEmpty(t, scenario.mapID)
+		assert.NotNil(t, scenario.mockSetup)
+	})
+
+	t.Run("allows customization with fluent API", func(t *testing.T) {
+		sessionID := "custom-session"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID)
+
+		assert.Equal(t, sessionID, scenario.sessionID)
+		assert.Equal(t, userID, scenario.userID)
+		assert.Equal(t, mapID, scenario.mapID)
+	})
+
+	t.Run("ExpectConnectionSuccess sets up session service mock", func(t *testing.T) {
+		scenario := NewWebSocketTestScenario().
+			ExpectConnectionSuccess()
+
+		assert.NotNil(t, scenario.mockSetup.SessionService)
+	})
+}
+
+func TestWebSocketTestScenario_Connection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("successful WebSocket connection", func(t *testing.T) {
+		sessionID := "session-123"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID).
+			ExpectConnectionSuccess()
+
+		conn, welcomeMsg := scenario.Connect(t)
+		defer conn.Close()
+
+		// Verify welcome message
+		assert.Equal(t, "welcome", welcomeMsg.Type)
+		if data, ok := welcomeMsg.Data["sessionId"]; ok {
+			assert.Equal(t, sessionID, data)
+		}
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+
+	t.Run("WebSocket connection with invalid session", func(t *testing.T) {
+		sessionID := "invalid-session"
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			ExpectConnectionFailure()
+
+		err := scenario.ConnectExpectingError(t)
+
+		// Verify connection failed
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "bad handshake")
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+
+	t.Run("WebSocket connection without authorization", func(t *testing.T) {
+		scenario := NewWebSocketTestScenario()
+
+		err := scenario.ConnectWithoutAuth(t)
+
+		// Verify connection failed
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "bad handshake")
+	})
+}
+
+func TestWebSocketTestScenario_Heartbeat(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("successful heartbeat message", func(t *testing.T) {
+		sessionID := "session-123"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID).
+			ExpectConnectionSuccess().
+			ExpectHeartbeatSuccess()
+
+		conn, _ := scenario.Connect(t)
+		defer conn.Close()
+
+		// Send heartbeat and verify no error response
+		scenario.SendHeartbeat(t, conn)
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+
+	t.Run("heartbeat with session error", func(t *testing.T) {
+		sessionID := "session-123"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID).
+			ExpectConnectionSuccess().
+			ExpectHeartbeatError()
+
+		conn, _ := scenario.Connect(t)
+		defer conn.Close()
+
+		// Send heartbeat and expect error response
+		errorMsg := scenario.SendHeartbeatExpectingError(t, conn)
+		assert.Equal(t, "error", errorMsg.Type)
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+}
+
+func TestWebSocketTestScenario_AvatarMovement(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("successful avatar movement", func(t *testing.T) {
+		sessionID := "session-123"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID).
+			ExpectConnectionSuccess().
+			ExpectAvatarMoveSuccess()
+
+		conn, _ := scenario.Connect(t)
+		defer conn.Close()
+
+		// Send avatar movement
+		newPosition := models.LatLng{Lat: 40.7589, Lng: -73.9851}
+		scenario.SendAvatarMove(t, conn, newPosition)
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+
+	t.Run("avatar movement with rate limit exceeded", func(t *testing.T) {
+		sessionID := "session-123"
+		userID := GenerateUUID()
+		mapID := GenerateUUID()
+
+		scenario := NewWebSocketTestScenario().
+			WithSession(sessionID).
+			WithUser(userID).
+			WithMap(mapID).
+			ExpectConnectionSuccess().
+			ExpectAvatarMoveRateLimited()
+
+		conn, _ := scenario.Connect(t)
+		defer conn.Close()
+
+		// Send avatar movement and expect rate limit error
+		newPosition := models.LatLng{Lat: 40.7589, Lng: -73.9851}
+		errorMsg := scenario.SendAvatarMoveExpectingError(t, conn, newPosition)
+		assert.Equal(t, "error", errorMsg.Type)
+
+		scenario.mockSetup.AssertExpectations(t)
+	})
+}
+
+// Note: Message broadcast testing is complex and requires multiple clients
+// For now, we focus on basic WebSocket functionality

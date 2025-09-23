@@ -43,7 +43,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add UUID assertion helpers for consistent ID validation
     - _Requirements: 5.1, 5.2, 5.3_
 
-- [-] 2. Test Scenario Builders
+- [x] 2. Test Scenario Builders
   - [x] 2.1 Implement POI test scenario builder
     - Write tests for POITestScenario with fluent configuration
     - Implement POITestScenario with WithValidUser, WithMap methods
@@ -68,7 +68,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add CreateSession, UpdatePosition, Heartbeat execution methods
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 2.3 Implement WebSocket test scenario builder
+  - [x] 2.3 Implement WebSocket test scenario builder
     - Write tests for WebSocketTestScenario with connection management
     - Implement WebSocketTestScenario with connection setup and teardown
     - Write tests for real-time event scenarios (avatar movement, POI updates)
