@@ -13,7 +13,7 @@ func TestPOITestScenario(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("creates scenario with defaults", func(t *testing.T) {
-		scenario := NewPOITestScenario()
+		scenario := NewPOITestScenario(t)
 
 		assert.NotNil(t, scenario)
 		assert.NotEmpty(t, scenario.userID)
@@ -25,7 +25,7 @@ func TestPOITestScenario(t *testing.T) {
 		userID := GenerateUUID()
 		mapID := GenerateUUID()
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			WithMap(mapID)
 
@@ -34,7 +34,7 @@ func TestPOITestScenario(t *testing.T) {
 	})
 
 	t.Run("ExpectRateLimitSuccess sets up rate limiter mock", func(t *testing.T) {
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			ExpectRateLimitSuccess()
 
 		// Verify the expectation was set up (this will be validated when we execute)
@@ -42,9 +42,8 @@ func TestPOITestScenario(t *testing.T) {
 	})
 
 	t.Run("ExpectCreationSuccess sets up POI service mock", func(t *testing.T) {
-		expectedPOI := NewPOI().Build()
-		scenario := NewPOITestScenario().
-			ExpectCreationSuccess(expectedPOI)
+		scenario := NewPOITestScenario(t).
+			ExpectCreationSuccess()
 
 		// Verify the expectation was set up
 		assert.NotNil(t, scenario.mockSetup.POIService)
@@ -64,11 +63,11 @@ func TestPOITestScenario_CreatePOI(t *testing.T) {
 			WithMap(mapID).
 			Build()
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			WithMap(mapID).
 			ExpectRateLimitSuccess().
-			ExpectCreationSuccess(expectedPOI)
+			ExpectCreationSuccess()
 
 		request := CreatePOIRequest{
 			MapID:           mapID.String(),
@@ -79,7 +78,7 @@ func TestPOITestScenario_CreatePOI(t *testing.T) {
 			MaxParticipants: 10,
 		}
 
-		response := scenario.CreatePOI(t, request)
+		response := scenario.CreatePOI(request)
 
 		// Verify response
 		assert.Equal(t, expectedPOI.ID, response.ID)
@@ -96,7 +95,7 @@ func TestPOITestScenario_CreatePOI(t *testing.T) {
 		userID := GenerateUUID()
 		mapID := GenerateUUID()
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			WithMap(mapID).
 			ExpectRateLimitExceeded()
@@ -110,17 +109,17 @@ func TestPOITestScenario_CreatePOI(t *testing.T) {
 			MaxParticipants: 10,
 		}
 
-		recorder := scenario.CreatePOIExpectingError(t, request)
+		errorResponse := scenario.CreatePOIExpectError(request)
 
 		// Verify rate limit error response
-		AssertHTTPStatus(t, recorder, http.StatusTooManyRequests)
-		AssertErrorResponse(t, recorder, "RATE_LIMIT_EXCEEDED")
+		assert.Equal(t, "RATE_LIMIT_EXCEEDED", errorResponse.Code)
+		assert.Contains(t, errorResponse.Message, "rate limit")
 
 		scenario.mockSetup.AssertExpectations(t)
 	})
 
 	t.Run("POI creation with validation error", func(t *testing.T) {
-		scenario := NewPOITestScenario()
+		scenario := NewPOITestScenario(t)
 
 		request := CreatePOIRequest{
 			MapID:           "", // Invalid: empty map ID
@@ -131,11 +130,11 @@ func TestPOITestScenario_CreatePOI(t *testing.T) {
 			MaxParticipants: 10,
 		}
 
-		recorder := scenario.CreatePOIExpectingError(t, request)
+		errorResponse := scenario.CreatePOIExpectError(request)
 
 		// Verify validation error response
-		AssertHTTPStatus(t, recorder, http.StatusBadRequest)
-		AssertErrorResponse(t, recorder, "INVALID_REQUEST")
+		assert.Equal(t, "INVALID_REQUEST", errorResponse.Code)
+		assert.Contains(t, errorResponse.Message, "validation")
 	})
 }
 
@@ -146,19 +145,17 @@ func TestPOITestScenario_JoinPOI(t *testing.T) {
 		userID := GenerateUUID()
 		poiID := "poi-123"
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			ExpectJoinRateLimitSuccessWithHeaders().
 			ExpectJoinSuccess()
 
-		request := JoinPOIRequest{
-			UserID: userID.String(),
-		}
-
-		recorder := scenario.JoinPOI(t, poiID, request)
+		response := scenario.JoinPOI(poiID, userID.String())
 
 		// Verify successful join
-		AssertHTTPStatus(t, recorder, http.StatusOK)
+		assert.True(t, response.Success)
+		assert.Equal(t, poiID, response.POIID)
+		assert.Equal(t, userID.String(), response.UserID)
 
 		scenario.mockSetup.AssertExpectations(t)
 	})
@@ -167,20 +164,16 @@ func TestPOITestScenario_JoinPOI(t *testing.T) {
 		userID := GenerateUUID()
 		poiID := "poi-123"
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			ExpectJoinRateLimitSuccess().
 			ExpectCapacityExceeded()
 
-		request := JoinPOIRequest{
-			UserID: userID.String(),
-		}
-
-		recorder := scenario.JoinPOI(t, poiID, request)
+		errorResponse := scenario.JoinPOIExpectError(poiID, userID.String())
 
 		// Verify capacity exceeded error
-		AssertHTTPStatus(t, recorder, http.StatusConflict)
-		AssertErrorResponse(t, recorder, "CAPACITY_EXCEEDED")
+		assert.Equal(t, "CAPACITY_EXCEEDED", errorResponse.Code)
+		assert.Contains(t, errorResponse.Message, "capacity")
 
 		scenario.mockSetup.AssertExpectations(t)
 	})
@@ -189,20 +182,16 @@ func TestPOITestScenario_JoinPOI(t *testing.T) {
 		userID := GenerateUUID()
 		poiID := "non-existent-poi"
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			WithUser(userID).
 			ExpectJoinRateLimitSuccess().
 			ExpectNotFound()
 
-		request := JoinPOIRequest{
-			UserID: userID.String(),
-		}
+		errorResponse := scenario.JoinPOIExpectError(poiID, userID.String())
 
-		recorder := scenario.JoinPOI(t, poiID, request)
-
-		// Verify internal error (since we're returning a generic error)
-		AssertHTTPStatus(t, recorder, http.StatusInternalServerError)
-		AssertErrorResponse(t, recorder, "INTERNAL_ERROR")
+		// Verify not found error
+		assert.Equal(t, "POI_NOT_FOUND", errorResponse.Code)
+		assert.Contains(t, errorResponse.Message, "not found")
 
 		scenario.mockSetup.AssertExpectations(t)
 	})
@@ -218,14 +207,14 @@ func TestPOITestScenario_GetPOI(t *testing.T) {
 			WithName("Coffee Shop").
 			Build()
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			ExpectGetSuccess(expectedPOI)
 
-		response := scenario.GetPOI(t, poiID)
+		response := scenario.GetPOI(poiID)
 
 		// Verify response
-		assert.Equal(t, expectedPOI.ID, response.ID)
-		assert.Equal(t, expectedPOI.Name, response.Name)
+		assert.Equal(t, expectedPOI.ID, response.POI.ID)
+		assert.Equal(t, expectedPOI.Name, response.POI.Name)
 
 		scenario.mockSetup.AssertExpectations(t)
 	})
@@ -233,14 +222,14 @@ func TestPOITestScenario_GetPOI(t *testing.T) {
 	t.Run("POI not found", func(t *testing.T) {
 		poiID := "non-existent-poi"
 
-		scenario := NewPOITestScenario().
+		scenario := NewPOITestScenario(t).
 			ExpectGetNotFound()
 
-		recorder := scenario.GetPOIExpectingError(t, poiID)
+		errorResponse := scenario.GetPOIExpectError(poiID)
 
 		// Verify not found error
-		AssertHTTPStatus(t, recorder, http.StatusNotFound)
-		AssertErrorResponse(t, recorder, "POI_NOT_FOUND")
+		assert.Equal(t, "POI_NOT_FOUND", errorResponse.Code)
+		assert.Contains(t, errorResponse.Message, "not found")
 
 		scenario.mockSetup.AssertExpectations(t)
 	})

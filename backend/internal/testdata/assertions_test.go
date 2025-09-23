@@ -233,3 +233,7 @@ func (m *MockTestingT) Errorf(format string, args ...interface{}) {
 func (m *MockTestingT) Helper() {
 	// No-op for mock
 }
+
+func (m *MockTestingT) Cleanup(func()) {
+	// No-op for mock
+}

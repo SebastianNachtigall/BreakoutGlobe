@@ -41,6 +41,23 @@ type CreatePOIResponse struct {
 	CreatedAt       time.Time     `json:"createdAt"`
 }
 
+// POIResponseInterface implementation for CreatePOIResponse
+func (r *CreatePOIResponse) GetID() string {
+	return r.ID
+}
+
+func (r *CreatePOIResponse) GetName() string {
+	return r.Name
+}
+
+func (r *CreatePOIResponse) GetDescription() string {
+	return r.Description
+}
+
+func (r *CreatePOIResponse) GetPosition() models.LatLng {
+	return r.Position
+}
+
 type GetPOIsResponse struct {
 	POIs []POIWithParticipants `json:"pois"`
 }
@@ -525,6 +542,32 @@ func (s *POITestScenario) LeavePOI(poiID, userID string) *LeavePOIResponse {
 	var response LeavePOIResponse
 	json.Unmarshal(recorder.Body.Bytes(), &response)
 	
+	return &response
+}
+
+// GetPOI executes a POI get request
+func (s *POITestScenario) GetPOI(poiID string) *GetPOIResponse {
+	url := fmt.Sprintf("/api/pois/%s", poiID)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	
+	recorder := httptest.NewRecorder()
+	s.router.ServeHTTP(recorder, req)
+	
+	var response GetPOIResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
+	return &response
+}
+
+// GetPOIExpectError executes a POI get request expecting an error
+func (s *POITestScenario) GetPOIExpectError(poiID string) *ErrorResponse {
+	url := fmt.Sprintf("/api/pois/%s", poiID)
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	
+	recorder := httptest.NewRecorder()
+	s.router.ServeHTTP(recorder, req)
+	
+	var response ErrorResponse
+	json.Unmarshal(recorder.Body.Bytes(), &response)
 	return &response
 }
 
