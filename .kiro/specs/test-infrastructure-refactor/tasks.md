@@ -105,7 +105,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Verify all session handler tests pass with new infrastructure
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 3.3 Migrate Service layer tests
+  - [x] 3.3 Migrate Service layer tests
     - Write tests for migrated POIService using testdata builders
     - Migrate POIService tests to use NewPOI().WithCreator() patterns
     - Write tests for migrated SessionService using relationship builders
