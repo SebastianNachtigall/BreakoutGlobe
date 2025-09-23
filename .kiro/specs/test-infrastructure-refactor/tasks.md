@@ -56,7 +56,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add CreatePOI, JoinPOI, GetPOI execution methods with HTTP handling
     - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 2.2 Implement Session test scenario builder
+  - [x] 2.2 Implement Session test scenario builder
     - Write tests for SessionTestScenario with user and map setup
     - Implement SessionTestScenario with WithExistingUser, WithMap methods
     - Write tests for session creation scenarios (success, rate limit, validation)

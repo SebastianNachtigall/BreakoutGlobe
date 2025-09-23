@@ -539,7 +539,12 @@ func (m *MockSessionService) GetActiveSessions(ctx context.Context, mapID string
 	return args.Get(0).([]*models.Session), args.Error(1)
 }
 
-func (m *MockSessionService) CleanupExpiredSessions(ctx context.Context, timeout time.Duration) (int, error) {
-	args := m.Called(ctx, timeout)
-	return args.Int(0), args.Error(1)
+func (m *MockSessionService) GetActiveSessionsForMap(ctx context.Context, mapID string) ([]*models.Session, error) {
+	args := m.Called(ctx, mapID)
+	return args.Get(0).([]*models.Session), args.Error(1)
+}
+
+func (m *MockSessionService) CleanupExpiredSessions(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
