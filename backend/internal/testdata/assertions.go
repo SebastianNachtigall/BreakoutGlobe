@@ -13,6 +13,7 @@ import (
 type TestingT interface {
 	Errorf(format string, args ...interface{})
 	Helper()
+	Cleanup(func())
 }
 
 // POIResponseInterface defines the interface for POI response types
@@ -180,19 +181,6 @@ func indexOfSubstring(s, substr string) int {
 
 // Concrete implementations for common response types
 
-// CreatePOIResponse represents a POI creation response
-type CreatePOIResponse struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Position    models.LatLng `json:"position"`
-}
-
-func (r *CreatePOIResponse) GetID() string          { return r.ID }
-func (r *CreatePOIResponse) GetName() string        { return r.Name }
-func (r *CreatePOIResponse) GetDescription() string { return r.Description }
-func (r *CreatePOIResponse) GetPosition() models.LatLng { return r.Position }
-
 // SessionResponse represents a session response
 type SessionResponse struct {
 	ID        string        `json:"id"`
@@ -208,15 +196,7 @@ func (r *SessionResponse) GetMapID() string       { return r.MapID }
 func (r *SessionResponse) GetAvatarPos() models.LatLng { return r.AvatarPos }
 func (r *SessionResponse) GetIsActive() bool      { return r.IsActive }
 
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-func (r *ErrorResponse) GetCode() string    { return r.Code }
-func (r *ErrorResponse) GetMessage() string { return r.Message }// Fl
-uent assertion helpers for the new test infrastructure
+// Fluent assertion helpers for the new test infrastructure
 
 // FluentErrorResponseAssertion provides fluent assertions for error responses
 type FluentErrorResponseAssertion struct {
@@ -225,8 +205,8 @@ type FluentErrorResponseAssertion struct {
 	status   int
 }
 
-// AssertErrorResponse creates a new fluent error response assertion
-func AssertErrorResponse(t TestingT, response *ErrorResponse) *FluentErrorResponseAssertion {
+// AssertFluentErrorResponse creates a new fluent error response assertion
+func AssertFluentErrorResponse(t TestingT, response *ErrorResponse) *FluentErrorResponseAssertion {
 	t.Helper()
 	return &FluentErrorResponseAssertion{
 		t:        t,
@@ -284,8 +264,8 @@ type FluentPOIResponseAssertion struct {
 	poi *CreatePOIResponse
 }
 
-// AssertPOIResponse creates a new fluent POI response assertion
-func AssertPOIResponse(t TestingT, poi *CreatePOIResponse) *FluentPOIResponseAssertion {
+// AssertFluentPOIResponse creates a new fluent POI response assertion
+func AssertFluentPOIResponse(t TestingT, poi *CreatePOIResponse) *FluentPOIResponseAssertion {
 	t.Helper()
 	return &FluentPOIResponseAssertion{
 		t:   t,

@@ -103,7 +103,7 @@ type POITestScenario struct {
 
 // NewPOITestScenario creates a new POI test scenario with sensible defaults
 func NewPOITestScenario(t TestingT) *POITestScenario {
-	mockSetup := NewMockSetup(t)
+	mockSetup := NewMockSetup()
 	
 	scenario := &POITestScenario{
 		mockSetup: mockSetup,
@@ -143,8 +143,8 @@ func (s *POITestScenario) WithMap(mapID uuid.UUID) *POITestScenario {
 	return s
 }
 
-// WithMap sets a map ID from string for the scenario
-func (s *POITestScenario) WithMap(mapID string) *POITestScenario {
+// WithMapString sets a map ID from string for the scenario
+func (s *POITestScenario) WithMapString(mapID string) *POITestScenario {
 	s.mapID = uuid.MustParse(mapID)
 	return s
 }
@@ -212,8 +212,8 @@ func (s *POITestScenario) ExpectRateLimitExceeded() *POITestScenario {
 func (s *POITestScenario) ExpectCreationSuccess() *POITestScenario {
 	// Create a default POI for successful creation
 	expectedPOI := NewPOI().
-		WithMapID(s.mapID.String()).
-		WithCreatedBy(s.userID.String()).
+		WithMap(s.mapID).
+		WithCreator(s.userID).
 		Build()
 	
 	s.mockSetup.POIService.ExpectCreatePOI().
@@ -266,7 +266,7 @@ func (s *POITestScenario) ExpectGetPOIsSuccess(pois ...*models.POI) *POITestScen
 	
 	// Mock participant information for each POI
 	for _, poi := range pois {
-		participantCount := len(poi.Participants) // Assuming POI has Participants field
+		participantCount := 2 // Default participant count for testing
 		participants := make([]string, participantCount)
 		for i := range participants {
 			participants[i] = fmt.Sprintf("session-%d", i+1)
@@ -548,33 +548,7 @@ func (s *POITestScenario) LeavePOIExpectError(poiID, userID string) *ErrorRespon
 
 
 
-// Request/Response types for POI scenarios
-
-// CreatePOIRequest represents a POI creation request
-type CreatePOIRequest struct {
-	MapID           string        `json:"mapId"`
-	Name            string        `json:"name"`
-	Description     string        `json:"description"`
-	Position        models.LatLng `json:"position"`
-	CreatedBy       string        `json:"createdBy"`
-	MaxParticipants int           `json:"maxParticipants"`
-}
-
-// CreatePOIResponse is defined in assertions.go
-
-// JoinPOIRequest represents a POI join request
-type JoinPOIRequest struct {
-	UserID string `json:"userId"`
-}
-
-// GetPOIResponse represents a POI retrieval response
-type GetPOIResponse struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Position    models.LatLng `json:"position"`
-	CreatedBy   string        `json:"createdBy"`
-}
+// Request/Response types are defined at the top of this file
 
 // SessionTestScenario provides a fluent API for testing Session-related functionality
 type SessionTestScenario struct {
