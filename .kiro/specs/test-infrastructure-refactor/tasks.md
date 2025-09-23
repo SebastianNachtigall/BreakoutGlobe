@@ -80,7 +80,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add WebSocket client simulation and event verification
     - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 3. Migrate Existing Tests
+- [x] 3. Migrate Existing Tests
   - [x] 3.1 Migrate POI handler tests
     - Write tests for migrated CreatePOI using new scenario builders
     - Migrate TestCreatePOI to use POITestScenario with 80% less code

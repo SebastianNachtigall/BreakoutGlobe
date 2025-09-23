@@ -64,10 +64,11 @@ This project strictly follows Test-Driven Development methodology. You MUST alwa
 
 ## Application to This Project
 
-- All new features must start with failing tests
-- All bug fixes must start with a test that reproduces the bug
+- All new features must start with failing tests using established test infrastructure patterns
+- All bug fixes must start with a test that reproduces the bug using scenario builders
 - All refactoring must maintain green test status
 - Tests should be readable and describe business requirements
+- **MUST** follow test architecture standards defined in `test-architecture-standards.md`
 
 ## ENFORCEMENT RULES
 
@@ -93,11 +94,13 @@ This project strictly follows Test-Driven Development methodology. You MUST alwa
 4. **NEVER** make additional feature changes while fixing broken tests
 
 This rule applies to:
-- All backend Go code
+- All backend Go code (using established test infrastructure patterns)
 - All frontend TypeScript code  
 - All integration tests
-- All API endpoint implementations
-- All service layer implementations
+- All API endpoint implementations (using scenario builders)
+- All service layer implementations (using business-focused test patterns)
+
+**See `test-architecture-standards.md` for mandatory test infrastructure patterns.**
 
 ## VIOLATION CONSEQUENCES
 
