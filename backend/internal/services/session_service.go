@@ -26,7 +26,7 @@ type SessionRepository interface {
 
 // SessionPresence defines the interface for session presence management
 type SessionPresence interface {
-	SetSessionPresence(ctx context.Context, sessionID string, data redis.SessionPresenceData, ttl time.Duration) error
+	SetSessionPresence(ctx context.Context, sessionID string, data *redis.SessionPresenceData, ttl time.Duration) error
 	GetSessionPresence(ctx context.Context, sessionID string) (*redis.SessionPresenceData, error)
 	UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) error
 	UpdateSessionActivity(ctx context.Context, sessionID string) error
@@ -109,7 +109,7 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, mapID string
 		CurrentPOI:     nil, // No POI initially
 	}
 
-	if err := s.presence.SetSessionPresence(ctx, session.ID, presenceData, 30*time.Minute); err != nil {
+	if err := s.presence.SetSessionPresence(ctx, session.ID, &presenceData, 30*time.Minute); err != nil {
 		// Log error but don't fail the session creation
 		// In a production system, you might want to use a proper logger here
 		fmt.Printf("Warning: failed to set session presence: %v\n", err)
@@ -280,19 +280,19 @@ func (s *SessionService) GetActiveSessionsFromPresence(ctx context.Context, mapI
 }
 
 // CleanupExpiredSessions removes expired sessions from both database and presence
-func (s *SessionService) CleanupExpiredSessions(ctx context.Context) (int, error) {
+func (s *SessionService) CleanupExpiredSessions(ctx context.Context) error {
 	// Cleanup database sessions (mark as inactive)
 	if err := s.repo.ExpireOldSessions(30 * time.Minute); err != nil {
-		return 0, fmt.Errorf("failed to cleanup database sessions: %w", err)
+		return fmt.Errorf("failed to cleanup database sessions: %w", err)
 	}
 
 	// Cleanup presence sessions
-	cleanedCount, err := s.presence.CleanupExpiredSessions(ctx, 30*time.Minute)
+	_, err := s.presence.CleanupExpiredSessions(ctx, 30*time.Minute)
 	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup presence sessions: %w", err)
+		return fmt.Errorf("failed to cleanup presence sessions: %w", err)
 	}
 
-	return cleanedCount, nil
+	return nil
 }
 
 // SetCurrentPOI sets the current POI for a session

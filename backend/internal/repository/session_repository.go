@@ -12,14 +12,14 @@ import (
 
 // SessionRepository defines the interface for session data operations
 type SessionRepository interface {
-	Create(ctx context.Context, session *models.Session) (*models.Session, error)
-	GetByID(ctx context.Context, id string) (*models.Session, error)
-	GetByUserAndMap(ctx context.Context, userID, mapID string) (*models.Session, error)
-	GetActiveByMap(ctx context.Context, mapID string) ([]*models.Session, error)
-	Update(ctx context.Context, session *models.Session) (*models.Session, error)
-	UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) (*models.Session, error)
-	Delete(ctx context.Context, id string) error
-	ExpireOldSessions(ctx context.Context, timeout time.Duration) (int64, error)
+	Create(session *models.Session) error
+	GetByID(id string) (*models.Session, error)
+	GetByUserAndMap(userID, mapID string) (*models.Session, error)
+	Update(session *models.Session) error
+	UpdateAvatarPosition(sessionID string, position models.LatLng) error
+	Delete(id string) error
+	GetActiveByMap(mapID string) ([]*models.Session, error)
+	ExpireOldSessions(timeout time.Duration) error
 }
 
 // sessionRepository implements SessionRepository interface
@@ -35,10 +35,12 @@ func NewSessionRepository(db *database.DB) SessionRepository {
 }
 
 // Create creates a new session in the database
-func (r *sessionRepository) Create(ctx context.Context, session *models.Session) (*models.Session, error) {
+func (r *sessionRepository) Create(session *models.Session) error {
 	if session == nil {
-		return nil, fmt.Errorf("session cannot be nil")
+		return fmt.Errorf("session cannot be nil")
 	}
+
+	ctx := context.Background()
 
 	// Check if user already has an active session in this map
 	var existingSession models.Session
@@ -47,162 +49,152 @@ func (r *sessionRepository) Create(ctx context.Context, session *models.Session)
 		First(&existingSession).Error
 
 	if err == nil {
-		return nil, fmt.Errorf("user already has an active session in this map")
+		return fmt.Errorf("user already has an active session in this map")
 	} else if err != gorm.ErrRecordNotFound {
-		return nil, fmt.Errorf("failed to check existing session: %w", err)
+		return fmt.Errorf("failed to check existing session: %w", err)
 	}
 
-	// Validate the session
+	// Generate ID if not set
+	if session.ID == "" {
+		newSession, err := models.NewSession(session.UserID, session.MapID, session.AvatarPos)
+		if err != nil {
+			return fmt.Errorf("failed to create session: %w", err)
+		}
+		session.ID = newSession.ID
+		session.CreatedAt = newSession.CreatedAt
+		session.LastActive = newSession.LastActive
+	}
+
+	// Validate before creating
 	if err := session.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid session: %w", err)
+		return fmt.Errorf("session validation failed: %w", err)
 	}
 
-	// Create the session
-	if err := r.db.WithContext(ctx).Create(session).Error; err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
+	err = r.db.WithContext(ctx).Create(session).Error
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
 	}
 
-	return session, nil
+	return nil
 }
 
 // GetByID retrieves a session by its ID
-func (r *sessionRepository) GetByID(ctx context.Context, id string) (*models.Session, error) {
-	if id == "" {
-		return nil, fmt.Errorf("session ID cannot be empty")
-	}
-
+func (r *sessionRepository) GetByID(id string) (*models.Session, error) {
+	ctx := context.Background()
 	var session models.Session
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&session).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("session not found")
-		}
-		return nil, fmt.Errorf("failed to get session: %w", err)
+		return nil, err
 	}
-
 	return &session, nil
 }
 
 // GetByUserAndMap retrieves a session by user ID and map ID
-func (r *sessionRepository) GetByUserAndMap(ctx context.Context, userID, mapID string) (*models.Session, error) {
-	if userID == "" {
-		return nil, fmt.Errorf("user ID cannot be empty")
-	}
-	if mapID == "" {
-		return nil, fmt.Errorf("map ID cannot be empty")
-	}
-
+func (r *sessionRepository) GetByUserAndMap(userID, mapID string) (*models.Session, error) {
+	ctx := context.Background()
 	var session models.Session
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? AND map_id = ? AND is_active = ?", userID, mapID, true).
 		First(&session).Error
-
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("session not found")
-		}
-		return nil, fmt.Errorf("failed to get session: %w", err)
-	}
-
-	return &session, nil
-}
-
-// GetActiveByMap retrieves all active sessions for a specific map
-func (r *sessionRepository) GetActiveByMap(ctx context.Context, mapID string) ([]*models.Session, error) {
-	if mapID == "" {
-		return nil, fmt.Errorf("map ID cannot be empty")
-	}
-
-	var sessions []*models.Session
-	err := r.db.WithContext(ctx).
-		Where("map_id = ? AND is_active = ?", mapID, true).
-		Order("last_active DESC").
-		Find(&sessions).Error
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get active sessions: %w", err)
-	}
-
-	return sessions, nil
-}
-
-// Update updates an existing session
-func (r *sessionRepository) Update(ctx context.Context, session *models.Session) (*models.Session, error) {
-	if session == nil {
-		return nil, fmt.Errorf("session cannot be nil")
-	}
-
-	// Validate the session
-	if err := session.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid session: %w", err)
-	}
-
-	// Update the session
-	err := r.db.WithContext(ctx).Save(session).Error
-	if err != nil {
-		return nil, fmt.Errorf("failed to update session: %w", err)
-	}
-
-	return session, nil
-}
-
-// UpdateAvatarPosition updates the avatar position for a session
-func (r *sessionRepository) UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) (*models.Session, error) {
-	if sessionID == "" {
-		return nil, fmt.Errorf("session ID cannot be empty")
-	}
-
-	// Validate position
-	if err := position.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid position: %w", err)
-	}
-
-	// Get the session first
-	session, err := r.GetByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Update avatar position and activity
-	err = session.UpdateAvatarPosition(position)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update avatar position: %w", err)
-	}
-
-	// Save the updated session
-	return r.Update(ctx, session)
+	return &session, nil
 }
 
-// Delete deletes a session by ID
-func (r *sessionRepository) Delete(ctx context.Context, id string) error {
-	if id == "" {
-		return fmt.Errorf("session ID cannot be empty")
+// Update updates an existing session
+func (r *sessionRepository) Update(session *models.Session) error {
+	if session == nil {
+		return fmt.Errorf("session cannot be nil")
 	}
 
+	ctx := context.Background()
+
+	// Validate before updating
+	if err := session.Validate(); err != nil {
+		return fmt.Errorf("session validation failed: %w", err)
+	}
+
+	err := r.db.WithContext(ctx).Save(session).Error
+	if err != nil {
+		return fmt.Errorf("failed to update session: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateAvatarPosition updates the avatar position for a session
+func (r *sessionRepository) UpdateAvatarPosition(sessionID string, position models.LatLng) error {
+	ctx := context.Background()
+
+	// Validate position
+	if err := position.Validate(); err != nil {
+		return fmt.Errorf("invalid position: %w", err)
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.Session{}).
+		Where("id = ?", sessionID).
+		Updates(map[string]interface{}{
+			"avatar_pos_lat": position.Lat,
+			"avatar_pos_lng": position.Lng,
+			"last_active":    time.Now(),
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update avatar position: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
+}
+
+// Delete removes a session from the database
+func (r *sessionRepository) Delete(id string) error {
+	ctx := context.Background()
 	result := r.db.WithContext(ctx).Delete(&models.Session{}, "id = ?", id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete session: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("session not found")
+		return gorm.ErrRecordNotFound
 	}
 
 	return nil
 }
 
-// ExpireOldSessions marks sessions as inactive if they haven't been active within the timeout period
-func (r *sessionRepository) ExpireOldSessions(ctx context.Context, timeout time.Duration) (int64, error) {
+// GetActiveByMap retrieves all active sessions for a specific map
+func (r *sessionRepository) GetActiveByMap(mapID string) ([]*models.Session, error) {
+	ctx := context.Background()
+	var sessions []*models.Session
+
+	err := r.db.WithContext(ctx).
+		Where("map_id = ? AND is_active = ?", mapID, true).
+		Order("last_active DESC").
+		Find(&sessions).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active sessions for map %s: %w", mapID, err)
+	}
+
+	return sessions, nil
+}
+
+// ExpireOldSessions marks old sessions as inactive
+func (r *sessionRepository) ExpireOldSessions(timeout time.Duration) error {
+	ctx := context.Background()
 	cutoffTime := time.Now().Add(-timeout)
 
-	result := r.db.WithContext(ctx).
-		Model(&models.Session{}).
+	result := r.db.WithContext(ctx).Model(&models.Session{}).
 		Where("last_active < ? AND is_active = ?", cutoffTime, true).
 		Update("is_active", false)
 
 	if result.Error != nil {
-		return 0, fmt.Errorf("failed to expire old sessions: %w", result.Error)
+		return fmt.Errorf("failed to expire old sessions: %w", result.Error)
 	}
 
-	return result.RowsAffected, nil
+	return nil
 }

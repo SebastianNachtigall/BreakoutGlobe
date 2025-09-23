@@ -1,11 +1,13 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/testdata"
 	"breakoutglobe/internal/websocket"
 
 	"github.com/stretchr/testify/assert"
@@ -233,7 +235,7 @@ func TestSessionHeartbeatFlow(t *testing.T) {
 	require.NoError(t, err)
 	
 	// Last activity should be recent (within last few seconds)
-	timeSinceLastActivity := time.Since(session.LastActivity)
+	timeSinceLastActivity := time.Since(session.LastActive)
 	assert.Less(t, timeSinceLastActivity, 5*time.Second, "Last activity should be recent")
 }
 
@@ -452,7 +454,7 @@ func TestSessionCleanupFlow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set last activity to 2 hours ago
-		session.LastActivity = time.Now().Add(-2 * time.Hour)
+		session.LastActive = time.Now().Add(-2 * time.Hour)
 		err = env.db.DB.Save(&session).Error
 		require.NoError(t, err)
 	}

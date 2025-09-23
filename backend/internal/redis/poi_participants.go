@@ -131,39 +131,29 @@ func (pp *POIParticipants) JoinPOIWithCapacityCheck(ctx context.Context, poiID, 
 }
 
 // RemoveAllParticipants removes all participants from a POI
-func (pp *POIParticipants) RemoveAllParticipants(ctx context.Context, poiID string) (int, error) {
+func (pp *POIParticipants) RemoveAllParticipants(ctx context.Context, poiID string) error {
 	key := pp.getPOIParticipantsKey(poiID)
 	
-	// Get current count before deletion
-	count, err := pp.client.SCard(ctx, key).Result()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get participant count: %w", err)
-	}
-	
-	if count == 0 {
-		return 0, nil // No participants to remove
-	}
-	
 	// Delete the entire set
-	err = pp.client.Del(ctx, key).Err()
+	err := pp.client.Del(ctx, key).Err()
 	if err != nil {
-		return 0, fmt.Errorf("failed to remove all participants: %w", err)
+		return fmt.Errorf("failed to remove all participants: %w", err)
 	}
 	
-	return int(count), nil
+	return nil
 }
 
 // RemoveParticipantFromAllPOIs removes a session from all POIs they're participating in
-func (pp *POIParticipants) RemoveParticipantFromAllPOIs(ctx context.Context, sessionID string) (int, error) {
+func (pp *POIParticipants) RemoveParticipantFromAllPOIs(ctx context.Context, sessionID string) error {
 	// Get all POI participant keys
 	pattern := "poi:participants:*"
 	keys, err := pp.client.Keys(ctx, pattern).Result()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get POI keys: %w", err)
+		return fmt.Errorf("failed to get POI keys: %w", err)
 	}
 	
 	if len(keys) == 0 {
-		return 0, nil // No POIs exist
+		return nil // No POIs exist
 	}
 	
 	// Use a pipeline for efficiency
@@ -175,22 +165,12 @@ func (pp *POIParticipants) RemoveParticipantFromAllPOIs(ctx context.Context, ses
 	}
 	
 	// Execute pipeline
-	results, err := pipe.Exec(ctx)
+	_, err = pipe.Exec(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("failed to execute removal pipeline: %w", err)
+		return fmt.Errorf("failed to execute removal pipeline: %w", err)
 	}
 	
-	// Count successful removals
-	removedCount := 0
-	for _, result := range results {
-		if cmd, ok := result.(*redis.IntCmd); ok {
-			if removed, err := cmd.Result(); err == nil && removed > 0 {
-				removedCount++
-			}
-		}
-	}
-	
-	return removedCount, nil
+	return nil
 }
 
 // GetPOIsForParticipant returns all POI IDs that a session is participating in

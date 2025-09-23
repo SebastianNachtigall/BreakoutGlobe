@@ -73,7 +73,7 @@ func (sp *SessionPresence) GetSessionPresence(ctx context.Context, sessionID str
 }
 
 // UpdateSessionActivity updates the last active timestamp for a session
-func (sp *SessionPresence) UpdateSessionActivity(ctx context.Context, sessionID string, lastActive time.Time) error {
+func (sp *SessionPresence) UpdateSessionActivity(ctx context.Context, sessionID string) error {
 	// Get current session data
 	data, err := sp.GetSessionPresence(ctx, sessionID)
 	if err != nil {
@@ -81,7 +81,7 @@ func (sp *SessionPresence) UpdateSessionActivity(ctx context.Context, sessionID 
 	}
 	
 	// Update last active time
-	data.LastActive = lastActive
+	data.LastActive = time.Now()
 	
 	// Get current TTL to preserve it
 	key := sp.getSessionKey(sessionID)
@@ -128,7 +128,7 @@ func (sp *SessionPresence) UpdateAvatarPosition(ctx context.Context, sessionID s
 }
 
 // SetCurrentPOI sets or clears the current POI for a session
-func (sp *SessionPresence) SetCurrentPOI(ctx context.Context, sessionID string, poiID *string) error {
+func (sp *SessionPresence) SetCurrentPOI(ctx context.Context, sessionID string, poiID string) error {
 	// Get current session data
 	data, err := sp.GetSessionPresence(ctx, sessionID)
 	if err != nil {
@@ -136,7 +136,11 @@ func (sp *SessionPresence) SetCurrentPOI(ctx context.Context, sessionID string, 
 	}
 	
 	// Update current POI and last active time
-	data.CurrentPOI = poiID
+	if poiID == "" {
+		data.CurrentPOI = nil
+	} else {
+		data.CurrentPOI = &poiID
+	}
 	data.LastActive = time.Now()
 	
 	// Get current TTL to preserve it
@@ -217,7 +221,7 @@ func (sp *SessionPresence) SessionHeartbeat(ctx context.Context, sessionID strin
 	}
 	
 	// Update last active time
-	err = sp.UpdateSessionActivity(ctx, sessionID, time.Now())
+	err = sp.UpdateSessionActivity(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to update session activity: %w", err)
 	}
@@ -231,9 +235,9 @@ func (sp *SessionPresence) SessionHeartbeat(ctx context.Context, sessionID strin
 	return nil
 }
 
-// CleanupExpiredSessions removes expired sessions for a specific map
+// CleanupExpiredSessions removes expired sessions older than maxAge
 // This is a manual cleanup that can be called periodically
-func (sp *SessionPresence) CleanupExpiredSessions(ctx context.Context, mapID string) (int, error) {
+func (sp *SessionPresence) CleanupExpiredSessions(ctx context.Context, maxAge time.Duration) (int, error) {
 	// Get all session keys
 	pattern := "session:*"
 	keys, err := sp.client.Keys(ctx, pattern).Result()
@@ -274,14 +278,9 @@ func (sp *SessionPresence) CleanupExpiredSessions(ctx context.Context, mapID str
 			continue
 		}
 		
-		// Only process sessions for the specified map
-		if data.MapID != mapID {
-			continue
-		}
-		
 		// Check if session is considered expired based on last active time
 		// (This is additional cleanup beyond Redis TTL)
-		if time.Since(data.LastActive) > 30*time.Minute {
+		if time.Since(data.LastActive) > maxAge {
 			err = sp.client.Del(ctx, key).Err()
 			if err == nil {
 				cleanedCount++

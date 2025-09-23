@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"breakoutglobe/internal/database"
 	"breakoutglobe/internal/handlers"
 	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/redis"
