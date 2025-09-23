@@ -146,7 +146,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Add Docker Compose integration for CI database testing
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 4.2 Implement Redis integration infrastructure
+  - [x] 4.2 Implement Redis integration infrastructure
     - Write tests for Redis connection management with real Redis instance
     - Implement Redis test setup with isolated keyspaces per test
     - Write tests for session presence management with real TTL and expiration

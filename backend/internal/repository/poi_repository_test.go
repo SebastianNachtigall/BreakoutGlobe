@@ -20,6 +20,11 @@ type POIRepositoryTestSuite struct {
 }
 
 func (suite *POIRepositoryTestSuite) SetupSuite() {
+	// Skip integration tests in short mode
+	if testing.Short() {
+		suite.T().Skip("Skipping database integration test in short mode")
+	}
+	
 	// Set up test database
 	testURL := "postgres://postgres:postgres@localhost:5432/breakoutglobe_test?sslmode=disable"
 	

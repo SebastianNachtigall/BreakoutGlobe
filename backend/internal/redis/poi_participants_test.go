@@ -16,6 +16,11 @@ type POIParticipantsTestSuite struct {
 }
 
 func (suite *POIParticipantsTestSuite) SetupSuite() {
+	// Skip integration tests in short mode
+	if testing.Short() {
+		suite.T().Skip("Skipping Redis integration test in short mode")
+	}
+	
 	// Connect to test Redis instance
 	client := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
