@@ -158,7 +158,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Implement Redis Docker integration for CI testing
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 4.3 Implement WebSocket integration infrastructure
+  - [x] 4.3 Implement WebSocket integration infrastructure
     - Write tests for real HTTP server with WebSocket upgrade handling
     - Implement WebSocket integration tests with actual network connections
     - Write tests for multi-client WebSocket communication and broadcasting
