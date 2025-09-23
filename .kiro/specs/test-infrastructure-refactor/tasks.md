@@ -170,7 +170,7 @@ This implementation plan transforms our brittle test infrastructure into a resil
     - Implement WebSocket error handling and recovery testing
     - _Requirements: 4.1, 4.2, 4.3_
 
-  - [ ] 4.4 Create infrastructure flow integration tests
+  - [x] 4.4 Create infrastructure flow integration tests
     - Write integration test for complete POI creation flow (HTTP → Service → DB → Redis → WebSocket)
     - Implement end-to-end session management flow with real persistence and presence
     - Write integration test for rate limiting enforcement across all layers

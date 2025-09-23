@@ -146,10 +146,44 @@ func (tr *TestRedis) AssertSetSize(key string, expectedSize int) {
 	}
 }
 
+// Keys returns all keys matching a pattern
+func (tr *TestRedis) Keys(pattern string) []string {
+	tr.t.Helper()
+	
+	keys, err := tr.client.Keys(context.Background(), pattern).Result()
+	if err != nil {
+		tr.t.Errorf("Failed to get Redis keys with pattern %s: %v", pattern, err)
+		return nil
+	}
+	return keys
+}
+
+// KeyCount returns the number of keys matching a pattern
+func (tr *TestRedis) KeyCount(pattern string) int {
+	return len(tr.Keys(pattern))
+}
+
+// SetMembers gets all members of a set
+func (tr *TestRedis) SetMembers(key string) []string {
+	tr.t.Helper()
+	
+	members, err := tr.client.SMembers(context.Background(), key).Result()
+	if err != nil {
+		tr.t.Errorf("Failed to get Redis set members %s: %v", key, err)
+		return nil
+	}
+	return members
+}
+
 // getRedisEnvOrDefault returns environment variable value or default
 func getRedisEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
 	return defaultValue
+}
+
+// GetAllKeys returns all keys in the Redis database
+func (tr *TestRedis) GetAllKeys() []string {
+	return tr.Keys("*")
 }
