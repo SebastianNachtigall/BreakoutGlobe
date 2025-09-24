@@ -97,6 +97,8 @@ func (tdb *TestDB) RunMigrations() error {
 	
 	// Auto-migrate core models
 	return tdb.DB.AutoMigrate(
+		&models.User{},    // Add User model for user profile tests
+		&models.Map{},     // Add Map model for relationships
 		&models.Session{},
 		&models.POI{},
 		// Add other models as needed

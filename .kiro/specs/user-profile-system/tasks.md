@@ -15,7 +15,7 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Write tests for display name validation (3-50 characters) and guest account creation
   - _Requirements: 1.1, 1.2_
 
-- [ ] 2. Implement basic User repository for profile creation
+- [x] 2. Implement basic User repository for profile creation
   - Write tests using newUserRepositoryScenario(t) for Create and GetByID operations
   - Implement UserRepository interface with Create() and GetByID() methods only
   - Use fluent assertions: AssertUser(t, user).HasDisplayName().HasAccountType()
