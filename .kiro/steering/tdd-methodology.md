@@ -70,6 +70,35 @@ This project strictly follows Test-Driven Development methodology. You MUST alwa
 - Tests should be readable and describe business requirements
 - **MUST** follow test architecture standards defined in `test-architecture-standards.md`
 
+## CRITICAL EDGE CASE: Adding New Functionality to Existing Models
+
+**NEVER assume TDD is being followed just because existing tests remain green**
+
+When adding new methods, fields, or functionality to existing models:
+
+### ❌ WRONG Approach (Pseudo-TDD):
+1. Run existing tests - they pass (Green)
+2. Add new functionality (methods, fields, relationships)
+3. Add tests for new functionality after implementation
+4. Assume TDD was followed because "tests stayed green"
+
+### ✅ CORRECT Approach (True TDD):
+1. **MUST** write failing tests for NEW functionality FIRST (Red)
+2. **MUST** run tests to confirm they fail for the right reasons
+3. **MUST** implement minimal code to make new tests pass (Green)
+4. **MUST** refactor while keeping all tests green (Refactor)
+
+### Key Principle:
+**Existing tests staying green only proves backward compatibility, NOT that TDD was followed for new functionality**
+
+### Examples:
+- Adding `User.CanModify()` method → Write failing test first
+- Adding `Session.BelongsToUser()` method → Write failing test first  
+- Adding new model relationships → Write failing tests first
+- Adding access control methods → Write failing tests first
+
+**Every new method, field, or behavior requires its own Red-Green-Refactor cycle**
+
 ## ENFORCEMENT RULES
 
 ### Before Any Implementation:

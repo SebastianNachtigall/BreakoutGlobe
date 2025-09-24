@@ -328,3 +328,188 @@ func TestPOI_IsWithinRadius(t *testing.T) {
 		})
 	}
 }
+
+// Tests for new relationship functionality
+func TestPOI_IsOwnedBy(t *testing.T) {
+	creatorID := "user-123"
+	poi := POI{
+		CreatedBy: creatorID,
+	}
+
+	tests := []struct {
+		name     string
+		userID   string
+		expected bool
+	}{
+		{
+			name:     "POI is owned by creator",
+			userID:   creatorID,
+			expected: true,
+		},
+		{
+			name:     "POI is not owned by other user",
+			userID:   "other-user-456",
+			expected: false,
+		},
+		{
+			name:     "empty user ID does not own POI",
+			userID:   "",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := poi.IsOwnedBy(tt.userID)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPOI_BelongsToMap(t *testing.T) {
+	mapID := "map-123"
+	poi := POI{
+		MapID: mapID,
+	}
+
+	tests := []struct {
+		name      string
+		testMapID string
+		expected  bool
+	}{
+		{
+			name:      "POI belongs to map",
+			testMapID: mapID,
+			expected:  true,
+		},
+		{
+			name:      "POI does not belong to other map",
+			testMapID: "other-map-456",
+			expected:  false,
+		},
+		{
+			name:      "empty map ID does not match",
+			testMapID: "",
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := poi.BelongsToMap(tt.testMapID)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPOI_CanBeModifiedBy(t *testing.T) {
+	creatorID := "user-123"
+	poi := POI{
+		CreatedBy: creatorID,
+	}
+
+	tests := []struct {
+		name     string
+		user     *User
+		expected bool
+	}{
+		{
+			name:     "nil user cannot modify",
+			user:     nil,
+			expected: false,
+		},
+		{
+			name: "creator can modify their POI",
+			user: &User{
+				ID:   creatorID,
+				Role: UserRoleUser,
+			},
+			expected: true,
+		},
+		{
+			name: "other regular user cannot modify",
+			user: &User{
+				ID:   "other-user-456",
+				Role: UserRoleUser,
+			},
+			expected: false,
+		},
+		{
+			name: "admin can modify any POI",
+			user: &User{
+				ID:   "admin-789",
+				Role: UserRoleAdmin,
+			},
+			expected: true,
+		},
+		{
+			name: "superadmin can modify any POI",
+			user: &User{
+				ID:   "superadmin-999",
+				Role: UserRoleSuperAdmin,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := poi.CanBeModifiedBy(tt.user)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPOI_CanBeAccessedBy(t *testing.T) {
+	poi := POI{
+		CreatedBy: "user-123",
+	}
+
+	tests := []struct {
+		name     string
+		user     *User
+		expected bool
+	}{
+		{
+			name:     "nil user cannot access",
+			user:     nil,
+			expected: false,
+		},
+		{
+			name: "any authenticated user can access POI",
+			user: &User{
+				ID:   "any-user-456",
+				Role: UserRoleUser,
+			},
+			expected: true,
+		},
+		{
+			name: "admin can access POI",
+			user: &User{
+				ID:   "admin-789",
+				Role: UserRoleAdmin,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := poi.CanBeAccessedBy(tt.user)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPOI_Update(t *testing.T) {
+	poi := POI{
+		UpdatedAt: time.Now().Add(-10 * time.Minute),
+	}
+
+	oldUpdatedAt := poi.UpdatedAt
+
+	poi.Update()
+
+	assert.True(t, poi.UpdatedAt.After(oldUpdatedAt))
+	assert.WithinDuration(t, time.Now(), poi.UpdatedAt, time.Second)
+}

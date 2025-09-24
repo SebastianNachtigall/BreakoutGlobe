@@ -281,3 +281,134 @@ func TestSession_UpdateAvatarPosition_InvalidCoordinates(t *testing.T) {
 	// Position should not be updated on error
 	assert.Equal(t, LatLng{Lat: 0.0, Lng: 0.0}, session.AvatarPos)
 }
+
+// Tests for new relationship functionality
+func TestSession_BelongsToUser(t *testing.T) {
+	userID := "user-123"
+	session := Session{
+		UserID: userID,
+	}
+
+	tests := []struct {
+		name       string
+		testUserID string
+		expected   bool
+	}{
+		{
+			name:       "session belongs to user",
+			testUserID: userID,
+			expected:   true,
+		},
+		{
+			name:       "session does not belong to other user",
+			testUserID: "other-user-456",
+			expected:   false,
+		},
+		{
+			name:       "empty user ID does not match",
+			testUserID: "",
+			expected:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := session.BelongsToUser(tt.testUserID)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSession_BelongsToMap(t *testing.T) {
+	mapID := "map-123"
+	session := Session{
+		MapID: mapID,
+	}
+
+	tests := []struct {
+		name      string
+		testMapID string
+		expected  bool
+	}{
+		{
+			name:      "session belongs to map",
+			testMapID: mapID,
+			expected:  true,
+		},
+		{
+			name:      "session does not belong to other map",
+			testMapID: "other-map-456",
+			expected:  false,
+		},
+		{
+			name:      "empty map ID does not match",
+			testMapID: "",
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := session.BelongsToMap(tt.testMapID)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSession_CanBeAccessedBy(t *testing.T) {
+	userID := "user-123"
+	session := Session{
+		UserID: userID,
+	}
+
+	tests := []struct {
+		name     string
+		user     *User
+		expected bool
+	}{
+		{
+			name:     "nil user cannot access",
+			user:     nil,
+			expected: false,
+		},
+		{
+			name: "session owner can access",
+			user: &User{
+				ID:   userID,
+				Role: UserRoleUser,
+			},
+			expected: true,
+		},
+		{
+			name: "other regular user cannot access",
+			user: &User{
+				ID:   "other-user-456",
+				Role: UserRoleUser,
+			},
+			expected: false,
+		},
+		{
+			name: "admin can access any session",
+			user: &User{
+				ID:   "admin-789",
+				Role: UserRoleAdmin,
+			},
+			expected: true,
+		},
+		{
+			name: "superadmin can access any session",
+			user: &User{
+				ID:   "superadmin-999",
+				Role: UserRoleSuperAdmin,
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := session.CanBeAccessedBy(tt.user)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
