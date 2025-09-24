@@ -15,6 +15,7 @@ func RunMigrations(db *gorm.DB) error {
 
 	// Auto-migrate all models
 	err := db.AutoMigrate(
+		&models.User{}, // Must be first since other models reference it
 		&models.Map{},
 		&models.Session{},
 		&models.POI{},
@@ -80,9 +81,10 @@ func DropAllTables(db *gorm.DB) error {
 
 	// Drop tables in reverse dependency order
 	tables := []interface{}{
-		&models.POI{},     // Has foreign key to maps
-		&models.Session{}, // Has foreign key to maps
-		&models.Map{},     // Base table
+		&models.POI{},     // Has foreign key to maps and users
+		&models.Session{}, // Has foreign key to maps and users
+		&models.Map{},     // Has foreign key to users
+		&models.User{},    // Base table
 	}
 
 	for _, table := range tables {
@@ -112,6 +114,7 @@ func GetMigrationStatus(db *gorm.DB) (map[string]bool, error) {
 	status := make(map[string]bool)
 
 	// Check if tables exist
+	status["users"] = db.Migrator().HasTable(&models.User{})
 	status["maps"] = db.Migrator().HasTable(&models.Map{})
 	status["sessions"] = db.Migrator().HasTable(&models.Session{})
 	status["pois"] = db.Migrator().HasTable(&models.POI{})

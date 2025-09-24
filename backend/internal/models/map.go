@@ -5,17 +5,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Map represents a map instance that contains isolated sessions and POIs
 type Map struct {
-	ID          string    `json:"id" gorm:"primaryKey;type:varchar(36)"`
-	Name        string    `json:"name" gorm:"not null;type:varchar(255)"`
-	Description string    `json:"description" gorm:"type:text"`
-	CreatedBy   string    `json:"createdBy" gorm:"index;type:varchar(36);not null"`
-	IsActive    bool      `json:"isActive" gorm:"default:true"`
-	CreatedAt   time.Time `json:"createdAt" gorm:"not null"`
-	UpdatedAt   time.Time `json:"updatedAt" gorm:"not null"`
+	ID          string         `json:"id" gorm:"primaryKey;type:varchar(36)"`
+	Name        string         `json:"name" gorm:"not null;type:varchar(255)"`
+	Description string         `json:"description" gorm:"type:text"`
+	CreatedBy   string         `json:"createdBy" gorm:"index;type:varchar(36);not null"`
+	Creator     *User          `json:"creator,omitempty" gorm:"foreignKey:CreatedBy;references:ID"`
+	IsActive    bool           `json:"isActive" gorm:"default:true"`
+	CreatedAt   time.Time      `json:"createdAt" gorm:"not null"`
+	UpdatedAt   time.Time      `json:"updatedAt" gorm:"not null"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"` // Soft delete support
 }
 
 // NewMap creates a new map instance with validation and generated ID
@@ -73,4 +76,36 @@ func (m *Map) Deactivate() {
 func (m *Map) Activate() {
 	m.IsActive = true
 	m.UpdatedAt = time.Now()
+}
+
+// CanBeAccessedBy checks if a user can access this map
+func (m *Map) CanBeAccessedBy(userID string) bool {
+	// All active maps can be accessed by any user
+	// Future enhancement: implement role-based access control
+	return m.IsActive
+}
+
+// CanBeModifiedBy checks if a user can modify this map
+func (m *Map) CanBeModifiedBy(user *User) bool {
+	if user == nil {
+		return false
+	}
+	
+	// Map creator can always modify
+	if m.CreatedBy == user.ID {
+		return true
+	}
+	
+	// Admins and superadmins can modify any map
+	return user.IsAdmin() || user.IsSuperAdmin()
+}
+
+// IsOwnedBy checks if the map is owned by the specified user
+func (m *Map) IsOwnedBy(userID string) bool {
+	return m.CreatedBy == userID
+}
+
+// TableName returns the table name for GORM
+func (Map) TableName() string {
+	return "maps"
 }

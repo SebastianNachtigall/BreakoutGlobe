@@ -14,7 +14,7 @@ This implementation plan transforms the current anonymous session system into a 
     - Align User model with current database connection and migration patterns
     - _Requirements: 1.1, 2.1, 7.1_
 
-  - [ ] 1.2 Create Map model with proper relationships
+  - [x] 1.2 Create Map model with proper relationships
     - Write tests using NewMap() builder for multi-map support relationships
     - Ensure Map model integrates with current Session and POI models
     - Write tests for map ownership, access control, and user isolation
