@@ -360,3 +360,121 @@ func (a *UserAssertion) HasUpdatedAt() *UserAssertion {
 	}
 	return a
 }
+
+// UserResponseInterface defines the interface for User response types
+type UserResponseInterface interface {
+	GetID() string
+	GetDisplayName() string
+	GetAccountType() string
+	GetRole() string
+	GetIsActive() bool
+}
+
+// UserResponseAssertion provides fluent assertions for User response types
+type UserResponseAssertion struct {
+	t        TestingT
+	response UserResponseInterface
+}
+
+// AssertUserResponse provides fluent assertions for User response types
+func AssertUserResponse(t TestingT, response UserResponseInterface) *UserResponseAssertion {
+	t.Helper()
+	return &UserResponseAssertion{t: t, response: response}
+}
+
+// HasID asserts the response has the expected ID
+func (a *UserResponseAssertion) HasID(expectedID string) *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetID() != expectedID {
+		a.t.Errorf("Expected user response ID %s, got %s", expectedID, a.response.GetID())
+	}
+	return a
+}
+
+// HasDisplayName asserts the response has the expected display name
+func (a *UserResponseAssertion) HasDisplayName(expectedDisplayName string) *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetDisplayName() != expectedDisplayName {
+		a.t.Errorf("Expected user response display name %s, got %s", expectedDisplayName, a.response.GetDisplayName())
+	}
+	return a
+}
+
+// HasAccountType asserts the response has the expected account type
+func (a *UserResponseAssertion) HasAccountType(expectedAccountType string) *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetAccountType() != expectedAccountType {
+		a.t.Errorf("Expected user response account type %s, got %s", expectedAccountType, a.response.GetAccountType())
+	}
+	return a
+}
+
+// HasRole asserts the response has the expected role
+func (a *UserResponseAssertion) HasRole(expectedRole string) *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetRole() != expectedRole {
+		a.t.Errorf("Expected user response role %s, got %s", expectedRole, a.response.GetRole())
+	}
+	return a
+}
+
+// IsActive asserts the response indicates the user is active
+func (a *UserResponseAssertion) IsActive() *UserResponseAssertion {
+	a.t.Helper()
+	if !a.response.GetIsActive() {
+		a.t.Errorf("Expected user response to indicate active user, but got inactive")
+	}
+	return a
+}
+
+// IsInactive asserts the response indicates the user is inactive
+func (a *UserResponseAssertion) IsInactive() *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetIsActive() {
+		a.t.Errorf("Expected user response to indicate inactive user, but got active")
+	}
+	return a
+}
+
+// IsGuest asserts the response indicates a guest account
+func (a *UserResponseAssertion) IsGuest() *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetAccountType() != "guest" {
+		a.t.Errorf("Expected user response to indicate guest account, got %s", a.response.GetAccountType())
+	}
+	return a
+}
+
+// IsFull asserts the response indicates a full account
+func (a *UserResponseAssertion) IsFull() *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetAccountType() != "full" {
+		a.t.Errorf("Expected user response to indicate full account, got %s", a.response.GetAccountType())
+	}
+	return a
+}
+
+// HasUserRole asserts the response indicates a user role
+func (a *UserResponseAssertion) HasUserRole() *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetRole() != "user" {
+		a.t.Errorf("Expected user response to indicate user role, got %s", a.response.GetRole())
+	}
+	return a
+}
+
+// HasAdminRole asserts the response indicates an admin role
+func (a *UserResponseAssertion) HasAdminRole() *UserResponseAssertion {
+	a.t.Helper()
+	if a.response.GetRole() != "admin" {
+		a.t.Errorf("Expected user response to indicate admin role, got %s", a.response.GetRole())
+	}
+	return a
+}
+
+// HasValidID asserts the response has a valid UUID as ID
+func (a *UserResponseAssertion) HasValidID() *UserResponseAssertion {
+	a.t.Helper()
+	AssertValidUUID(a.t, a.response.GetID())
+	return a
+}

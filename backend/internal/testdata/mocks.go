@@ -14,6 +14,7 @@ import (
 type MockSetup struct {
 	POIService     *MockPOIServiceBuilder
 	SessionService *MockSessionServiceBuilder
+	UserService    *MockUserServiceBuilder
 	RateLimiter    *MockRateLimiterBuilder
 }
 
@@ -22,6 +23,7 @@ func NewMockSetup() *MockSetup {
 	return &MockSetup{
 		POIService:     NewMockPOIServiceBuilder(),
 		SessionService: NewMockSessionServiceBuilder(),
+		UserService:    NewMockUserServiceBuilder(),
 		RateLimiter:    NewMockRateLimiterBuilder(),
 	}
 }
@@ -30,6 +32,7 @@ func NewMockSetup() *MockSetup {
 func (m *MockSetup) AssertExpectations(t mock.TestingT) {
 	m.POIService.Mock().AssertExpectations(t)
 	m.SessionService.Mock().AssertExpectations(t)
+	m.UserService.Mock().AssertExpectations(t)
 	m.RateLimiter.Mock().AssertExpectations(t)
 }
 
@@ -546,5 +549,129 @@ func (m *MockSessionService) GetActiveSessionsForMap(ctx context.Context, mapID 
 
 func (m *MockSessionService) CleanupExpiredSessions(ctx context.Context) error {
 	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+// MockUserServiceBuilder provides a fluent API for setting up user service mocks
+type MockUserServiceBuilder struct {
+	mock *MockUserService
+}
+
+// NewMockUserServiceBuilder creates a new user service mock builder
+func NewMockUserServiceBuilder() *MockUserServiceBuilder {
+	return &MockUserServiceBuilder{
+		mock: &MockUserService{},
+	}
+}
+
+// Mock returns the underlying mock for direct access if needed
+func (b *MockUserServiceBuilder) Mock() *MockUserService {
+	return b.mock
+}
+
+// ExpectCreateGuestProfile starts building an expectation for CreateGuestProfile
+func (b *MockUserServiceBuilder) ExpectCreateGuestProfile() *UserCreateGuestExpectation {
+	return &UserCreateGuestExpectation{
+		mock: b.mock,
+	}
+}
+
+// ExpectGetUser starts building an expectation for GetUser
+func (b *MockUserServiceBuilder) ExpectGetUser(userID string) *UserGetExpectation {
+	return &UserGetExpectation{
+		mock:   b.mock,
+		userID: userID,
+	}
+}
+
+// UserCreateGuestExpectation builds expectations for guest user creation
+type UserCreateGuestExpectation struct {
+	mock        *MockUserService
+	displayName string
+}
+
+// WithDisplayName sets the expected display name
+func (e *UserCreateGuestExpectation) WithDisplayName(displayName string) *UserCreateGuestExpectation {
+	e.displayName = displayName
+	return e
+}
+
+// Returns sets up the mock to return the specified user
+func (e *UserCreateGuestExpectation) Returns(user *models.User) {
+	e.mock.On("CreateGuestProfile",
+		mock.Anything, // Handle any context type automatically
+		e.displayName,
+	).Return(user, nil)
+}
+
+// ReturnsError sets up the mock to return an error
+func (e *UserCreateGuestExpectation) ReturnsError(err error) {
+	e.mock.On("CreateGuestProfile",
+		mock.Anything,
+		e.displayName,
+	).Return(nil, err)
+}
+
+// UserGetExpectation builds expectations for user retrieval
+type UserGetExpectation struct {
+	mock   *MockUserService
+	userID string
+}
+
+// Returns sets up the mock to return the specified user
+func (e *UserGetExpectation) Returns(user *models.User) {
+	e.mock.On("GetUser",
+		mock.Anything,
+		e.userID,
+	).Return(user, nil)
+}
+
+// ReturnsNotFound sets up the mock to return a not found error
+func (e *UserGetExpectation) ReturnsNotFound() {
+	e.mock.On("GetUser",
+		mock.Anything,
+		e.userID,
+	).Return(nil, fmt.Errorf("user not found: %s", e.userID))
+}
+
+// ReturnsError sets up the mock to return a custom error
+func (e *UserGetExpectation) ReturnsError(err error) {
+	e.mock.On("GetUser",
+		mock.Anything,
+		e.userID,
+	).Return(nil, err)
+}
+
+// MockUserService is a mock implementation of user service
+type MockUserService struct {
+	mock.Mock
+}
+
+func (m *MockUserService) CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error) {
+	args := m.Called(ctx, displayName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) GetUser(ctx context.Context, userID string) (*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) UpdateUser(ctx context.Context, userID string, updateData map[string]interface{}) (*models.User, error) {
+	args := m.Called(ctx, userID, updateData)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) DeleteUser(ctx context.Context, userID string) error {
+	args := m.Called(ctx, userID)
 	return args.Error(0)
 }
