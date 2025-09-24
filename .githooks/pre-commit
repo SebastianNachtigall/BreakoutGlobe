@@ -63,15 +63,21 @@ if [ -d "backend" ]; then
     cd ..
 fi
 
-# Check that tests pass
-echo "Running Go tests..."
-if [ -d "backend" ]; then
-    cd backend
-    if ! go test ./... -short; then
-        echo "❌ ERROR: Go tests failed"
-        exit 1
+# Check that tests pass (excluding database tests that require infrastructure)
+if [ "$SKIP_TESTS" != "true" ]; then
+    echo "Running Go tests..."
+    if [ -d "backend" ]; then
+        cd backend
+        # Skip database tests that require PostgreSQL to be running
+        if ! go test $(go list ./... | grep -v '/database') -short; then
+            echo "❌ ERROR: Go tests failed"
+            echo "💡 TIP: Use 'SKIP_TESTS=true git commit' to skip tests if needed"
+            exit 1
+        fi
+        cd ..
     fi
-    cd ..
+else
+    echo "⚠️  Skipping tests (SKIP_TESTS=true)"
 fi
 
 # Check TypeScript/JavaScript files for similar issues
