@@ -22,7 +22,7 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Write tests using expectUserCreationSuccess() for guest profile workflows
   - _Requirements: 1.1, 1.6_
 
-- [ ] 3. Create profile creation API endpoint
+- [x] 3. Create profile creation API endpoint
   - Write tests using newUserHandlerScenario(t) for POST /api/users/profile
   - Use expectProfileCreationSuccess() for guest profile creation workflow
   - Implement minimal User service with CreateGuestProfile() method
