@@ -8,7 +8,7 @@ This implementation plan uses a **vertical slice approach** to deliver working f
 
 ### Slice 1: Basic Guest Profile Creation & Display (Browser Testable)
 
-- [ ] 1. Create minimal User model and database foundation
+- [x] 1. Create minimal User model and database foundation
   - Write tests using NewUser() builder for basic model validation (displayName, accountType)
   - Create User model with minimal fields: ID, DisplayName, AccountType, CreatedAt
   - Create database migration using established migration patterns

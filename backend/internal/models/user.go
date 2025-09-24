@@ -31,7 +31,7 @@ const (
 type User struct {
 	ID           string         `json:"id" gorm:"primaryKey;type:varchar(36)"`
 	Email        string         `json:"email" gorm:"uniqueIndex;type:varchar(255)"`
-	DisplayName  string         `json:"displayName" gorm:"type:varchar(100);not null"`
+	DisplayName  string         `json:"displayName" gorm:"type:varchar(50);not null"`
 	AvatarURL    string         `json:"avatarUrl" gorm:"type:varchar(500)"`
 	AboutMe      string         `json:"aboutMe" gorm:"type:text"`
 	AccountType  AccountType    `json:"accountType" gorm:"type:varchar(20);not null;default:'full'"`
@@ -79,12 +79,12 @@ func (u *User) Validate() error {
 		return fmt.Errorf("display name is required")
 	}
 
-	if len(u.DisplayName) < 2 {
-		return fmt.Errorf("display name must be at least 2 characters")
+	if len(u.DisplayName) < 3 {
+		return fmt.Errorf("display name must be at least 3 characters")
 	}
 
-	if len(u.DisplayName) > 100 {
-		return fmt.Errorf("display name must be less than 100 characters")
+	if len(u.DisplayName) > 50 {
+		return fmt.Errorf("display name must be less than 50 characters")
 	}
 
 	// Check for invalid characters in display name

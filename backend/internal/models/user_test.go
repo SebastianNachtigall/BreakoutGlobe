@@ -63,7 +63,7 @@ func TestUser_Validate(t *testing.T) {
 			user: User{
 				ID:          "user-123",
 				Email:       "test@example.com",
-				DisplayName: "A",
+				DisplayName: "AB",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
 				IsActive:    true,
@@ -71,14 +71,14 @@ func TestUser_Validate(t *testing.T) {
 				UpdatedAt:   time.Now(),
 			},
 			wantErr: true,
-			errMsg:  "display name must be at least 2 characters",
+			errMsg:  "display name must be at least 3 characters",
 		},
 		{
 			name: "display name too long",
 			user: User{
 				ID:          "user-123",
 				Email:       "test@example.com",
-				DisplayName: "This is a very long display name that exceeds the maximum allowed length of one hundred characters which should fail validation",
+				DisplayName: "This is a very long display name that exceeds fifty characters",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
 				IsActive:    true,
@@ -86,7 +86,7 @@ func TestUser_Validate(t *testing.T) {
 				UpdatedAt:   time.Now(),
 			},
 			wantErr: true,
-			errMsg:  "display name must be less than 100 characters",
+			errMsg:  "display name must be less than 50 characters",
 		},
 		{
 			name: "full account without email",
@@ -169,6 +169,35 @@ func TestNewGuestUser(t *testing.T) {
 		assert.Equal(t, UserRoleUser, user.Role)
 		assert.True(t, user.IsActive)
 		assert.Empty(t, user.Email) // Guests don't have email by default
+	})
+}
+
+// TestUser_DisplayNameValidation tests display name validation requirements
+func TestUser_DisplayNameValidation(t *testing.T) {
+	t.Run("validates display name length requirements", func(t *testing.T) {
+		// Test minimum length (3 characters)
+		user, err := NewGuestUser("ABC")
+		require.NoError(t, err)
+		assert.NoError(t, user.Validate())
+
+		// Test too short (2 characters)
+		user, err = NewGuestUser("AB")
+		require.NoError(t, err)
+		err = user.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "display name must be at least 3 characters")
+
+		// Test maximum length (50 characters)
+		user, err = NewGuestUser("This is exactly fifty characters long for testing!")
+		require.NoError(t, err)
+		assert.NoError(t, user.Validate())
+
+		// Test too long (51 characters)
+		user, err = NewGuestUser("This is exactly fifty-one characters long for test!")
+		require.NoError(t, err)
+		err = user.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "display name must be less than 50 characters")
 	})
 }
 
