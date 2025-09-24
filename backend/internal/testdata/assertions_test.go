@@ -237,3 +237,121 @@ func (m *MockTestingT) Helper() {
 func (m *MockTestingT) Cleanup(func()) {
 	// No-op for mock
 }
+func TestUserAssertion(t *testing.T) {
+	t.Run("HasEmail assertion", func(t *testing.T) {
+		user := NewUser().
+			WithEmail("test@example.com").
+			Build()
+
+		// This should pass
+		AssertUser(t, user).HasEmail("test@example.com")
+	})
+
+	t.Run("HasDisplayName assertion", func(t *testing.T) {
+		user := NewUser().
+			WithDisplayName("John Doe").
+			Build()
+
+		// This should pass
+		AssertUser(t, user).HasDisplayName("John Doe")
+	})
+
+	t.Run("HasRole assertion", func(t *testing.T) {
+		user := NewUser().
+			WithRole(models.UserRoleAdmin).
+			Build()
+
+		// This should pass
+		AssertUser(t, user).HasRole(models.UserRoleAdmin)
+	})
+
+	t.Run("HasAccountType assertion", func(t *testing.T) {
+		user := NewUser().
+			WithAccountType(models.AccountTypeGuest).
+			Build()
+
+		// This should pass
+		AssertUser(t, user).HasAccountType(models.AccountTypeGuest)
+	})
+
+	t.Run("IsActive assertion", func(t *testing.T) {
+		user := NewUser().
+			WithActive(true).
+			Build()
+
+		// This should pass
+		AssertUser(t, user).IsActive()
+	})
+
+	t.Run("IsGuest assertion", func(t *testing.T) {
+		user := NewUser().
+			AsGuest().
+			Build()
+
+		// This should pass
+		AssertUser(t, user).IsGuest()
+	})
+
+	t.Run("IsFull assertion", func(t *testing.T) {
+		user := NewUser().
+			WithAccountType(models.AccountTypeFull).
+			Build()
+
+		// This should pass
+		AssertUser(t, user).IsFull()
+	})
+
+	t.Run("IsAdmin assertion", func(t *testing.T) {
+		user := NewUser().
+			AsAdmin().
+			Build()
+
+		// This should pass
+		AssertUser(t, user).IsAdmin()
+	})
+
+	t.Run("IsSuperAdmin assertion", func(t *testing.T) {
+		user := NewUser().
+			AsSuperAdmin().
+			Build()
+
+		// This should pass
+		AssertUser(t, user).IsSuperAdmin()
+	})
+
+	t.Run("HasPassword assertion", func(t *testing.T) {
+		user := NewUser().
+			WithPasswordHash("hashed-password").
+			Build()
+
+		// This should pass
+		AssertUser(t, user).HasPassword()
+	})
+
+	t.Run("HasNoPassword assertion", func(t *testing.T) {
+		user := NewUser().
+			Build() // No password hash set
+
+		// This should pass
+		AssertUser(t, user).HasNoPassword()
+	})
+
+	t.Run("chained assertions", func(t *testing.T) {
+		user := NewUser().
+			WithEmail("admin@example.com").
+			WithDisplayName("Admin User").
+			AsAdmin().
+			WithPasswordHash("secure-hash").
+			Build()
+
+		// Test fluent chaining
+		AssertUser(t, user).
+			HasEmail("admin@example.com").
+			HasDisplayName("Admin User").
+			HasRole(models.UserRoleAdmin).
+			IsActive().
+			IsFull().
+			IsAdmin().
+			HasPassword()
+	})
+}

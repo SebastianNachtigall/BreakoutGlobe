@@ -238,3 +238,100 @@ func TestBuilderRelationships(t *testing.T) {
 		assert.Equal(t, poi.CreatedBy, session.UserID)
 	})
 }
+func TestUserBuilder(t *testing.T) {
+	t.Run("creates user with defaults", func(t *testing.T) {
+		user := NewUser().Build()
+
+		assert.NotEmpty(t, user.ID)
+		assert.Equal(t, "Test User", user.DisplayName)
+		assert.Equal(t, models.AccountTypeFull, user.AccountType)
+		assert.Equal(t, models.UserRoleUser, user.Role)
+		assert.True(t, user.IsActive)
+		assert.False(t, user.CreatedAt.IsZero())
+		assert.False(t, user.UpdatedAt.IsZero())
+	})
+
+	t.Run("allows customization with fluent API", func(t *testing.T) {
+		user := NewUser().
+			WithID("custom-user-id").
+			WithEmail("test@example.com").
+			WithDisplayName("John Doe").
+			WithAvatarURL("https://example.com/avatar.jpg").
+			WithAboutMe("Software developer").
+			WithRole(models.UserRoleAdmin).
+			WithPasswordHash("hashed-password").
+			Build()
+
+		assert.Equal(t, "custom-user-id", user.ID)
+		assert.Equal(t, "test@example.com", user.Email)
+		assert.Equal(t, "John Doe", user.DisplayName)
+		assert.Equal(t, "https://example.com/avatar.jpg", user.AvatarURL)
+		assert.Equal(t, "Software developer", user.AboutMe)
+		assert.Equal(t, models.UserRoleAdmin, user.Role)
+		assert.Equal(t, "hashed-password", user.PasswordHash)
+		assert.True(t, user.HasPassword())
+	})
+
+	t.Run("AsGuest configures guest account", func(t *testing.T) {
+		user := NewUser().
+			WithDisplayName("Guest User").
+			AsGuest().
+			Build()
+
+		assert.Equal(t, "Guest User", user.DisplayName)
+		assert.Equal(t, models.AccountTypeGuest, user.AccountType)
+		assert.Empty(t, user.Email) // Guests don't have email
+		assert.True(t, user.IsGuest())
+		assert.False(t, user.IsFull())
+	})
+
+	t.Run("AsAdmin configures admin role", func(t *testing.T) {
+		user := NewUser().
+			WithEmail("admin@example.com").
+			WithDisplayName("Admin User").
+			AsAdmin().
+			Build()
+
+		assert.Equal(t, models.UserRoleAdmin, user.Role)
+		assert.True(t, user.IsAdmin())
+		assert.False(t, user.IsSuperAdmin())
+	})
+
+	t.Run("AsSuperAdmin configures super admin role", func(t *testing.T) {
+		user := NewUser().
+			WithEmail("superadmin@example.com").
+			WithDisplayName("Super Admin").
+			AsSuperAdmin().
+			Build()
+
+		assert.Equal(t, models.UserRoleSuperAdmin, user.Role)
+		assert.True(t, user.IsAdmin())
+		assert.True(t, user.IsSuperAdmin())
+	})
+
+	t.Run("generates valid UUID by default", func(t *testing.T) {
+		user := NewUser().Build()
+
+		_, err := uuid.Parse(user.ID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("creates valid user that passes validation", func(t *testing.T) {
+		user := NewUser().
+			WithEmail("valid@example.com").
+			Build()
+		
+		err := user.Validate()
+		assert.NoError(t, err)
+	})
+
+	t.Run("guest user passes validation without email", func(t *testing.T) {
+		user := NewUser().
+			WithDisplayName("Guest").
+			AsGuest().
+			Build()
+		
+		err := user.Validate()
+		assert.NoError(t, err)
+	})
+}

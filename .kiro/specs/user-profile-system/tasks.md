@@ -6,261 +6,279 @@ This implementation plan transforms the current anonymous session system into a 
 
 ## Implementation Tasks
 
-- [x] 1. Backend User Model and Database Schema
-  - [x] Create User model with profile fields (displayName, email, avatarURL, aboutMe, accountType, role)
-  - [x] Write tests for User model validation and constraints
-  - [x] Create Map model for multi-map support with proper relationships
-  - [x] Create database migration for users and maps tables with proper indexes
-  - [x] Update Session model to reference both User and Map for proper isolation
-  - [x] Update POI model to reference Map and Creator (User) for ownership tracking
-  - [x] Write tests for User-Session-Map relationships and foreign key constraints
-  - [x] Update all services and handlers to work with UUID-based models
-  - [ ] Fix all existing test files to work with UUID-based models
-  - _Requirements: 1.1, 2.1, 7.1, 8.1, 9.1_
+- [ ] 1. Backend User Model and Database Schema (NEEDS TDD ARCHITECTURE UPDATE)
+  - [x] 1.1 Create User model aligned with current repository interfaces
+    - Write tests using NewUser() builder for model validation and constraints
+    - Ensure User model works with our established repository interface patterns
+    - Write tests for email uniqueness, display name validation, and role constraints
+    - Align User model with current database connection and migration patterns
+    - _Requirements: 1.1, 2.1, 7.1_
+
+  - [ ] 1.2 Create Map model with proper relationships
+    - Write tests using NewMap() builder for multi-map support relationships
+    - Ensure Map model integrates with current Session and POI models
+    - Write tests for map ownership, access control, and user isolation
+    - Create database migration using established migration patterns
+    - _Requirements: 8.1, 9.1_
+
+  - [ ] 1.3 Update existing models for user profile integration
+    - Update Session model to reference User while maintaining current interface compatibility
+    - Update POI model to include Creator (User) relationship and map association
+    - Write tests using existing scenario builders for model relationship validation
+    - Ensure all model changes work with current service and repository interfaces
+    - _Requirements: 1.1, 8.1, 9.1_
 
 - [ ] 2. User Repository and Service Layer
-  - [ ] 2.1 Implement User Repository with CRUD operations
-    - Write tests for user creation, retrieval, update, and deletion
-    - Implement UserRepository interface with database operations
-    - Write tests for email uniqueness validation and conflict handling
-    - Add user search and filtering capabilities (by role, account type, active status)
+  - [ ] 2.1 Implement User Repository with TDD patterns
+    - Write tests using newUserRepositoryScenario(t) for CRUD operations
+    - Implement UserRepository interface aligned with current repository patterns
+    - Write tests using expectUserCreationSuccess() for profile creation workflows
+    - Use fluent assertions: AssertUser(t, user).HasEmail().HasRole().IsActive()
+    - Write tests using expectEmailUniquenessValidation() for conflict handling
+    - Add user search capabilities using established database test patterns
     - _Requirements: 1.1, 2.1, 6.1_
 
-  - [ ] 2.2 Create User Service with business logic
-    - Write tests for guest profile creation workflow
-    - Implement guest profile creation with localStorage backup sync
-    - Write tests for full account upgrade workflow with email verification
-    - Implement password hashing and validation using bcrypt
-    - Write tests for profile update operations with role-based permissions
+  - [ ] 2.2 Create User Service with business-focused tests
+    - Write tests using newUserServiceScenario(t) for guest profile creation
+    - Use expectGuestProfileCreationSuccess() for business rule validation
+    - Write tests using expectAccountUpgradeWorkflow() for full account conversion
+    - Implement password hashing aligned with current security patterns
+    - Write tests using expectRoleBasedPermissions() for profile update authorization
+    - Use established service layer patterns for localStorage backup sync
     - _Requirements: 1.1, 2.1, 5.1, 8.1_
 
-  - [ ] 2.3 Implement Avatar Upload and Management
-    - Write tests for avatar image upload with file validation
-    - Implement avatar storage (filesystem for dev, S3 for production)
-    - Write tests for image processing (resize, format conversion, optimization)
-    - Add avatar URL generation and CDN integration
-    - Write tests for avatar deletion and cleanup
+  - [ ] 2.3 Implement Avatar Management with integration testing
+    - Write tests using newAvatarScenario(t) for upload and processing workflows
+    - Use expectFileUploadValidation() for security and type checking
+    - Write integration tests with our established file storage patterns
+    - Use expectImageProcessingSuccess() for resize and optimization workflows
+    - Write tests using expectAvatarCleanup() for deletion and storage management
+    - Integrate with current CDN and storage infrastructure patterns
     - _Requirements: 1.1, 3.1, 8.3_
 
 - [ ] 3. Authentication and Authorization System
-  - [ ] 3.1 Implement Authentication Middleware
-    - Write tests for JWT token generation and validation
-    - Implement login/logout endpoints with session management
-    - Write tests for password reset workflow with secure tokens
-    - Add email verification system with token-based confirmation
-    - Write tests for session expiration and refresh token handling
+  - [ ] 3.1 Implement Authentication with scenario-based testing
+    - Write tests using newAuthScenario(t) for JWT token workflows
+    - Use expectTokenGenerationSuccess() and expectTokenValidation() patterns
+    - Write tests using expectLoginSuccess() and expectLogoutCleanup() for session management
+    - Use expectPasswordResetWorkflow() for secure token-based reset flows
+    - Write tests using expectEmailVerificationSuccess() for account confirmation
+    - Integrate with current rate limiting and security middleware patterns
     - _Requirements: 2.1, 4.1, 8.1_
 
-  - [ ] 3.2 Create Role-Based Access Control
-    - Write tests for role-based permission checking (user, admin, superadmin)
-    - Implement authorization middleware for API endpoints
-    - Write tests for hierarchical permission enforcement
-    - Add role assignment and validation logic
-    - Write tests for permission boundary enforcement (admins cannot modify superadmins)
+  - [ ] 3.2 Create Role-Based Access Control with business rule focus
+    - Write tests using newAuthorizationScenario(t) for permission checking
+    - Use expectRolePermissionSuccess() for hierarchical access validation
+    - Write tests using expectPermissionDenied() for unauthorized access attempts
+    - Use expectRoleAssignmentValidation() for role management workflows
+    - Write tests using expectAdminBoundaryEnforcement() for superadmin protection
+    - Integrate authorization with current handler and service layer patterns
     - _Requirements: 4.1, 6.1, 8.2_
 
 - [ ] 4. User Management API Endpoints
-  - [ ] 4.1 Profile Management Endpoints
-    - Write tests for POST /api/users/profile (guest profile creation)
-    - Implement guest profile creation with validation and localStorage sync
-    - Write tests for POST /api/users/account (upgrade to full account)
-    - Implement full account upgrade with email verification
-    - Write tests for GET /api/users/profile (get current user profile)
-    - Write tests for PUT /api/users/profile (update profile with role restrictions)
+  - [ ] 4.1 Profile Management Endpoints with handler scenario testing
+    - Write tests using newUserHandlerScenario(t) for profile creation endpoints
+    - Use expectProfileCreationSuccess() for POST /api/users/profile workflows
+    - Write tests using expectAccountUpgradeSuccess() for POST /api/users/account
+    - Use expectProfileRetrievalSuccess() for GET /api/users/profile
+    - Write tests using expectProfileUpdateAuthorization() for PUT /api/users/profile
+    - Integrate with current handler patterns and rate limiting infrastructure
     - _Requirements: 1.1, 2.1, 5.1_
 
-  - [ ] 4.4 Map Management Endpoints
-    - Write tests for GET /api/maps (list available maps)
-    - Implement map listing with user access control
-    - Write tests for GET /api/maps/:id (get map details)
-    - Write tests for POST /api/maps (create map - admin/superadmin only)
-    - Implement map creation with proper ownership and permissions
-    - Write tests for GET /api/maps/:id/users (get users active on specific map)
-    - _Requirements: 8.1_
-
-  - [ ] 4.2 Authentication Endpoints
-    - Write tests for POST /api/auth/login with email/password validation
-    - Implement login endpoint with rate limiting and brute force protection
-    - Write tests for POST /api/auth/logout with session invalidation
-    - Write tests for POST /api/users/verify-email with token validation
-    - Implement password reset endpoints with secure token generation
+  - [ ] 4.2 Authentication Endpoints with security-focused testing
+    - Write tests using newAuthHandlerScenario(t) for login/logout workflows
+    - Use expectLoginRateLimitSuccess() and expectBruteForceProtection() patterns
+    - Write tests using expectLogoutSessionInvalidation() for cleanup workflows
+    - Use expectEmailVerificationSuccess() for token-based confirmation
+    - Write tests using expectPasswordResetSecurity() for secure token handling
+    - Align with current authentication middleware and security patterns
     - _Requirements: 2.1, 4.1, 8.1_
 
-  - [ ] 4.3 Avatar Management Endpoints
-    - Write tests for POST /api/users/avatar with file upload validation
-    - Implement avatar upload with image processing and storage
-    - Write tests for DELETE /api/users/avatar with cleanup
-    - Add avatar serving endpoint with CDN integration
-    - Write tests for avatar URL generation and access control
+  - [ ] 4.3 Avatar Management Endpoints with file handling integration
+    - Write tests using newAvatarHandlerScenario(t) for upload workflows
+    - Use expectFileUploadValidation() and expectImageProcessing() patterns
+    - Write tests using expectAvatarDeletionCleanup() for removal workflows
+    - Use expectCDNIntegration() for avatar serving and URL generation
+    - Write tests using expectAvatarAccessControl() for permission validation
+    - Integrate with current file handling and storage infrastructure
     - _Requirements: 1.1, 3.1, 8.3_
 
+  - [ ] 4.4 Map Management Endpoints with authorization testing
+    - Write tests using newMapHandlerScenario(t) for map management workflows
+    - Use expectMapListingAuthorization() for GET /api/maps access control
+    - Write tests using expectMapCreationPermissions() for admin-only operations
+    - Use expectMapUserIsolation() for GET /api/maps/:id/users filtering
+    - Write tests using expectMapOwnershipValidation() for management operations
+    - Align with current authorization patterns and multi-tenancy support
+    - _Requirements: 8.1_
+
 - [ ] 5. Enhanced POI Management with Permissions
-  - [ ] 5.1 POI Creation and Ownership System
-    - Write tests for POI creation permissions (full account required)
-    - Implement POI creation with user ownership tracking and map association
-    - Write tests for POI ownership validation and edit permissions
-    - Update existing POI endpoints to include map context and creator information
-    - Write tests for POI deletion permissions (owner or admin)
-    - Add POI moderation capabilities for admin users
+  - [ ] 5.1 POI Creation and Ownership System with business rule testing
+    - Write tests using existing newPOIScenario(t) enhanced with user ownership
+    - Use expectPOICreationPermissions() for full account requirement validation
+    - Write tests using expectPOIOwnershipTracking() for creator assignment
+    - Use expectPOIEditPermissions() for owner and admin authorization
+    - Write tests using expectPOIDeletionAuthorization() for removal permissions
+    - Integrate POI moderation with current admin authorization patterns
     - _Requirements: 9.1_
 
-  - [ ] 5.2 Map-Specific POI Management
-    - Write tests for GET /api/maps/:mapId/pois (POIs filtered by map)
-    - Update POI listing to be map-specific with proper isolation
-    - Write tests for POST /api/maps/:mapId/pois (create POI on specific map)
-    - Implement map-scoped POI operations with permission checking
-    - Write tests for POI visibility and access control per map
-    - Add POI transfer capabilities between maps for admins
+  - [ ] 5.2 Map-Specific POI Management with isolation testing
+    - Write tests using newMapPOIScenario(t) for map-scoped operations
+    - Use expectMapPOIIsolation() for cross-map visibility validation
+    - Write tests using expectMapScopedPOICreation() for context-aware creation
+    - Use expectPOIMapPermissions() for map-specific access control
+    - Write tests using expectPOITransferAuthorization() for admin operations
+    - Enhance existing POI test infrastructure with map context support
     - _Requirements: 8.1, 9.1_
 
 - [ ] 6. Admin User Management System
-  - [ ] 6.1 User Management Endpoints (Admin/Superadmin)
-    - Write tests for GET /api/admin/users with pagination and filtering (optionally by map)
-    - Implement user listing with role-based access control and map context
-    - Write tests for GET /api/admin/users/:id with detailed user information
-    - Write tests for PUT /api/admin/users/:id/role with permission validation
-    - Implement role assignment with hierarchical permission checks
-    - Write tests for PUT /api/admin/users/:id/status (enable/disable users)
+  - [ ] 6.1 User Management Endpoints with admin scenario testing
+    - Write tests using newAdminScenario(t) for user management workflows
+    - Use expectAdminUserListingAuthorization() for GET /api/admin/users access
+    - Write tests using expectUserDetailPermissions() for detailed information access
+    - Use expectRoleAssignmentHierarchy() for PUT /api/admin/users/:id/role validation
+    - Write tests using expectUserStatusManagement() for enable/disable operations
+    - Integrate with current authorization middleware and audit logging patterns
     - _Requirements: 6.1, 8.1_
 
-  - [ ] 6.2 Admin User Interface Components
-    - Write tests for UserManagementPanel component with user listing
-    - Implement user management UI with search, filter, and pagination
-    - Write tests for UserDetailsModal with profile information display
-    - Implement user role assignment interface with permission validation
-    - Write tests for user status management (enable/disable accounts)
-    - Add audit logging display for user management actions
+  - [ ] 6.2 Admin User Interface Components with component testing
+    - Write tests using component test patterns for UserManagementPanel
+    - Use expectUserListingDisplay() and expectSearchFilterFunctionality() patterns
+    - Write tests using expectUserDetailsModal() for profile information display
+    - Use expectRoleAssignmentInterface() for permission validation UI
+    - Write tests using expectUserStatusToggle() for account management
+    - Integrate with current frontend testing patterns and state management
     - _Requirements: 6.1_
 
 - [ ] 7. Frontend Profile Management System
-  - [ ] 7.1 Profile Creation and Onboarding
-    - Write tests for ProfileCreationModal with form validation
-    - Implement guest profile creation form with name, avatar, and about me fields
-    - Write tests for AccountUpgradeModal with email/password validation
-    - Implement full account upgrade flow with email verification
-    - Write tests for profile creation flow with localStorage and backend sync
-    - Add onboarding wizard for new users accessing maps
+  - [ ] 7.1 Profile Creation and Onboarding with component testing
+    - Write tests using component test patterns for ProfileCreationModal
+    - Use expectFormValidation() and expectGuestProfileCreation() patterns
+    - Write tests using expectAccountUpgradeFlow() for modal workflows
+    - Use expectEmailVerificationUI() for full account upgrade validation
+    - Write tests using expectLocalStorageSync() for profile persistence
+    - Integrate onboarding wizard with current frontend routing and state patterns
     - _Requirements: 1.1, 2.1, 4.1_
 
-  - [ ] 7.2 Profile Management Interface
-    - Write tests for ProfileSettingsPanel with account type-specific options
-    - Implement profile editing with role-based field restrictions
-    - Write tests for AvatarUpload component with image preview and validation
-    - Implement avatar upload with progress indication and error handling
-    - Write tests for password change functionality for full accounts
-    - Add email change workflow with verification for full accounts
+  - [ ] 7.2 Profile Management Interface with role-based testing
+    - Write tests using expectProfileSettingsAccess() for account type restrictions
+    - Use expectRoleBasedFieldRestrictions() for editing permission validation
+    - Write tests using expectAvatarUploadComponent() for image handling workflows
+    - Use expectProgressIndicationUI() and expectErrorHandlingDisplay() patterns
+    - Write tests using expectPasswordChangeWorkflow() for full account features
+    - Integrate with current form validation and state management patterns
     - _Requirements: 5.1, 8.1_
 
 - [ ] 8. Enhanced Avatar Display System
-  - [ ] 8.1 Real-time Avatar Rendering
-    - Write tests for enhanced AvatarData interface with user profile information
-    - Update MapContainer to display user avatars with profile images
-    - Write tests for avatar image loading with fallback to initials
-    - Implement avatar hover tooltips with user name and role
-    - Write tests for avatar click interaction showing user profile card
-    - Add real-time avatar updates when users change their profile images
+  - [ ] 8.1 Real-time Avatar Rendering with integration testing
+    - Write tests using enhanced AvatarData interface with current WebSocket patterns
+    - Use expectAvatarImageLoading() and expectInitialsFallback() for display logic
+    - Write tests using expectAvatarTooltipDisplay() for user information hover
+    - Use expectProfileCardInteraction() for click-based profile viewing
+    - Write tests using expectRealTimeAvatarUpdates() with WebSocket integration
+    - Integrate with current MapContainer and real-time update infrastructure
     - _Requirements: 3.1, 3.2_
 
-  - [ ] 8.2 Multi-User Avatar Management with Map Isolation
-    - Write tests for multiple user avatar display and positioning with map isolation
-    - Implement real-time avatar synchronization via WebSocket filtered by current map
-    - Write tests for avatar collision detection and positioning optimization
-    - Add user presence indicators (online/offline status) scoped to current map
-    - Write tests for avatar animation and smooth movement transitions
-    - Implement avatar clustering for crowded areas with map-specific grouping
+  - [ ] 8.2 Multi-User Avatar Management with WebSocket flow testing
+    - Write tests using newMultiUserAvatarScenario(t) for concurrent display
+    - Use expectMapIsolatedAvatarSync() with current WebSocket test infrastructure
+    - Write tests using expectAvatarCollisionDetection() for positioning logic
+    - Use expectPresenceIndicatorDisplay() for online/offline status per map
+    - Write tests using expectAvatarAnimationTransitions() for smooth movement
+    - Integrate avatar clustering with current map rendering and performance patterns
     - _Requirements: 3.1, 7.1, 8.1_
 
 - [ ] 9. Frontend State Management Enhancement
-  - [ ] 9.1 User Profile Store
-    - Write tests for userProfileStore with profile state management
-    - Implement profile store with localStorage and backend synchronization
-    - Write tests for profile update operations with optimistic updates
-    - Add authentication state management (login/logout/session)
-    - Write tests for role-based UI state management
-    - Implement profile data persistence and rehydration
+  - [ ] 9.1 User Profile Store with state testing patterns
+    - Write tests using store test patterns for userProfileStore state management
+    - Use expectLocalStorageSync() and expectBackendSynchronization() patterns
+    - Write tests using expectOptimisticUpdates() for profile modification workflows
+    - Use expectAuthenticationStateManagement() for login/logout state transitions
+    - Write tests using expectRoleBasedUIState() for permission-driven interface changes
+    - Integrate with current frontend state management and persistence patterns
     - _Requirements: 1.1, 2.1, 7.1_
 
-  - [ ] 9.2 Enhanced Session Store with Map Context
-    - Write tests for updated sessionStore with user profile and map context integration
-    - Update session management to work with user profiles and map isolation
-    - Write tests for multi-user session tracking and avatar display filtered by map
-    - Implement real-time user presence and activity tracking scoped to current map
-    - Write tests for session synchronization across browser tabs with map context
-    - Add offline profile management with sync queue and map state preservation
+  - [ ] 9.2 Enhanced Session Store with integration testing
+    - Write tests using enhanced sessionStore patterns with user profile integration
+    - Use expectMapContextIsolation() for session tracking per map
+    - Write tests using expectMultiUserSessionSync() with current WebSocket patterns
+    - Use expectPresenceTrackingPerMap() for real-time activity scoped to maps
+    - Write tests using expectCrossTabSynchronization() for browser tab coordination
+    - Integrate offline profile management with current sync queue infrastructure
     - _Requirements: 3.1, 4.1, 7.1, 8.1_
 
 - [ ] 10. WebSocket Real-time Profile Updates
-  - [ ] 10.1 Profile Update Broadcasting
-    - Write tests for profile update WebSocket events (profile_updated, avatar_changed)
-    - Implement real-time profile change broadcasting to connected users
-    - Write tests for user join/leave events with profile information
-    - Add real-time avatar image updates across all connected clients
-    - Write tests for role change notifications and UI updates
-    - Implement user status change broadcasting (online/offline, active/inactive)
+  - [ ] 10.1 Profile Update Broadcasting with WebSocket integration testing
+    - Write tests using current TestWebSocket infrastructure for profile events
+    - Use expectProfileUpdateBroadcast() and expectAvatarChangeBroadcast() patterns
+    - Write tests using expectUserJoinLeaveEvents() with profile information
+    - Use expectRealTimeAvatarSync() for cross-client image updates
+    - Write tests using expectRoleChangeNotifications() for permission updates
+    - Integrate user status broadcasting with current WebSocket message patterns
     - _Requirements: 3.1, 7.1_
 
-  - [ ] 10.2 Enhanced WebSocket Client
-    - Write tests for WebSocket client handling of profile-related events
-    - Update WebSocket client to process user profile updates
-    - Write tests for avatar synchronization and real-time display updates
-    - Implement connection state management with user authentication
-    - Write tests for reconnection handling with profile state restoration
-    - Add WebSocket message queuing for offline profile changes
+  - [ ] 10.2 Enhanced WebSocket Client with flow integration testing
+    - Write tests using current WebSocket client patterns for profile event handling
+    - Use expectProfileEventProcessing() for user profile update workflows
+    - Write tests using expectAvatarSynchronization() with real-time display updates
+    - Use expectAuthenticatedConnectionState() for user-aware connection management
+    - Write tests using expectReconnectionProfileRestore() for state recovery
+    - Integrate message queuing with current offline sync infrastructure patterns
     - _Requirements: 3.1, 4.1, 7.1_
 
 - [ ] 11. Security and Data Protection
-  - [ ] 11.1 Input Validation and Sanitization
-    - Write tests for comprehensive input validation on all profile fields
-    - Implement server-side validation for display names, emails, and about me text
-    - Write tests for avatar upload security (file type, size, malware scanning)
-    - Add XSS protection for user-generated content display
-    - Write tests for SQL injection prevention in user queries
-    - Implement rate limiting for profile creation and update operations
+  - [ ] 11.1 Input Validation and Sanitization with security testing
+    - Write tests using newSecurityScenario(t) for comprehensive input validation
+    - Use expectInputSanitization() and expectXSSPrevention() patterns
+    - Write tests using expectAvatarUploadSecurity() for file validation workflows
+    - Use expectSQLInjectionPrevention() with current database test patterns
+    - Write tests using expectRateLimitingEnforcement() for abuse prevention
+    - Integrate security validation with current middleware and service patterns
     - _Requirements: 8.1, 8.3_
 
-  - [ ] 11.2 Data Privacy and GDPR Compliance
-    - Write tests for user data export functionality
-    - Implement complete user data deletion (right to be forgotten)
-    - Write tests for data retention policies and automated cleanup
-    - Add privacy controls for profile visibility and data sharing
-    - Write tests for audit logging of sensitive operations
-    - Implement consent management for data processing
+  - [ ] 11.2 Data Privacy and GDPR Compliance with audit testing
+    - Write tests using expectUserDataExport() for data portability workflows
+    - Use expectDataDeletionCompliance() for right to be forgotten implementation
+    - Write tests using expectDataRetentionPolicies() for automated cleanup
+    - Use expectPrivacyControlEnforcement() for visibility and sharing controls
+    - Write tests using expectAuditLoggingCompliance() for sensitive operation tracking
+    - Integrate consent management with current authentication and authorization patterns
     - _Requirements: 8.1, 8.4_
 
 - [ ] 12. Integration Testing and System Validation
-  - [ ] 12.1 End-to-End User Flows
-    - Write E2E tests for complete new user onboarding (guest profile creation)
-    - Test full account upgrade workflow with email verification
-    - Write E2E tests for profile management across different account types
-    - Test multi-user avatar display and real-time synchronization
-    - Write E2E tests for admin user management workflows
-    - Test cross-device profile access and synchronization for full accounts
+  - [ ] 12.1 End-to-End User Flows with infrastructure integration testing
+    - Write E2E tests using current infrastructure flow patterns for user onboarding
+    - Use expectCompleteUserJourney() for guest profile to full account workflows
+    - Write E2E tests using expectMultiUserAvatarFlow() for real-time synchronization
+    - Use expectAdminManagementFlow() for user administration workflows
+    - Write E2E tests using expectCrossDeviceProfileSync() for full account access
+    - Integrate with current Database + Redis + WebSocket flow testing infrastructure
     - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1_
 
-  - [ ] 12.2 Performance and Load Testing
-    - Write load tests for concurrent user profile creation and updates
-    - Test avatar upload and serving performance under load
-    - Write performance tests for real-time avatar synchronization with many users
-    - Test database performance with large numbers of user profiles
-    - Write tests for WebSocket performance with profile update broadcasting
-    - Add monitoring for profile-related API response times and resource usage
+  - [ ] 12.2 Performance and Load Testing with infrastructure patterns
+    - Write load tests using current performance testing patterns for user operations
+    - Use expectConcurrentProfileOperations() for creation and update load testing
+    - Write performance tests using expectAvatarUploadPerformance() for file handling
+    - Use expectRealTimeAvatarSyncPerformance() with WebSocket load patterns
+    - Write tests using expectDatabasePerformanceWithUsers() for query optimization
+    - Integrate monitoring with current infrastructure performance tracking patterns
     - _Requirements: 3.1, 7.1_
 
 - [ ] 13. Production Deployment and Monitoring
-  - [ ] 13.1 Production Configuration
-    - Configure avatar storage with cloud provider (AWS S3, CloudFront CDN)
-    - Set up email service for verification and password reset (SendGrid, SES)
-    - Write tests for production environment configuration and health checks
-    - Configure database indexes and performance optimization for user queries
-    - Set up monitoring and alerting for user management system
-    - Add backup and disaster recovery procedures for user data
+  - [ ] 13.1 Production Configuration with infrastructure integration
+    - Configure avatar storage using current cloud infrastructure patterns
+    - Set up email service integration with current notification infrastructure
+    - Write tests using expectProductionConfigValidation() for environment setup
+    - Use expectDatabaseOptimization() for user query performance validation
+    - Write tests using expectMonitoringIntegration() for system health tracking
+    - Integrate backup procedures with current data protection infrastructure
     - _Requirements: 8.1, 8.4_
 
-  - [ ] 13.2 Security Hardening
-    - Implement comprehensive security headers and HTTPS enforcement
-    - Configure rate limiting and DDoS protection for user endpoints
-    - Write security tests for authentication and authorization systems
-    - Set up intrusion detection and security monitoring
-    - Implement secure session management and token handling
-    - Add security audit logging and compliance reporting
+  - [ ] 13.2 Security Hardening with current security patterns
+    - Implement security headers using current middleware and security infrastructure
+    - Configure rate limiting using established rate limiting patterns and infrastructure
+    - Write security tests using expectSecurityHardening() for authentication systems
+    - Use expectIntrusionDetection() for security monitoring integration
+    - Write tests using expectSecureSessionManagement() for token handling validation
+    - Integrate audit logging with current compliance and monitoring infrastructure
     - _Requirements: 8.1, 8.2, 8.3_

@@ -217,6 +217,116 @@ func (b *MapBuilder) Build() *models.Map {
 	return b.mapData
 }
 
+// UserBuilder provides a fluent interface for building User test data
+type UserBuilder struct {
+	user *models.User
+}
+
+// NewUser creates a User builder with default values
+func NewUser() *UserBuilder {
+	return &UserBuilder{
+		user: &models.User{
+			ID:          uuid.New().String(),
+			DisplayName: "Test User",
+			AccountType: models.AccountTypeFull,
+			Role:        models.UserRoleUser,
+			IsActive:    true,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		},
+	}
+}
+
+// WithID sets the user ID
+func (b *UserBuilder) WithID(id string) *UserBuilder {
+	b.user.ID = id
+	return b
+}
+
+// WithEmail sets the user email
+func (b *UserBuilder) WithEmail(email string) *UserBuilder {
+	b.user.Email = email
+	return b
+}
+
+// WithDisplayName sets the user display name
+func (b *UserBuilder) WithDisplayName(displayName string) *UserBuilder {
+	b.user.DisplayName = displayName
+	return b
+}
+
+// WithAvatarURL sets the user avatar URL
+func (b *UserBuilder) WithAvatarURL(avatarURL string) *UserBuilder {
+	b.user.AvatarURL = avatarURL
+	return b
+}
+
+// WithAboutMe sets the user about me text
+func (b *UserBuilder) WithAboutMe(aboutMe string) *UserBuilder {
+	b.user.AboutMe = aboutMe
+	return b
+}
+
+// WithAccountType sets the user account type
+func (b *UserBuilder) WithAccountType(accountType models.AccountType) *UserBuilder {
+	b.user.AccountType = accountType
+	return b
+}
+
+// WithRole sets the user role
+func (b *UserBuilder) WithRole(role models.UserRole) *UserBuilder {
+	b.user.Role = role
+	return b
+}
+
+// WithPasswordHash sets the user password hash
+func (b *UserBuilder) WithPasswordHash(passwordHash string) *UserBuilder {
+	b.user.PasswordHash = passwordHash
+	return b
+}
+
+// WithActive sets the user active status
+func (b *UserBuilder) WithActive(isActive bool) *UserBuilder {
+	b.user.IsActive = isActive
+	return b
+}
+
+// WithCreatedAt sets the user creation time
+func (b *UserBuilder) WithCreatedAt(createdAt time.Time) *UserBuilder {
+	b.user.CreatedAt = createdAt
+	return b
+}
+
+// WithUpdatedAt sets the user update time
+func (b *UserBuilder) WithUpdatedAt(updatedAt time.Time) *UserBuilder {
+	b.user.UpdatedAt = updatedAt
+	return b
+}
+
+// AsGuest configures the user as a guest account
+func (b *UserBuilder) AsGuest() *UserBuilder {
+	b.user.AccountType = models.AccountTypeGuest
+	b.user.Email = "" // Guests don't have email
+	return b
+}
+
+// AsAdmin configures the user as an admin
+func (b *UserBuilder) AsAdmin() *UserBuilder {
+	b.user.Role = models.UserRoleAdmin
+	return b
+}
+
+// AsSuperAdmin configures the user as a super admin
+func (b *UserBuilder) AsSuperAdmin() *UserBuilder {
+	b.user.Role = models.UserRoleSuperAdmin
+	return b
+}
+
+// Build returns the built User
+func (b *UserBuilder) Build() *models.User {
+	return b.user
+}
+
 // UUID utility functions
 
 // GenerateUUID creates a new UUID

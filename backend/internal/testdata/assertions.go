@@ -196,123 +196,167 @@ func (r *SessionResponse) GetMapID() string       { return r.MapID }
 func (r *SessionResponse) GetAvatarPos() models.LatLng { return r.AvatarPos }
 func (r *SessionResponse) GetIsActive() bool      { return r.IsActive }
 
-// Fluent assertion helpers for the new test infrastructure
-
-// FluentErrorResponseAssertion provides fluent assertions for error responses
-type FluentErrorResponseAssertion struct {
-	t        TestingT
-	response *ErrorResponse
-	status   int
+// UserAssertion provides fluent assertions for User models
+type UserAssertion struct {
+	t    TestingT
+	user *models.User
 }
 
-// AssertFluentErrorResponse creates a new fluent error response assertion
-func AssertFluentErrorResponse(t TestingT, response *ErrorResponse) *FluentErrorResponseAssertion {
+// AssertUser provides fluent assertions for User models
+func AssertUser(t TestingT, user *models.User) *UserAssertion {
 	t.Helper()
-	return &FluentErrorResponseAssertion{
-		t:        t,
-		response: response,
-	}
+	return &UserAssertion{t: t, user: user}
 }
 
-// HasCode asserts the error has the expected code
-func (a *FluentErrorResponseAssertion) HasCode(expectedCode string) *FluentErrorResponseAssertion {
+// HasID asserts the user has the expected ID
+func (a *UserAssertion) HasID(expectedID string) *UserAssertion {
 	a.t.Helper()
-	if a.response.Code != expectedCode {
-		a.t.Errorf("Expected error code %s, got %s", expectedCode, a.response.Code)
+	if a.user.ID != expectedID {
+		a.t.Errorf("Expected user ID %s, got %s", expectedID, a.user.ID)
 	}
 	return a
 }
 
-// HasMessage asserts the error has the expected message
-func (a *FluentErrorResponseAssertion) HasMessage(expectedMessage string) *FluentErrorResponseAssertion {
+// HasEmail asserts the user has the expected email
+func (a *UserAssertion) HasEmail(expectedEmail string) *UserAssertion {
 	a.t.Helper()
-	if a.response.Message != expectedMessage {
-		a.t.Errorf("Expected error message %s, got %s", expectedMessage, a.response.Message)
+	if a.user.Email != expectedEmail {
+		a.t.Errorf("Expected user email %s, got %s", expectedEmail, a.user.Email)
 	}
 	return a
 }
 
-// MessageContains asserts the error message contains the expected substring
-func (a *FluentErrorResponseAssertion) MessageContains(substring string) *FluentErrorResponseAssertion {
+// HasDisplayName asserts the user has the expected display name
+func (a *UserAssertion) HasDisplayName(expectedDisplayName string) *UserAssertion {
 	a.t.Helper()
-	if !contains(a.response.Message, substring) {
-		a.t.Errorf("Expected error message to contain %s, got %s", substring, a.response.Message)
+	if a.user.DisplayName != expectedDisplayName {
+		a.t.Errorf("Expected user display name %s, got %s", expectedDisplayName, a.user.DisplayName)
 	}
 	return a
 }
 
-// HasStatus asserts the HTTP status code
-func (a *FluentErrorResponseAssertion) HasStatus(expectedStatus int) *FluentErrorResponseAssertion {
+// HasAvatarURL asserts the user has the expected avatar URL
+func (a *UserAssertion) HasAvatarURL(expectedAvatarURL string) *UserAssertion {
 	a.t.Helper()
-	// Note: This would need to be set by the scenario when creating the assertion
-	// For now, we'll just store it for future use
-	a.status = expectedStatus
-	return a
-}
-
-// HasRetryAfter asserts the retry-after header value
-func (a *FluentErrorResponseAssertion) HasRetryAfter(expectedRetryAfter string) *FluentErrorResponseAssertion {
-	a.t.Helper()
-	// This would need to be implemented with access to HTTP headers
-	// For now, we'll assume it's correct
-	return a
-}
-
-// FluentPOIResponseAssertion provides fluent assertions for POI responses
-type FluentPOIResponseAssertion struct {
-	t   TestingT
-	poi *CreatePOIResponse
-}
-
-// AssertFluentPOIResponse creates a new fluent POI response assertion
-func AssertFluentPOIResponse(t TestingT, poi *CreatePOIResponse) *FluentPOIResponseAssertion {
-	t.Helper()
-	return &FluentPOIResponseAssertion{
-		t:   t,
-		poi: poi,
-	}
-}
-
-// HasName asserts the POI has the expected name
-func (a *FluentPOIResponseAssertion) HasName(expectedName string) *FluentPOIResponseAssertion {
-	a.t.Helper()
-	if a.poi.Name != expectedName {
-		a.t.Errorf("Expected POI name %s, got %s", expectedName, a.poi.Name)
+	if a.user.AvatarURL != expectedAvatarURL {
+		a.t.Errorf("Expected user avatar URL %s, got %s", expectedAvatarURL, a.user.AvatarURL)
 	}
 	return a
 }
 
-// HasDescription asserts the POI has the expected description
-func (a *FluentPOIResponseAssertion) HasDescription(expectedDescription string) *FluentPOIResponseAssertion {
+// HasAboutMe asserts the user has the expected about me text
+func (a *UserAssertion) HasAboutMe(expectedAboutMe string) *UserAssertion {
 	a.t.Helper()
-	if a.poi.Description != expectedDescription {
-		a.t.Errorf("Expected POI description %s, got %s", expectedDescription, a.poi.Description)
+	if a.user.AboutMe != expectedAboutMe {
+		a.t.Errorf("Expected user about me %s, got %s", expectedAboutMe, a.user.AboutMe)
 	}
 	return a
 }
 
-// HasPosition asserts the POI has the expected position
-func (a *FluentPOIResponseAssertion) HasPosition(expectedLat, expectedLng float64) *FluentPOIResponseAssertion {
+// HasAccountType asserts the user has the expected account type
+func (a *UserAssertion) HasAccountType(expectedAccountType models.AccountType) *UserAssertion {
 	a.t.Helper()
-	if a.poi.Position.Lat != expectedLat || a.poi.Position.Lng != expectedLng {
-		a.t.Errorf("Expected POI position (%f, %f), got (%f, %f)", 
-			expectedLat, expectedLng, a.poi.Position.Lat, a.poi.Position.Lng)
+	if a.user.AccountType != expectedAccountType {
+		a.t.Errorf("Expected user account type %s, got %s", expectedAccountType, a.user.AccountType)
 	}
 	return a
 }
 
-// HasMaxParticipants asserts the POI has the expected max participants
-func (a *FluentPOIResponseAssertion) HasMaxParticipants(expectedMax int) *FluentPOIResponseAssertion {
+// HasRole asserts the user has the expected role
+func (a *UserAssertion) HasRole(expectedRole models.UserRole) *UserAssertion {
 	a.t.Helper()
-	// Note: CreatePOIResponse doesn't have MaxParticipants field in current definition
-	// This would need to be added to the response type
+	if a.user.Role != expectedRole {
+		a.t.Errorf("Expected user role %s, got %s", expectedRole, a.user.Role)
+	}
 	return a
 }
 
-// HasCreator asserts the POI has the expected creator
-func (a *FluentPOIResponseAssertion) HasCreator(expectedCreator string) *FluentPOIResponseAssertion {
+// HasPassword asserts the user has a password set
+func (a *UserAssertion) HasPassword() *UserAssertion {
 	a.t.Helper()
-	// Note: CreatePOIResponse doesn't have CreatedBy field in current definition
-	// This would need to be added to the response type
+	if !a.user.HasPassword() {
+		a.t.Errorf("Expected user to have a password, but password hash is empty")
+	}
+	return a
+}
+
+// HasNoPassword asserts the user has no password set
+func (a *UserAssertion) HasNoPassword() *UserAssertion {
+	a.t.Helper()
+	if a.user.HasPassword() {
+		a.t.Errorf("Expected user to have no password, but password hash is set")
+	}
+	return a
+}
+
+// IsActive asserts the user is active
+func (a *UserAssertion) IsActive() *UserAssertion {
+	a.t.Helper()
+	if !a.user.IsActive {
+		a.t.Errorf("Expected user to be active, but user is inactive")
+	}
+	return a
+}
+
+// IsInactive asserts the user is inactive
+func (a *UserAssertion) IsInactive() *UserAssertion {
+	a.t.Helper()
+	if a.user.IsActive {
+		a.t.Errorf("Expected user to be inactive, but user is active")
+	}
+	return a
+}
+
+// IsGuest asserts the user is a guest account
+func (a *UserAssertion) IsGuest() *UserAssertion {
+	a.t.Helper()
+	if !a.user.IsGuest() {
+		a.t.Errorf("Expected user to be a guest account")
+	}
+	return a
+}
+
+// IsFull asserts the user is a full account
+func (a *UserAssertion) IsFull() *UserAssertion {
+	a.t.Helper()
+	if !a.user.IsFull() {
+		a.t.Errorf("Expected user to be a full account")
+	}
+	return a
+}
+
+// IsAdmin asserts the user has admin privileges
+func (a *UserAssertion) IsAdmin() *UserAssertion {
+	a.t.Helper()
+	if !a.user.IsAdmin() {
+		a.t.Errorf("Expected user to have admin privileges")
+	}
+	return a
+}
+
+// IsSuperAdmin asserts the user is a super admin
+func (a *UserAssertion) IsSuperAdmin() *UserAssertion {
+	a.t.Helper()
+	if !a.user.IsSuperAdmin() {
+		a.t.Errorf("Expected user to be a super admin")
+	}
+	return a
+}
+
+// HasCreatedAt asserts the user has a creation timestamp
+func (a *UserAssertion) HasCreatedAt() *UserAssertion {
+	a.t.Helper()
+	if a.user.CreatedAt.IsZero() {
+		a.t.Errorf("Expected user to have a creation timestamp")
+	}
+	return a
+}
+
+// HasUpdatedAt asserts the user has an update timestamp
+func (a *UserAssertion) HasUpdatedAt() *UserAssertion {
+	a.t.Helper()
+	if a.user.UpdatedAt.IsZero() {
+		a.t.Errorf("Expected user to have an update timestamp")
+	}
 	return a
 }
