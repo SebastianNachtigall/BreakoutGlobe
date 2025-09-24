@@ -1,0 +1,258 @@
+import React, { useState } from 'react';
+import { UserProfile } from '../types/models';
+import { createGuestProfile, APIError } from '../services/api';
+
+interface ProfileCreationModalProps {
+  isOpen: boolean;
+  onProfileCreated: (profile: UserProfile) => void;
+  onClose: () => void;
+}
+
+interface FormData {
+  displayName: string;
+  aboutMe: string;
+  avatarFile?: File;
+}
+
+interface FormErrors {
+  displayName?: string;
+  aboutMe?: string;
+  avatarFile?: string;
+  general?: string;
+}
+
+const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
+  isOpen,
+  onProfileCreated,
+  onClose,
+}) => {
+  const [formData, setFormData] = useState<FormData>({
+    displayName: '',
+    aboutMe: '',
+  });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
+
+    // Display name validation
+    if (!formData.displayName.trim()) {
+      newErrors.displayName = 'Display name is required';
+    } else if (formData.displayName.trim().length < 3) {
+      newErrors.displayName = 'Display name must be at least 3 characters';
+    } else if (formData.displayName.trim().length > 50) {
+      newErrors.displayName = 'Display name must be 50 characters or less';
+    }
+
+    // About me validation
+    if (formData.aboutMe.length > 500) {
+      newErrors.aboutMe = 'About me must be 500 characters or less';
+    }
+
+    // Avatar file validation
+    if (formData.avatarFile) {
+      const allowedTypes = ['image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(formData.avatarFile.type)) {
+        newErrors.avatarFile = 'Only JPG and PNG files are allowed';
+      } else if (formData.avatarFile.size > 2 * 1024 * 1024) { // 2MB
+        newErrors.avatarFile = 'File size must be less than 2MB';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    setErrors({});
+
+    try {
+      const profile = await createGuestProfile({
+        displayName: formData.displayName.trim(),
+        aboutMe: formData.aboutMe.trim() || undefined,
+        avatarFile: formData.avatarFile,
+      });
+
+      onProfileCreated(profile);
+    } catch (error) {
+      console.error('Failed to create profile:', error);
+      
+      if (error instanceof APIError) {
+        setErrors({ general: error.message });
+      } else {
+        setErrors({ general: 'Failed to create profile. Please try again.' });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setFormData(prev => ({ ...prev, avatarFile: file }));
+    
+    // Validate file immediately
+    if (file) {
+      const newErrors: FormErrors = {};
+      const allowedTypes = ['image/jpeg', 'image/png'];
+      
+      if (!allowedTypes.includes(file.type)) {
+        newErrors.avatarFile = 'Only JPG and PNG files are allowed';
+      } else if (file.size > 2 * 1024 * 1024) { // 2MB
+        newErrors.avatarFile = 'File size must be less than 2MB';
+      }
+      
+      setErrors(prev => ({ ...prev, avatarFile: newErrors.avatarFile }));
+    } else {
+      // Clear error when no file is selected
+      setErrors(prev => ({ ...prev, avatarFile: undefined }));
+    }
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      data-testid="modal-backdrop"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Create Your Profile
+          </h2>
+          <p className="text-gray-600">
+            Set up your profile to join the map and collaborate with others.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Display Name */}
+          <div>
+            <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
+              Display Name *
+            </label>
+            <input
+              type="text"
+              id="displayName"
+              value={formData.displayName}
+              onChange={(e) => handleInputChange('displayName', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.displayName ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Enter your display name"
+              maxLength={50}
+              disabled={isLoading}
+            />
+            {errors.displayName && (
+              <p className="mt-1 text-sm text-red-600">{errors.displayName}</p>
+            )}
+          </div>
+
+          {/* About Me */}
+          <div>
+            <label htmlFor="aboutMe" className="block text-sm font-medium text-gray-700 mb-1">
+              About Me
+            </label>
+            <textarea
+              id="aboutMe"
+              value={formData.aboutMe}
+              onChange={(e) => handleInputChange('aboutMe', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
+                errors.aboutMe ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Tell others about yourself (optional)"
+              rows={3}
+              maxLength={500}
+              disabled={isLoading}
+            />
+            <div className="flex justify-between items-center mt-1">
+              {errors.aboutMe && (
+                <p className="text-sm text-red-600">{errors.aboutMe}</p>
+              )}
+              <p className="text-sm text-gray-500 ml-auto">
+                {formData.aboutMe.length}/500
+              </p>
+            </div>
+          </div>
+
+          {/* Avatar Upload */}
+          <div>
+            <label htmlFor="avatarFile" className="block text-sm font-medium text-gray-700 mb-1">
+              Avatar Image
+            </label>
+            <input
+              type="file"
+              id="avatarFile"
+              accept="image/jpeg,image/png"
+              onChange={handleFileChange}
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.avatarFile ? 'border-red-500' : 'border-gray-300'
+              }`}
+              disabled={isLoading}
+            />
+            {errors.avatarFile && (
+              <p className="mt-1 text-sm text-red-600">{errors.avatarFile}</p>
+            )}
+            <p className="mt-1 text-sm text-gray-500">
+              Optional. JPG or PNG, max 2MB
+            </p>
+          </div>
+
+          {/* General Error */}
+          {errors.general && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{errors.general}</p>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Creating Profile...' : 'Create Profile'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default ProfileCreationModal;

@@ -37,6 +37,20 @@ export interface Map {
   updatedAt: Date
 }
 
+export interface UserProfile {
+  id: string
+  displayName: string
+  email?: string
+  avatarURL?: string
+  aboutMe?: string
+  accountType: 'guest' | 'full'
+  role: 'user' | 'admin' | 'superadmin'
+  isActive: boolean
+  emailVerified: boolean
+  createdAt: Date
+  lastActiveAt?: Date
+}
+
 // API response types (with string dates)
 export interface SessionAPI {
   id: string
@@ -68,6 +82,20 @@ export interface MapAPI {
   isActive: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface UserProfileAPI {
+  id: string
+  displayName: string
+  email?: string
+  avatarURL?: string
+  aboutMe?: string
+  accountType: 'guest' | 'full'
+  role: 'user' | 'admin' | 'superadmin'
+  isActive: boolean
+  emailVerified: boolean
+  createdAt: string
+  lastActiveAt?: string
 }
 
 // Validation result type
@@ -206,6 +234,14 @@ export function transformMapFromAPI(apiMap: MapAPI): Map {
     ...apiMap,
     createdAt: new Date(apiMap.createdAt),
     updatedAt: new Date(apiMap.updatedAt)
+  }
+}
+
+export function transformUserProfileFromAPI(apiProfile: UserProfileAPI): UserProfile {
+  return {
+    ...apiProfile,
+    createdAt: new Date(apiProfile.createdAt),
+    lastActiveAt: apiProfile.lastActiveAt ? new Date(apiProfile.lastActiveAt) : undefined
   }
 }
 
