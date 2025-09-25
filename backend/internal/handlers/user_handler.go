@@ -15,6 +15,7 @@ import (
 // UserServiceInterface defines the interface for user service operations
 type UserServiceInterface interface {
 	CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error)
+	GetUser(ctx context.Context, userID string) (*models.User, error)
 	UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error)
 }
 
@@ -38,6 +39,7 @@ func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
 	{
 		// User profile management
 		api.POST("/users/profile", h.CreateProfile)
+		api.GET("/users/profile", h.GetProfile)
 		api.POST("/users/avatar", h.UploadAvatar)
 	}
 }
@@ -209,6 +211,51 @@ func (h *UserHandler) UploadAvatar(c *gin.Context) {
 	h.addRateLimitHeaders(c, userID, services.ActionCreatePOI)
 	
 	// Return updated user profile
+	response := CreateProfileResponse{
+		ID:          user.ID,
+		DisplayName: user.DisplayName,
+		AccountType: string(user.AccountType),
+		Role:        string(user.Role),
+		IsActive:    user.IsActive,
+		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+		AvatarURL:   user.AvatarURL,
+	}
+	
+	c.JSON(http.StatusOK, response)
+}
+
+// GetProfile handles GET /api/users/profile
+func (h *UserHandler) GetProfile(c *gin.Context) {
+	// Get user ID from header (session-based user identification)
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    "UNAUTHORIZED",
+			Message: "User ID required",
+		})
+		return
+	}
+	
+	// Get user from service
+	user, err := h.userService.GetUser(c.Request.Context(), userID)
+	if err != nil {
+		if err.Error() == "user not found" {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Code:    "USER_NOT_FOUND",
+				Message: "User not found",
+			})
+			return
+		}
+		
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "INTERNAL_ERROR",
+			Message: "Failed to retrieve user profile",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Return user profile
 	response := CreateProfileResponse{
 		ID:          user.ID,
 		DisplayName: user.DisplayName,

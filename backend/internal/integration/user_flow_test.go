@@ -378,3 +378,86 @@ func TestUserProfileFlow_ErrorHandling(t *testing.T) {
 		assert.True(t, response2.Code == http.StatusCreated || response2.Code == http.StatusInternalServerError)
 	})
 }
+
+// TestUserProfileFlow_GetProfile tests profile retrieval functionality - Task 7
+func TestUserProfileFlow_GetProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping user profile retrieval integration test in short mode")
+	}
+
+	// Setup complete user integration environment
+	env := SetupUserFlowTest(t)
+	defer env.Cleanup()
+
+	ctx := context.Background()
+
+	t.Run("GetProfile_Success", func(t *testing.T) {
+		// First create a user
+		user := testdata.NewUser().
+			WithDisplayName("Profile Test User").
+			AsGuest().
+			WithEmail("profile-test@test.com").
+			WithAvatarURL("/api/users/avatar/test-avatar.jpg").
+			Build()
+
+		err := env.userRepository.Create(ctx, user)
+		require.NoError(t, err)
+
+		// Make GET request to retrieve profile
+		req := httptest.NewRequest(http.MethodGet, "/api/users/profile", nil)
+		req.Header.Set("X-User-ID", user.ID)
+		recorder := httptest.NewRecorder()
+		env.userRouter.ServeHTTP(recorder, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusOK, recorder.Code)
+
+		var profileResponse map[string]interface{}
+		err = json.Unmarshal(recorder.Body.Bytes(), &profileResponse)
+		require.NoError(t, err)
+
+		// Verify response structure
+		assert.Equal(t, user.ID, profileResponse["id"])
+		assert.Equal(t, "Profile Test User", profileResponse["displayName"])
+		assert.Equal(t, "guest", profileResponse["accountType"])
+		assert.Equal(t, "user", profileResponse["role"])
+		assert.Equal(t, true, profileResponse["isActive"])
+		assert.Equal(t, "/api/users/avatar/test-avatar.jpg", profileResponse["avatarUrl"])
+		assert.Contains(t, profileResponse, "createdAt")
+	})
+
+	t.Run("GetProfile_UserNotFound", func(t *testing.T) {
+		// Make GET request with non-existent user ID
+		req := httptest.NewRequest(http.MethodGet, "/api/users/profile", nil)
+		req.Header.Set("X-User-ID", "non-existent-user-id")
+		recorder := httptest.NewRecorder()
+		env.userRouter.ServeHTTP(recorder, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusNotFound, recorder.Code)
+
+		var errorResponse map[string]interface{}
+		err := json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+		require.NoError(t, err)
+
+		assert.Equal(t, "USER_NOT_FOUND", errorResponse["code"])
+		assert.Equal(t, "User not found", errorResponse["message"])
+	})
+
+	t.Run("GetProfile_MissingUserID", func(t *testing.T) {
+		// Make GET request without X-User-ID header
+		req := httptest.NewRequest(http.MethodGet, "/api/users/profile", nil)
+		recorder := httptest.NewRecorder()
+		env.userRouter.ServeHTTP(recorder, req)
+
+		// Verify response
+		assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+
+		var errorResponse map[string]interface{}
+		err := json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
+		require.NoError(t, err)
+
+		assert.Equal(t, "UNAUTHORIZED", errorResponse["code"])
+		assert.Equal(t, "User ID required", errorResponse["message"])
+	})
+}

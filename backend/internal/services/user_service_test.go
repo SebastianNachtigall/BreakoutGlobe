@@ -302,6 +302,96 @@ func indexOfSubstring(s, substr string) int {
 	return -1
 }
 
+// GetUser tests - Task 7
+
+func TestUserService_GetUser_Success(t *testing.T) {
+	scenario := newUserServiceTestScenario(t)
+	defer scenario.cleanup()
+	
+	userID := "test-user-123"
+	expectedUser := &models.User{
+		ID:          userID,
+		DisplayName: "Test User",
+		AccountType: models.AccountTypeGuest,
+		Role:        models.UserRoleUser,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+	}
+	
+	// Setup expectations using established patterns
+	scenario.expectUserRetrievalSuccess(userID, expectedUser)
+	
+	// Execute operation
+	user, err := scenario.service.GetUser(context.Background(), userID)
+	
+	// Verify results using established patterns
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+		return
+	}
+	
+	if user == nil {
+		t.Error("Expected user, got nil")
+		return
+	}
+	
+	if user.ID != expectedUser.ID {
+		t.Errorf("Expected ID %s, got %s", expectedUser.ID, user.ID)
+	}
+	if user.DisplayName != expectedUser.DisplayName {
+		t.Errorf("Expected DisplayName %s, got %s", expectedUser.DisplayName, user.DisplayName)
+	}
+}
+
+func TestUserService_GetUser_UserNotFound(t *testing.T) {
+	scenario := newUserServiceTestScenario(t)
+	defer scenario.cleanup()
+	
+	userID := "non-existent-user"
+	
+	// Setup expectations for user not found
+	scenario.expectUserRetrievalError(userID, errors.New("record not found"))
+	
+	// Execute operation
+	user, err := scenario.service.GetUser(context.Background(), userID)
+	
+	// Verify error response
+	if err == nil {
+		t.Error("Expected error, got nil")
+		return
+	}
+	
+	if user != nil {
+		t.Error("Expected nil user, got user")
+	}
+	
+	if err.Error() != "user not found" {
+		t.Errorf("Expected 'user not found' error, got %s", err.Error())
+	}
+}
+
+func TestUserService_GetUser_EmptyUserID(t *testing.T) {
+	scenario := newUserServiceTestScenario(t)
+	defer scenario.cleanup()
+	
+	// Execute operation with empty user ID
+	user, err := scenario.service.GetUser(context.Background(), "")
+	
+	// Verify error response
+	if err == nil {
+		t.Error("Expected error, got nil")
+		return
+	}
+	
+	if user != nil {
+		t.Error("Expected nil user, got user")
+	}
+	
+	if err.Error() != "user ID cannot be empty" {
+		t.Errorf("Expected 'user ID cannot be empty' error, got %s", err.Error())
+	}
+}
+
 // MockUserRepository for testing - follows established patterns
 type MockUserRepository struct {
 	mock.Mock

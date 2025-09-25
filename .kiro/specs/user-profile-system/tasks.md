@@ -68,7 +68,7 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Re-enable full test suite execution for commits
   - _Technical Debt: Created after commit 24451e3 with SKIP_TESTS=true_
 
-- [ ] 7. Add profile retrieval endpoint for persistence
+- [-] 7. Add profile retrieval endpoint for persistence
   - Write tests using newUserHandlerScenario(t) for GET /api/users/profile
   - Implement GET /api/users/profile endpoint to retrieve existing profiles
   - Use expectProfileRetrievalSuccess() for profile lookup workflows

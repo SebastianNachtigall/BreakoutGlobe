@@ -44,6 +44,20 @@ func (s *UserService) CreateGuestProfile(ctx context.Context, displayName string
 	return user, nil
 }
 
+// GetUser retrieves a user by ID
+func (s *UserService) GetUser(ctx context.Context, userID string) (*models.User, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("user ID cannot be empty")
+	}
+	
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+	
+	return user, nil
+}
+
 // UploadAvatar uploads an avatar image for a user
 func (s *UserService) UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error) {
 	// Get existing user

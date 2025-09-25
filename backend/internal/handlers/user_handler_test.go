@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -525,4 +526,130 @@ func (m *MockUserService) UploadAvatar(ctx context.Context, userID string, filen
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.User), args.Error(1)
+}
+
+// Profile Retrieval Tests - Task 7
+
+// ExpectProfileRetrievalSuccess sets up the user service to successfully retrieve a profile
+func (s *UserTestScenario) ExpectProfileRetrievalSuccess(expectedUser *models.User) *UserTestScenario {
+	s.mockUserService.On("GetUser", mock.Anything, expectedUser.ID).Return(expectedUser, nil)
+	return s
+}
+
+// ExpectProfileRetrievalError sets up the user service to return an error during profile retrieval
+func (s *UserTestScenario) ExpectProfileRetrievalError(userID string, err error) *UserTestScenario {
+	s.mockUserService.On("GetUser", mock.Anything, userID).Return(nil, err)
+	return s
+}
+
+// GetProfile executes a profile retrieval request and returns the response
+func (s *UserTestScenario) GetProfile(t *testing.T, userID string) *httptest.ResponseRecorder {
+	t.Helper()
+	
+	req := httptest.NewRequest(http.MethodGet, "/api/users/profile", nil)
+	req.Header.Set("X-User-ID", userID) // Session-based user identification
+	recorder := httptest.NewRecorder()
+	
+	s.router.ServeHTTP(recorder, req)
+	return recorder
+}
+
+func TestGetProfile_Success(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+	
+	// Create expected user using builder pattern
+	expectedUser := &models.User{
+		ID:          "test-user-123",
+		DisplayName: "Test User",
+		AccountType: models.AccountTypeGuest,
+		Role:        models.UserRoleUser,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+	}
+	
+	// Setup expectations using fluent API
+	scenario.ExpectProfileRetrievalSuccess(expectedUser)
+	
+	// Execute request
+	response := scenario.GetProfile(t, expectedUser.ID)
+	
+	// Verify response
+	if response.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			http.StatusOK, response.Code, response.Body.String())
+		return
+	}
+	
+	// Parse and verify response body
+	var profileResponse CreateProfileResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &profileResponse); err != nil {
+		t.Errorf("Failed to parse response: %v. Body: %s", err, response.Body.String())
+		return
+	}
+	
+	// Verify profile data
+	if profileResponse.ID != expectedUser.ID {
+		t.Errorf("Expected ID %s, got %s", expectedUser.ID, profileResponse.ID)
+	}
+	if profileResponse.DisplayName != expectedUser.DisplayName {
+		t.Errorf("Expected DisplayName %s, got %s", expectedUser.DisplayName, profileResponse.DisplayName)
+	}
+	if profileResponse.AccountType != string(expectedUser.AccountType) {
+		t.Errorf("Expected AccountType %s, got %s", expectedUser.AccountType, profileResponse.AccountType)
+	}
+}
+
+func TestGetProfile_UserNotFound(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+	
+	userID := "non-existent-user"
+	
+	// Setup expectations for user not found
+	scenario.ExpectProfileRetrievalError(userID, errors.New("user not found"))
+	
+	// Execute request
+	response := scenario.GetProfile(t, userID)
+	
+	// Verify error response
+	if response.Code != http.StatusNotFound {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			http.StatusNotFound, response.Code, response.Body.String())
+	}
+}
+
+func TestGetProfile_MissingUserID(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+	
+	// Execute request without X-User-ID header
+	req := httptest.NewRequest(http.MethodGet, "/api/users/profile", nil)
+	recorder := httptest.NewRecorder()
+	scenario.router.ServeHTTP(recorder, req)
+	
+	// Verify error response
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestGetProfile_ServiceError(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+	
+	userID := "test-user-123"
+	
+	// Setup expectations for service error
+	scenario.ExpectProfileRetrievalError(userID, errors.New("database connection failed"))
+	
+	// Execute request
+	response := scenario.GetProfile(t, userID)
+	
+	// Verify error response
+	if response.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			http.StatusInternalServerError, response.Code, response.Body.String())
+	}
 }
