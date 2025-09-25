@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+// Import CSS for proper styling in tests
+import '../index.css'
 
 // Mock MapLibre GL
 vi.mock('maplibre-gl', () => ({

@@ -75,6 +75,17 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Add session-based user identification for profile persistence
   - _Requirements: 7.1, 7.2_
 
+- [ ] 7.2. Fix avatar visibility issue on map (Critical Bug Fix)
+  - **Issue**: Guest user avatars with initials are generated correctly but not visible on map
+  - **Root Cause**: MapLibre markers need explicit CSS positioning (position: absolute, z-index)
+  - **Evidence**: Tests show elements created with correct classes but missing computed styles
+  - Add explicit CSS positioning to marker elements in createMarkerElement()
+  - Set markerElement.style.position = 'absolute' and markerElement.style.zIndex = '1000'
+  - Add CSS fallbacks for Tailwind classes (width: 32px, height: 32px for w-8 h-8)
+  - Write tests to verify avatar visibility with proper positioning
+  - Test both initials-based and image-based avatars for consistent styling
+  - _Requirements: 3.1, 3.3 - Critical for guest user experience_
+
 - [ ] 8. Add localStorage sync for guest profiles
   - Write tests using expectLocalStorageSync() for profile persistence patterns
   - Create userProfileStore with localStorage backup for guest profiles

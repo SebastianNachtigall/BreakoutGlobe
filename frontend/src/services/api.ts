@@ -32,14 +32,12 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function createGuestProfile(request: CreateGuestProfileRequest): Promise<UserProfile> {
-  // For now, send JSON data (avatar upload will be added later)
+  // First create the profile
   const requestBody = {
     displayName: request.displayName,
     accountType: 'guest', // Required by backend
     aboutMe: request.aboutMe || ''
   };
-
-  console.log('🚀 Creating profile with data:', requestBody);
 
   const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
     method: 'POST',
@@ -49,8 +47,34 @@ export async function createGuestProfile(request: CreateGuestProfileRequest): Pr
     body: JSON.stringify(requestBody),
   });
 
-  const apiProfile = await handleResponse<UserProfileAPI>(response);
-  return transformUserProfileFromAPI(apiProfile);
+  let profile = await handleResponse<UserProfileAPI>(response);
+  let transformedProfile = transformUserProfileFromAPI(profile);
+
+  // If avatar file is provided, upload it after profile creation
+  if (request.avatarFile) {
+    try {
+      // Set the user ID header for the avatar upload
+      const formData = new FormData();
+      formData.append('avatar', request.avatarFile);
+
+      const avatarResponse = await fetch(`${API_BASE_URL}/api/users/avatar`, {
+        method: 'POST',
+        headers: {
+          'X-User-ID': transformedProfile.id, // Backend expects user ID in header
+        },
+        body: formData,
+      });
+
+      const updatedProfile = await handleResponse<UserProfileAPI>(avatarResponse);
+      transformedProfile = transformUserProfileFromAPI(updatedProfile);
+    } catch (error) {
+      console.warn('Avatar upload failed, but profile was created:', error);
+      // Don't fail the entire profile creation if avatar upload fails
+      // The user can upload an avatar later
+    }
+  }
+
+  return transformedProfile;
 }
 
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {

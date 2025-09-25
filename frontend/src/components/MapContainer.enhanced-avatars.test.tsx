@@ -101,6 +101,48 @@ describe('MapContainer - Enhanced Avatar Display', () => {
       expect(markerElement.textContent).toBe('JD'); // John Doe initials
     });
 
+    it('should display visually styled initials for guest profiles without avatars', async () => {
+      const avatarsWithProfiles: EnhancedAvatarData[] = [
+        {
+          sessionId: 'session-1',
+          userId: 'user-1',
+          displayName: 'ANewProfile1',
+          position: { lat: 40.7128, lng: -74.0060 },
+          isCurrentUser: false,
+          role: 'user'
+        }
+      ];
+
+      render(<MapContainer avatars={avatarsWithProfiles} />);
+
+      await waitFor(() => {
+        expect(mockMarker.getElement).toHaveBeenCalled();
+      });
+
+      // Check that marker element contains correct initials
+      const markerElement = mockMarker.getElement();
+      expect(markerElement.textContent).toBe('AN'); // ANewProfile1 initials
+      
+      // CRITICAL: Check that initials are visually styled and visible
+      expect(markerElement.className).toContain('text-white'); // Text should be white
+      expect(markerElement.className).toContain('text-xs'); // Text should have size
+      expect(markerElement.className).toContain('font-bold'); // Text should be bold
+      expect(markerElement.className).toContain('flex'); // Should use flexbox for centering
+      expect(markerElement.className).toContain('items-center'); // Should center vertically
+      expect(markerElement.className).toContain('justify-center'); // Should center horizontally
+      expect(markerElement.className).toContain('bg-gray-500'); // Should have background color
+      expect(markerElement.className).toContain('w-8'); // Should have width
+      expect(markerElement.className).toContain('h-8'); // Should have height
+      
+      // Verify no image element exists (should be text only)
+      expect(markerElement.querySelector('img')).toBeNull();
+      
+      // Verify the element is not empty or hidden
+      expect(markerElement.textContent).not.toBe('');
+      expect(markerElement.style.display).not.toBe('none');
+      expect(markerElement.style.visibility).not.toBe('hidden');
+    });
+
     it('should show display name on hover', async () => {
       const avatarsWithProfiles: EnhancedAvatarData[] = [
         {

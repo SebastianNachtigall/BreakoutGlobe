@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { MapContainer, AvatarData, POIData } from './components/MapContainer'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { NotificationCenter } from './components/NotificationCenter'
@@ -380,7 +380,8 @@ function App() {
   }, [])
 
   // Convert session state to avatar data for MapContainer
-  const avatars: AvatarData[] = [
+  // CRITICAL: Memoize avatars array to prevent unnecessary re-renders and marker recreation
+  const avatars: AvatarData[] = useMemo(() => [
     {
       sessionId: sessionState.sessionId || 'current-user',
       userId: userProfile?.id,
@@ -392,7 +393,17 @@ function App() {
       role: userProfile?.role
     }
     // TODO: Add other users' avatars from real-time updates
-  ]
+  ], [
+    sessionState.sessionId,
+    userProfile?.id,
+    userProfile?.displayName,
+    userProfile?.avatarURL,
+    sessionState.avatarPosition,
+    sessionState.isMoving,
+    userProfile?.role
+  ])
+
+
 
   // Show loading screen while checking for profile
   if (!profileCheckComplete) {

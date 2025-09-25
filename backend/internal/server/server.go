@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -55,7 +57,7 @@ func New(cfg *config.Config) *Server {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID"},
 		AllowCredentials: true,
 	}))
 	
@@ -102,6 +104,9 @@ func (s *Server) setupRoutes() {
 		
 		// User profile endpoints with proper handlers
 		s.setupUserRoutes(api)
+		
+		// Serve uploaded avatar files
+		api.GET("/users/avatar/:filename", s.serveAvatar)
 	}
 	
 	// WebSocket endpoint (simple echo for now)
@@ -487,6 +492,27 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 			break
 		}
 	}
+}
+
+// serveAvatar serves uploaded avatar files
+func (s *Server) serveAvatar(c *gin.Context) {
+	filename := c.Param("filename")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "filename is required"})
+		return
+	}
+	
+	// Construct file path
+	filePath := filepath.Join("uploads", "avatars", filename)
+	
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "avatar not found"})
+		return
+	}
+	
+	// Serve the file
+	c.File(filePath)
 }
 
 // Simple user profile handlers for testing

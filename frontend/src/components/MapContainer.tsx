@@ -145,6 +145,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     markerElement.title = avatar.displayName || avatar.sessionId;
 
     // Handle avatar image or initials
+
     if (avatar.avatarURL) {
       // Show loading state initially
       markerElement.classList.add('animate-pulse');
@@ -162,14 +163,17 @@ export const MapContainer: React.FC<MapContainerProps> = ({
       
       avatarImg.onerror = () => {
         markerElement.classList.remove('animate-pulse');
-        markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+        const initials = generateInitials(avatar.displayName, avatar.sessionId);
+        markerElement.textContent = initials;
       };
       
       // Set initial fallback while loading
-      markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+      const initialInitials = generateInitials(avatar.displayName, avatar.sessionId);
+      markerElement.textContent = initialInitials;
     } else {
       // Display initials
-      markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+      const initials = generateInitials(avatar.displayName, avatar.sessionId);
+      markerElement.textContent = initials;
     }
 
     // Add click handler for profile card
@@ -188,6 +192,15 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     markerElement.style.pointerEvents = 'auto';
     // CRITICAL: Only allow hover transitions, no position transitions
     markerElement.style.transition = 'transform 0.2s ease'; // Only for hover scale
+
+    // CRITICAL FIX: Add explicit positioning for MapLibre markers
+    markerElement.style.position = 'absolute';
+    markerElement.style.zIndex = '1000';
+    
+    // Add explicit dimensions and styling as fallback for Tailwind classes
+    markerElement.style.width = '32px';  // w-8
+    markerElement.style.height = '32px'; // h-8
+    markerElement.style.borderRadius = '50%'; // rounded-full
 
     return markerElement;
   }, [generateInitials, onAvatarClick]);

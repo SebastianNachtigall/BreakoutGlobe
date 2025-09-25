@@ -88,7 +88,7 @@ export interface UserProfileAPI {
   id: string
   displayName: string
   email?: string
-  avatarURL?: string
+  avatarUrl?: string  // Note: backend uses lowercase 'u'
   aboutMe?: string
   accountType: 'guest' | 'full'
   role: 'user' | 'admin' | 'superadmin'
@@ -238,11 +238,19 @@ export function transformMapFromAPI(apiMap: MapAPI): Map {
 }
 
 export function transformUserProfileFromAPI(apiProfile: UserProfileAPI): UserProfile {
+  // Convert relative avatar URL to absolute URL
+  let avatarURL = apiProfile.avatarUrl;
+  if (avatarURL && !avatarURL.startsWith('http')) {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+    avatarURL = `${API_BASE_URL}${avatarURL}`;
+  }
+
   return {
     ...apiProfile,
+    avatarURL: avatarURL, // Transform avatarUrl to avatarURL with absolute URL
     createdAt: new Date(apiProfile.createdAt),
     lastActiveAt: apiProfile.lastActiveAt ? new Date(apiProfile.lastActiveAt) : undefined
-  }
+  };
 }
 
 // Utility functions for coordinate operations
