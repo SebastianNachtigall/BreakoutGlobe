@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -494,7 +495,13 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 	}
 }
 
-// serveAvatar serves uploaded avatar files
+// serveAvatar serves uploaded avatar files with comprehensive security validation
+// Implements secure file serving with:
+// - Path traversal attack prevention
+// - File type validation (only images)
+// - File size limits
+// - Proper caching headers
+// - MIME type detection
 func (s *Server) serveAvatar(c *gin.Context) {
 	filename := c.Param("filename")
 	if filename == "" {
@@ -502,13 +509,60 @@ func (s *Server) serveAvatar(c *gin.Context) {
 		return
 	}
 	
-	// Construct file path
+	// Security validation: prevent path traversal attacks
+	// Check for various path traversal patterns
+	if strings.Contains(filename, "..") || 
+	   strings.Contains(filename, "/") || 
+	   strings.Contains(filename, `\`) ||
+	   strings.Contains(filename, "%2e%2e") || // URL encoded ..
+	   strings.Contains(filename, "%2f") ||    // URL encoded /
+	   strings.Contains(filename, "%5c") {     // URL encoded \
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
+		return
+	}
+	
+	// Validate file extension (only allow image files)
+	ext := strings.ToLower(filepath.Ext(filename))
+	allowedExtensions := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+	}
+	if !allowedExtensions[ext] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file type"})
+		return
+	}
+	
+	// Construct file path (safe after validation)
 	filePath := filepath.Join("uploads", "avatars", filename)
 	
 	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+	fileInfo, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "avatar not found"})
 		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "file access error"})
+		return
+	}
+	
+	// Check file size (max 2MB for serving)
+	if fileInfo.Size() > 2*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large"})
+		return
+	}
+	
+	// Set proper cache headers for avatar files
+	c.Header("Cache-Control", "public, max-age=3600") // Cache for 1 hour
+	c.Header("ETag", fmt.Sprintf(`"%d-%d"`, fileInfo.Size(), fileInfo.ModTime().Unix()))
+	
+	// Set content type based on file extension
+	switch ext {
+	case ".jpg", ".jpeg":
+		c.Header("Content-Type", "image/jpeg")
+	case ".png":
+		c.Header("Content-Type", "image/png")
 	}
 	
 	// Serve the file
