@@ -59,6 +59,7 @@ type CreateProfileResponse struct {
 	Role        string `json:"role"`
 	IsActive    bool   `json:"isActive"`
 	CreatedAt   string `json:"createdAt"`
+	AvatarURL   string `json:"avatarUrl,omitempty"`
 }
 
 // CreateProfile handles POST /api/users/profile
@@ -215,6 +216,7 @@ func (h *UserHandler) UploadAvatar(c *gin.Context) {
 		Role:        string(user.Role),
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+		AvatarURL:   user.AvatarURL,
 	}
 	
 	c.JSON(http.StatusOK, response)

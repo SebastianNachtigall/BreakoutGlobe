@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"breakoutglobe/internal/interfaces"
 	"breakoutglobe/internal/models"
 	"github.com/stretchr/testify/mock"
 )
@@ -305,6 +306,9 @@ func indexOfSubstring(s, substr string) int {
 type MockUserRepository struct {
 	mock.Mock
 }
+
+// Ensure MockUserRepository implements the interface
+var _ interfaces.UserRepositoryInterface = (*MockUserRepository)(nil)
 
 func (m *MockUserRepository) Create(ctx context.Context, user *models.User) error {
 	args := m.Called(ctx, user)

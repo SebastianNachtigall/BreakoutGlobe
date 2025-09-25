@@ -3,6 +3,7 @@ package repository
 import (
 	"testing"
 
+	"breakoutglobe/internal/interfaces"
 	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/testdata"
 )
@@ -12,7 +13,7 @@ import (
 // UserRepositoryTestScenario provides scenario-based testing for UserRepository using established patterns
 type UserRepositoryTestScenario struct {
 	t          *testing.T
-	repository UserRepositoryInterface
+	repository interfaces.UserRepositoryInterface
 	db         *testdata.TestDB
 }
 

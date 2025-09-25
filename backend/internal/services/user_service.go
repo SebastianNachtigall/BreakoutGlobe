@@ -7,17 +7,17 @@ import (
 	"path/filepath"
 	"time"
 
+	"breakoutglobe/internal/interfaces"
 	"breakoutglobe/internal/models"
-	"breakoutglobe/internal/repository"
 )
 
 // UserService handles user-related business logic
 type UserService struct {
-	userRepo repository.UserRepositoryInterface
+	userRepo interfaces.UserRepositoryInterface
 }
 
 // NewUserService creates a new UserService instance
-func NewUserService(userRepo repository.UserRepositoryInterface) *UserService {
+func NewUserService(userRepo interfaces.UserRepositoryInterface) *UserService {
 	return &UserService{
 		userRepo: userRepo,
 	}

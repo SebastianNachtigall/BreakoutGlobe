@@ -4,24 +4,18 @@ import (
 	"context"
 	"fmt"
 
+	"breakoutglobe/internal/interfaces"
 	"breakoutglobe/internal/models"
 	"gorm.io/gorm"
 )
 
-// UserRepositoryInterface defines the interface for user data operations
-type UserRepositoryInterface interface {
-	Create(ctx context.Context, user *models.User) error
-	GetByID(ctx context.Context, id string) (*models.User, error)
-	Update(ctx context.Context, user *models.User) error
-}
-
-// userRepository implements UserRepository interface
+// userRepository implements UserRepositoryInterface
 type userRepository struct {
 	db *gorm.DB
 }
 
 // NewUserRepository creates a new user repository
-func NewUserRepository(db *gorm.DB) UserRepositoryInterface {
+func NewUserRepository(db *gorm.DB) interfaces.UserRepositoryInterface {
 	return &userRepository{
 		db: db,
 	}

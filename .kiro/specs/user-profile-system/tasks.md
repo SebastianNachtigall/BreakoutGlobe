@@ -47,12 +47,19 @@ This implementation plan uses a **vertical slice approach** to deliver working f
 
 ### Slice 2: Avatar Upload & Profile Persistence (Complete Avatar Experience)
 
-- [ ] 6. Add basic avatar upload functionality
+- [x] 6. Add basic avatar upload functionality
   - Extend User model with AvatarURL field and update migration
   - Write tests using newAvatarScenario(t) for basic upload workflows
   - Implement POST /api/users/avatar endpoint with file validation
   - Use expectFileUploadValidation() for size and type checking (max 2MB, JPG/PNG)
   - _Requirements: 1.3, 3.1_
+
+- [x] 6.1. Fix import cycle in repository tests (Tech Debt)
+  - Resolve services ↔ testdata ↔ repository import cycle
+  - Re-enable user repository tests that were disabled
+  - Refactor testdata package to avoid circular dependencies
+  - Ensure all repository tests pass with proper isolation
+  - _Technical Debt: Critical for test infrastructure integrity_
 
 - [ ] 7. Add profile retrieval endpoint for persistence
   - Write tests using newUserHandlerScenario(t) for GET /api/users/profile
