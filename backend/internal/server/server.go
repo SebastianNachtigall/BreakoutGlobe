@@ -69,6 +69,12 @@ func (s *Server) setupRoutes() {
 		api.POST("/pois", s.createPOI)
 		api.POST("/pois/:poiId/join", s.joinPOI)
 		api.POST("/pois/:poiId/leave", s.leavePOI)
+		
+		// Simple user profile endpoints for testing
+		api.GET("/users/profile", s.getUserProfile)
+		api.POST("/users/profile", s.createUserProfile)
+		api.PUT("/users/profile", s.updateUserProfile)
+		api.POST("/users/avatar", s.uploadAvatar)
 	}
 	
 	// WebSocket endpoint (simple echo for now)
@@ -305,4 +311,81 @@ func (s *Server) handleWebSocket(c *gin.Context) {
 			break
 		}
 	}
+}
+
+// Simple user profile handlers for testing
+
+func (s *Server) getUserProfile(c *gin.Context) {
+	// For testing, return 404 to trigger profile creation
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": "Profile not found",
+	})
+}
+
+func (s *Server) createUserProfile(c *gin.Context) {
+	var req struct {
+		DisplayName string `json:"displayName"`
+		AboutMe     string `json:"aboutMe"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	// Generate a simple user profile response
+	profile := gin.H{
+		"id":            "user-" + req.DisplayName,
+		"displayName":   req.DisplayName,
+		"aboutMe":       req.AboutMe,
+		"accountType":   "guest",
+		"role":          "user",
+		"isActive":      true,
+		"emailVerified": false,
+		"createdAt":     "2024-01-01T00:00:00Z",
+	}
+	
+	c.JSON(http.StatusCreated, profile)
+}
+
+func (s *Server) updateUserProfile(c *gin.Context) {
+	var req struct {
+		DisplayName string `json:"displayName"`
+		AboutMe     string `json:"aboutMe"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	// Return updated profile
+	profile := gin.H{
+		"id":            "user-" + req.DisplayName,
+		"displayName":   req.DisplayName,
+		"aboutMe":       req.AboutMe,
+		"accountType":   "guest",
+		"role":          "user",
+		"isActive":      true,
+		"emailVerified": false,
+		"createdAt":     "2024-01-01T00:00:00Z",
+	}
+	
+	c.JSON(http.StatusOK, profile)
+}
+
+func (s *Server) uploadAvatar(c *gin.Context) {
+	// For testing, just return success without actually handling the file
+	profile := gin.H{
+		"id":            "user-test",
+		"displayName":   "Test User",
+		"avatarURL":     "https://via.placeholder.com/128",
+		"accountType":   "guest",
+		"role":          "user",
+		"isActive":      true,
+		"emailVerified": false,
+		"createdAt":     "2024-01-01T00:00:00Z",
+	}
+	
+	c.JSON(http.StatusOK, profile)
 }

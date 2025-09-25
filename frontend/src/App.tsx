@@ -5,10 +5,13 @@ import { NotificationCenter } from './components/NotificationCenter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
+import ProfileCreationModal from './components/ProfileCreationModal'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
+import { getCurrentUserProfile } from './services/api'
+import type { UserProfile } from './types/models'
 
 // Mock data for development
 const mockSession = {
@@ -31,6 +34,11 @@ function App() {
   const [showPOICreation, setShowPOICreation] = useState(false)
   const [poiCreationPosition, setPOICreationPosition] = useState<{ lat: number; lng: number } | null>(null)
   
+  // Profile system state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [showProfileCreation, setShowProfileCreation] = useState(false)
+  const [profileCheckComplete, setProfileCheckComplete] = useState(false)
+  
   const initializationRef = useRef(false)
 
   // Initialize session and WebSocket connection
@@ -40,6 +48,32 @@ function App() {
 
     const initializeApp = async () => {
       try {
+        // Check if user has a profile first
+        try {
+          const profile = await getCurrentUserProfile()
+          if (profile) {
+            console.info('✅ User profile found:', profile.displayName)
+            setUserProfile(profile)
+            setProfileCheckComplete(true)
+          } else {
+            // No profile exists, show profile creation modal
+            console.info('ℹ️ No user profile found - showing profile creation modal')
+            setShowProfileCreation(true)
+            setProfileCheckComplete(true)
+            return // Don't continue initialization until profile is created
+          }
+        } catch (error) {
+          // Handle 404 as expected behavior for new users
+          if (error instanceof Error && error.message.includes('404')) {
+            console.info('ℹ️ New user detected - showing profile creation modal')
+          } else {
+            console.info('ℹ️ No existing profile found - showing profile creation modal')
+          }
+          setShowProfileCreation(true)
+          setProfileCheckComplete(true)
+          return // Don't continue initialization until profile is created
+        }
+
         // Create or restore session
         let sessionId = sessionState.sessionId
         
@@ -51,7 +85,7 @@ function App() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              userId: `user-${Date.now()}`, // Generate a unique user ID
+              userId: userProfile?.id || `user-${Date.now()}`, // Use profile ID if available
               mapId: 'default-map', // Use a default map ID for now
               avatarPosition: mockSession.position
             }),
@@ -264,23 +298,143 @@ function App() {
     wsClient.leavePOI(poiId)
   }, [wsClient])
 
+  // Handle profile creation
+  const handleProfileCreated = useCallback((profile: UserProfile) => {
+    console.info('🎉 Profile created successfully:', profile.displayName)
+    setUserProfile(profile)
+    setShowProfileCreation(false)
+    
+    // Now initialize the app with the new profile
+    const initializeWithProfile = async () => {
+      try {
+        // Create new session via API
+        const response = await fetch('http://localhost:8080/api/sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: profile.id,
+            mapId: 'default-map',
+            avatarPosition: mockSession.position
+          }),
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to create session')
+        }
+        
+        const sessionData = await response.json()
+        const sessionId = sessionData.sessionId || sessionData.id
+        
+        // Update session store
+        sessionStore.getState().createSession(sessionId, sessionData.position || mockSession.position)
+
+        // Initialize WebSocket connection
+        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`
+        const client = new WebSocketClient(wsUrl, sessionId)
+        
+        // Set up WebSocket event handlers
+        client.onStatusChange((status) => {
+          setConnectionStatus(status)
+        })
+        
+        client.onError((error) => {
+          errorStore.getState().addError({
+            id: Date.now().toString(),
+            message: error.message,
+            type: 'websocket',
+            severity: 'error',
+            timestamp: error.timestamp
+          })
+        })
+        
+        // Connect WebSocket
+        await client.connect()
+        setWsClient(client)
+        
+        // Load initial POIs
+        await loadPOIs()
+        
+        setIsInitialized(true)
+        
+      } catch (error) {
+        console.error('Failed to initialize app after profile creation:', error)
+        errorStore.getState().addError({
+          id: Date.now().toString(),
+          message: error instanceof Error ? error.message : 'Failed to initialize application',
+          type: 'api',
+          severity: 'error',
+          timestamp: new Date()
+        })
+      }
+    }
+
+    initializeWithProfile()
+  }, [])
+
+  const handleProfileCreationClose = useCallback(() => {
+    // For now, we require a profile to use the app
+    // In a real app, you might want to allow anonymous usage
+    setShowProfileCreation(false)
+  }, [])
+
   // Convert session state to avatar data for MapContainer
   const avatars: AvatarData[] = [
     {
       sessionId: sessionState.sessionId || 'current-user',
+      userId: userProfile?.id,
+      displayName: userProfile?.displayName,
+      avatarURL: userProfile?.avatarURL,
       position: sessionState.avatarPosition,
       isCurrentUser: true,
-      isMoving: sessionState.isMoving
+      isMoving: sessionState.isMoving,
+      role: userProfile?.role
     }
     // TODO: Add other users' avatars from real-time updates
   ]
 
+  // Show loading screen while checking for profile
+  if (!profileCheckComplete) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading BreakoutGlobe...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show profile creation modal if no profile exists
+  if (showProfileCreation) {
+    return (
+      <ErrorBoundary>
+        <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome to BreakoutGlobe</h1>
+            <p className="text-gray-600 mb-8">Create your profile to get started</p>
+          </div>
+          <ProfileCreationModal
+            isOpen={true}
+            onProfileCreated={handleProfileCreated}
+            onClose={handleProfileCreationClose}
+          />
+        </div>
+      </ErrorBoundary>
+    )
+  }
+
+  // Show loading screen while initializing the app
   if (!isInitialized) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Initializing BreakoutGlobe...</p>
+          {userProfile && (
+            <p className="text-sm text-gray-500 mt-2">Welcome back, {userProfile.displayName}!</p>
+          )}
         </div>
       </div>
     )

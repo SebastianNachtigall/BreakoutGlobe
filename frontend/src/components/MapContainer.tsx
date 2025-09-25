@@ -2,15 +2,20 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { Map, NavigationControl, ScaleControl, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { POIContextMenu } from './POIContextMenu';
+import { ProfileCard } from './ProfileCard';
 
 export interface AvatarData {
   sessionId: string;
+  userId?: string;
+  displayName?: string;
+  avatarURL?: string;
   position: {
     lat: number;
     lng: number;
   };
   isCurrentUser: boolean;
   isMoving?: boolean;
+  role?: 'user' | 'admin' | 'superadmin';
 }
 
 export interface POIParticipant {
@@ -47,6 +52,10 @@ export interface MapContainerProps {
   onAvatarMove?: (position: { lat: number; lng: number }) => void;
   onPOIClick?: (poiId: string) => void;
   onPOICreate?: (position: { lat: number; lng: number }) => void;
+  onAvatarClick?: (userId: string) => void;
+  showProfileCard?: boolean;
+  selectedUserProfile?: import('../types/models').UserProfile;
+  onProfileCardClose?: () => void;
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -58,7 +67,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   onMapReady,
   onAvatarMove,
   onPOIClick,
-  onPOICreate
+  onPOICreate,
+  onAvatarClick,
+  showProfileCard = false,
+  selectedUserProfile,
+  onProfileCardClose
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
@@ -71,6 +84,19 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     position: { x: number; y: number };
     mapPosition: { lat: number; lng: number };
   } | null>(null);
+
+  // Utility function to generate initials from display name or fallback to sessionId
+  const generateInitials = useCallback((displayName?: string, sessionId?: string): string => {
+    const name = displayName || sessionId || 'U';
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.length === 1 && words[0].length >= 2) {
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      return words[0][0].toUpperCase();
+    }
+  }, []);
 
   // Memoize click handler to prevent re-renders
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
@@ -87,20 +113,72 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
 
 
-  // Create marker element with NO conflicting animations
+  // Create enhanced marker element with avatar support
   const createMarkerElement = useCallback((avatar: AvatarData) => {
     const markerElement = document.createElement('div');
-    markerElement.className = `
+    
+    // Determine role-based styling
+    const getRoleRing = (role?: string) => {
+      switch (role) {
+        case 'admin':
+          return 'ring-yellow-400';
+        case 'superadmin':
+          return 'ring-red-400';
+        default:
+          return avatar.isCurrentUser ? 'ring-blue-500' : 'ring-gray-400';
+      }
+    };
+
+    const baseClasses = `
       w-8 h-8 rounded-full border-2 
       ${avatar.isCurrentUser
-        ? 'bg-blue-500 border-blue-600 ring-2 ring-blue-500 ring-opacity-50'
-        : 'bg-gray-500 border-gray-600 ring-2 ring-gray-400 ring-opacity-50'
+        ? 'bg-blue-500 border-blue-600'
+        : 'bg-gray-500 border-gray-600'
       }
+      ring-2 ${getRoleRing(avatar.role)} ring-opacity-50
       shadow-lg cursor-pointer hover:scale-110
       flex items-center justify-center text-white text-xs font-bold
+      relative overflow-hidden
     `;
-    markerElement.textContent = avatar.sessionId.charAt(0).toUpperCase();
-    markerElement.title = avatar.sessionId;
+
+    markerElement.className = baseClasses;
+    markerElement.title = avatar.displayName || avatar.sessionId;
+
+    // Handle avatar image or initials
+    if (avatar.avatarURL) {
+      // Show loading state initially
+      markerElement.classList.add('animate-pulse');
+      
+      const avatarImg = document.createElement('img');
+      avatarImg.src = avatar.avatarURL;
+      avatarImg.className = 'w-full h-full object-cover rounded-full';
+      avatarImg.alt = avatar.displayName || avatar.sessionId;
+      
+      avatarImg.onload = () => {
+        markerElement.classList.remove('animate-pulse');
+        markerElement.textContent = ''; // Clear any existing content
+        markerElement.appendChild(avatarImg);
+      };
+      
+      avatarImg.onerror = () => {
+        markerElement.classList.remove('animate-pulse');
+        markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+      };
+      
+      // Set initial fallback while loading
+      markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+    } else {
+      // Display initials
+      markerElement.textContent = generateInitials(avatar.displayName, avatar.sessionId);
+    }
+
+    // Add click handler for profile card
+    markerElement.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (onAvatarClick && avatar.userId) {
+        onAvatarClick(avatar.userId);
+      }
+    });
 
     // Performance optimizations - NO CSS transitions for position
     markerElement.style.willChange = 'transform';
@@ -112,7 +190,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     markerElement.style.transition = 'transform 0.2s ease'; // Only for hover scale
 
     return markerElement;
-  }, []);
+  }, [generateInitials, onAvatarClick]);
 
   // Create POI marker element
   const createPOIMarkerElement = useCallback((poi: POIData) => {
@@ -460,6 +538,14 @@ export const MapContainer: React.FC<MapContainerProps> = ({
           mapPosition={contextMenu.mapPosition}
           onCreatePOI={handlePOICreate}
           onClose={handleContextMenuClose}
+        />
+      )}
+
+      {/* Profile card */}
+      {showProfileCard && selectedUserProfile && onProfileCardClose && (
+        <ProfileCard
+          userProfile={selectedUserProfile}
+          onClose={onProfileCardClose}
         />
       )}
     </div>

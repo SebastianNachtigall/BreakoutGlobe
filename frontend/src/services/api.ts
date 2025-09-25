@@ -32,20 +32,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function createGuestProfile(request: CreateGuestProfileRequest): Promise<UserProfile> {
-  const formData = new FormData();
-  formData.append('displayName', request.displayName);
-  
-  if (request.aboutMe) {
-    formData.append('aboutMe', request.aboutMe);
-  }
-  
-  if (request.avatarFile) {
-    formData.append('avatar', request.avatarFile);
-  }
+  // For now, send JSON data (avatar upload will be added later)
+  const requestBody = {
+    displayName: request.displayName,
+    accountType: 'guest', // Required by backend
+    aboutMe: request.aboutMe || ''
+  };
+
+  console.log('🚀 Creating profile with data:', requestBody);
 
   const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
     method: 'POST',
-    body: formData,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
   });
 
   const apiProfile = await handleResponse<UserProfileAPI>(response);
@@ -60,7 +61,8 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     });
 
     if (response.status === 404) {
-      return null; // No profile exists
+      // 404 is expected for new users - not an error
+      return null;
     }
 
     const apiProfile = await handleResponse<UserProfileAPI>(response);
