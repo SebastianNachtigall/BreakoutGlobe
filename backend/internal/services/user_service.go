@@ -83,7 +83,8 @@ func (s *UserService) UploadAvatar(ctx context.Context, userID string, filename 
 	}
 	
 	// Update user's avatar URL
-	user.AvatarURL = fmt.Sprintf("/api/users/avatar/%s", uniqueFilename)
+	avatarURL := fmt.Sprintf("/api/users/avatar/%s", uniqueFilename)
+	user.AvatarURL = &avatarURL
 	user.UpdatedAt = time.Now()
 	
 	// Save updated user

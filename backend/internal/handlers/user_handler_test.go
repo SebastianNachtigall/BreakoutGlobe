@@ -362,10 +362,11 @@ func TestUploadAvatar_Success(t *testing.T) {
 	fileData := []byte("fake-jpeg-data")
 	
 	// Create expected user with avatar URL
+	avatarURL := "/api/users/avatar/" + filename
 	expectedUser := &models.User{
 		ID:          userID,
 		DisplayName: "Test User",
-		AvatarURL:   "/api/users/avatar/" + filename,
+		AvatarURL:   &avatarURL,
 		AccountType: models.AccountTypeGuest,
 		Role:        models.UserRoleUser,
 		IsActive:    true,

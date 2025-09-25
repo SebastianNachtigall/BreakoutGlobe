@@ -113,6 +113,7 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 		Role:        string(user.Role),
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+		AvatarURL:   stringPtrToString(user.AvatarURL),
 	}
 	
 	c.JSON(http.StatusCreated, response)
@@ -218,7 +219,7 @@ func (h *UserHandler) UploadAvatar(c *gin.Context) {
 		Role:        string(user.Role),
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
-		AvatarURL:   user.AvatarURL,
+		AvatarURL:   stringPtrToString(user.AvatarURL),
 	}
 	
 	c.JSON(http.StatusOK, response)
@@ -265,7 +266,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		Role:        string(user.Role),
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
-		AvatarURL:   user.AvatarURL,
+		AvatarURL:   stringPtrToString(user.AvatarURL),
 	}
 	
 	c.JSON(http.StatusOK, response)
@@ -323,4 +324,12 @@ func (h *UserHandler) addRateLimitHeaders(c *gin.Context, userID string, action 
 	for key, value := range headers {
 		c.Header(key, value)
 	}
+}
+
+// stringPtrToString converts a string pointer to string, returning empty string if nil
+func stringPtrToString(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
 }

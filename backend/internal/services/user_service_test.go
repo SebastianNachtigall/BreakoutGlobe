@@ -209,14 +209,14 @@ func TestUserService_UploadAvatar_Success(t *testing.T) {
 	if user == nil {
 		t.Errorf("Expected user to be returned, got nil")
 	}
-	if user.AvatarURL == "" {
+	if user.AvatarURL == nil || *user.AvatarURL == "" {
 		t.Errorf("Expected avatar URL to be set")
 	}
-	if !contains(user.AvatarURL, "/api/users/avatar/") {
-		t.Errorf("Expected avatar URL to contain '/api/users/avatar/', got: %s", user.AvatarURL)
+	if user.AvatarURL != nil && !contains(*user.AvatarURL, "/api/users/avatar/") {
+		t.Errorf("Expected avatar URL to contain '/api/users/avatar/', got: %s", *user.AvatarURL)
 	}
-	if !contains(user.AvatarURL, ".jpg") {
-		t.Errorf("Expected avatar URL to contain file extension, got: %s", user.AvatarURL)
+	if user.AvatarURL != nil && !contains(*user.AvatarURL, ".jpg") {
+		t.Errorf("Expected avatar URL to contain file extension, got: %s", *user.AvatarURL)
 	}
 }
 

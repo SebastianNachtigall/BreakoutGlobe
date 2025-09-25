@@ -349,7 +349,7 @@ func TestNewMap_WithBuilder(t *testing.T) {
 		creator := &User{
 			ID:          creatorID,
 			DisplayName: "Map Creator",
-			Email:       "creator@example.com",
+			Email:       stringPtr("creator@example.com"),
 			Role:        UserRoleAdmin,
 			AccountType: AccountTypeFull,
 			IsActive:    true,
@@ -372,7 +372,7 @@ func TestNewMap_WithBuilder(t *testing.T) {
 		creator := &User{
 			ID:          creatorID,
 			DisplayName: "Map Owner",
-			Email:       "owner@example.com",
+			Email:       stringPtr("owner@example.com"),
 			Role:        UserRoleUser,
 			AccountType: AccountTypeFull,
 			IsActive:    true,

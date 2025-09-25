@@ -221,7 +221,8 @@ func TestUserProfileFlow_AvatarUpload(t *testing.T) {
 		// Verify user was updated in database
 		updatedUser, err := env.userRepository.GetByID(ctx, user.ID)
 		require.NoError(t, err)
-		assert.Equal(t, avatarURL, updatedUser.AvatarURL)
+		require.NotNil(t, updatedUser.AvatarURL)
+		assert.Equal(t, avatarURL, *updatedUser.AvatarURL)
 	})
 
 	t.Run("AvatarUpload_ValidationError_NoFile", func(t *testing.T) {
@@ -319,7 +320,8 @@ func TestUserProfileFlow_EndToEnd(t *testing.T) {
 		assert.Equal(t, models.AccountTypeGuest, finalUser.AccountType)
 		assert.Equal(t, models.UserRoleUser, finalUser.Role)
 		assert.True(t, finalUser.IsActive)
-		assert.Equal(t, avatarURL, finalUser.AvatarURL)
+		require.NotNil(t, finalUser.AvatarURL)
+		assert.Equal(t, avatarURL, *finalUser.AvatarURL)
 		assert.NotZero(t, finalUser.CreatedAt)
 		assert.NotZero(t, finalUser.UpdatedAt)
 

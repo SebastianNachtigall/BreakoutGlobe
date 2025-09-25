@@ -30,13 +30,13 @@ const (
 // User represents a user in the system
 type User struct {
 	ID           string         `json:"id" gorm:"primaryKey;type:varchar(36)"`
-	Email        string         `json:"email" gorm:"uniqueIndex;type:varchar(255)"`
+	Email        *string        `json:"email" gorm:"uniqueIndex;type:varchar(255)"`
 	DisplayName  string         `json:"displayName" gorm:"type:varchar(50);not null"`
-	AvatarURL    string         `json:"avatarUrl" gorm:"type:varchar(500)"`
-	AboutMe      string         `json:"aboutMe" gorm:"type:text"`
+	AvatarURL    *string        `json:"avatarUrl" gorm:"type:varchar(500)"`
+	AboutMe      *string        `json:"aboutMe" gorm:"type:text"`
 	AccountType  AccountType    `json:"accountType" gorm:"type:varchar(20);not null;default:'full'"`
 	Role         UserRole       `json:"role" gorm:"type:varchar(20);not null;default:'user'"`
-	PasswordHash string         `json:"-" gorm:"type:varchar(255)"` // Hidden from JSON
+	PasswordHash *string        `json:"-" gorm:"type:varchar(255)"` // Hidden from JSON
 	IsActive     bool           `json:"isActive" gorm:"default:true"`
 	CreatedAt    time.Time      `json:"createdAt"`
 	UpdatedAt    time.Time      `json:"updatedAt"`
@@ -94,7 +94,7 @@ func (u *User) Validate() error {
 
 	// Validate email for full accounts
 	if u.AccountType == AccountTypeFull {
-		if u.Email == "" {
+		if u.Email == nil || *u.Email == "" {
 			return fmt.Errorf("email is required for full accounts")
 		}
 
@@ -118,17 +118,17 @@ func (u *User) Validate() error {
 
 // validateEmail validates the email format
 func (u *User) validateEmail() error {
-	if u.Email == "" {
+	if u.Email == nil || *u.Email == "" {
 		return nil // Email is optional for guest accounts
 	}
 
-	if len(u.Email) > 255 {
+	if len(*u.Email) > 255 {
 		return fmt.Errorf("email must be less than 255 characters")
 	}
 
 	// Basic email regex validation
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if !emailRegex.MatchString(u.Email) {
+	if !emailRegex.MatchString(*u.Email) {
 		return fmt.Errorf("invalid email format")
 	}
 
@@ -166,7 +166,7 @@ func (u *User) validateAccountType() error {
 
 // HasPassword returns true if the user has a password set
 func (u *User) HasPassword() bool {
-	return u.PasswordHash != ""
+	return u.PasswordHash != nil && *u.PasswordHash != ""
 }
 
 // IsGuest returns true if the user is a guest account

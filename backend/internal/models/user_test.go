@@ -8,6 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Helper function to create string pointers
+func stringPtr(s string) *string {
+	return &s
+}
+
 // TestUser_Validate tests User model validation following existing patterns
 func TestUser_Validate(t *testing.T) {
 	tests := []struct {
@@ -20,7 +25,7 @@ func TestUser_Validate(t *testing.T) {
 			name: "valid full account user",
 			user: User{
 				ID:          "user-123",
-				Email:       "test@example.com",
+				Email:       stringPtr("test@example.com"),
 				DisplayName: "Test User",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
@@ -47,7 +52,7 @@ func TestUser_Validate(t *testing.T) {
 			name: "empty display name",
 			user: User{
 				ID:          "user-123",
-				Email:       "test@example.com",
+				Email:       stringPtr("test@example.com"),
 				DisplayName: "",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
@@ -62,7 +67,7 @@ func TestUser_Validate(t *testing.T) {
 			name: "display name too short",
 			user: User{
 				ID:          "user-123",
-				Email:       "test@example.com",
+				Email:       stringPtr("test@example.com"),
 				DisplayName: "AB",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
@@ -77,7 +82,7 @@ func TestUser_Validate(t *testing.T) {
 			name: "display name too long",
 			user: User{
 				ID:          "user-123",
-				Email:       "test@example.com",
+				Email:       stringPtr("test@example.com"),
 				DisplayName: "This is a very long display name that exceeds fifty characters",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
@@ -106,7 +111,7 @@ func TestUser_Validate(t *testing.T) {
 			name: "invalid email format",
 			user: User{
 				ID:          "user-123",
-				Email:       "invalid-email",
+				Email:       stringPtr("invalid-email"),
 				DisplayName: "Test User",
 				AccountType: AccountTypeFull,
 				Role:        UserRoleUser,
@@ -204,10 +209,10 @@ func TestUser_DisplayNameValidation(t *testing.T) {
 // TestUser_BusinessMethods tests User business logic methods
 func TestUser_BusinessMethods(t *testing.T) {
 	t.Run("HasPassword", func(t *testing.T) {
-		user := User{PasswordHash: ""}
+		user := User{PasswordHash: stringPtr("")}
 		assert.False(t, user.HasPassword())
 		
-		user.PasswordHash = "hashed-password"
+		user.PasswordHash = stringPtr("hashed-password")
 		assert.True(t, user.HasPassword())
 	})
 

@@ -245,7 +245,7 @@ func (b *UserBuilder) WithID(id string) *UserBuilder {
 
 // WithEmail sets the user email
 func (b *UserBuilder) WithEmail(email string) *UserBuilder {
-	b.user.Email = email
+	b.user.Email = &email
 	return b
 }
 
@@ -257,13 +257,13 @@ func (b *UserBuilder) WithDisplayName(displayName string) *UserBuilder {
 
 // WithAvatarURL sets the user avatar URL
 func (b *UserBuilder) WithAvatarURL(avatarURL string) *UserBuilder {
-	b.user.AvatarURL = avatarURL
+	b.user.AvatarURL = &avatarURL
 	return b
 }
 
 // WithAboutMe sets the user about me text
 func (b *UserBuilder) WithAboutMe(aboutMe string) *UserBuilder {
-	b.user.AboutMe = aboutMe
+	b.user.AboutMe = &aboutMe
 	return b
 }
 
@@ -281,7 +281,7 @@ func (b *UserBuilder) WithRole(role models.UserRole) *UserBuilder {
 
 // WithPasswordHash sets the user password hash
 func (b *UserBuilder) WithPasswordHash(passwordHash string) *UserBuilder {
-	b.user.PasswordHash = passwordHash
+	b.user.PasswordHash = &passwordHash
 	return b
 }
 
@@ -306,7 +306,7 @@ func (b *UserBuilder) WithUpdatedAt(updatedAt time.Time) *UserBuilder {
 // AsGuest configures the user as a guest account
 func (b *UserBuilder) AsGuest() *UserBuilder {
 	b.user.AccountType = models.AccountTypeGuest
-	b.user.Email = "" // Guests don't have email
+	b.user.Email = nil // Guests don't have email
 	return b
 }
 

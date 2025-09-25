@@ -220,8 +220,12 @@ func (a *UserAssertion) HasID(expectedID string) *UserAssertion {
 // HasEmail asserts the user has the expected email
 func (a *UserAssertion) HasEmail(expectedEmail string) *UserAssertion {
 	a.t.Helper()
-	if a.user.Email != expectedEmail {
-		a.t.Errorf("Expected user email %s, got %s", expectedEmail, a.user.Email)
+	if a.user.Email == nil || *a.user.Email != expectedEmail {
+		emailStr := ""
+		if a.user.Email != nil {
+			emailStr = *a.user.Email
+		}
+		a.t.Errorf("Expected user email %s, got %s", expectedEmail, emailStr)
 	}
 	return a
 }
@@ -238,8 +242,12 @@ func (a *UserAssertion) HasDisplayName(expectedDisplayName string) *UserAssertio
 // HasAvatarURL asserts the user has the expected avatar URL
 func (a *UserAssertion) HasAvatarURL(expectedAvatarURL string) *UserAssertion {
 	a.t.Helper()
-	if a.user.AvatarURL != expectedAvatarURL {
-		a.t.Errorf("Expected user avatar URL %s, got %s", expectedAvatarURL, a.user.AvatarURL)
+	if a.user.AvatarURL == nil || *a.user.AvatarURL != expectedAvatarURL {
+		avatarStr := ""
+		if a.user.AvatarURL != nil {
+			avatarStr = *a.user.AvatarURL
+		}
+		a.t.Errorf("Expected user avatar URL %s, got %s", expectedAvatarURL, avatarStr)
 	}
 	return a
 }
@@ -247,8 +255,12 @@ func (a *UserAssertion) HasAvatarURL(expectedAvatarURL string) *UserAssertion {
 // HasAboutMe asserts the user has the expected about me text
 func (a *UserAssertion) HasAboutMe(expectedAboutMe string) *UserAssertion {
 	a.t.Helper()
-	if a.user.AboutMe != expectedAboutMe {
-		a.t.Errorf("Expected user about me %s, got %s", expectedAboutMe, a.user.AboutMe)
+	if a.user.AboutMe == nil || *a.user.AboutMe != expectedAboutMe {
+		aboutMeStr := ""
+		if a.user.AboutMe != nil {
+			aboutMeStr = *a.user.AboutMe
+		}
+		a.t.Errorf("Expected user about me %s, got %s", expectedAboutMe, aboutMeStr)
 	}
 	return a
 }
