@@ -99,12 +99,19 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   }
 }
 
-export async function updateUserProfile(updates: Partial<Pick<UserProfile, 'displayName' | 'aboutMe'>>): Promise<UserProfile> {
+export async function updateUserProfile(updates: Partial<Pick<UserProfile, 'displayName' | 'aboutMe'>>, userID?: string): Promise<UserProfile> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Add user ID header if provided
+  if (userID) {
+    headers['X-User-ID'] = userID;
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     credentials: 'include',
     body: JSON.stringify(updates),
   });

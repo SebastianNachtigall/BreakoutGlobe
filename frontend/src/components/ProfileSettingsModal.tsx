@@ -83,7 +83,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
         }
       }
 
-      const updatedProfile = await updateUserProfile(updates);
+      const updatedProfile = await updateUserProfile(updates, profile.id);
       setProfile(updatedProfile);
       onClose();
     } catch (err) {

@@ -126,7 +126,7 @@ describe('ProfileSettingsModal', () => {
       await waitFor(() => {
         expect(mockApi.updateUserProfile).toHaveBeenCalledWith({
           aboutMe: 'Updated about me text'
-        });
+        }, 'user-123'); // Should pass user ID for guest profiles
       });
       
       expect(mockSetProfile).toHaveBeenCalledWith({
@@ -176,7 +176,7 @@ describe('ProfileSettingsModal', () => {
         expect(mockApi.updateUserProfile).toHaveBeenCalledWith({
           displayName: 'Updated Name',
           aboutMe: 'Updated about me'
-        });
+        }, 'user-123'); // Should pass user ID for full profiles too
       });
     });
 
