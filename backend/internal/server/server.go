@@ -32,15 +32,21 @@ type Server struct {
 func New(cfg *config.Config) *Server {
 	gin.SetMode(cfg.GinMode)
 	
-	// Setup database connection
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
+	var db *gorm.DB
 	
-	// Auto-migrate models
-	if err := db.AutoMigrate(&models.User{}); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+	// Only connect to database if not in test mode
+	if cfg.GinMode != "test" {
+		// Setup database connection
+		var err error
+		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+		
+		// Auto-migrate models
+		if err := db.AutoMigrate(&models.User{}); err != nil {
+			log.Fatalf("Failed to migrate database: %v", err)
+		}
 	}
 	
 	router := gin.Default()
@@ -103,17 +109,20 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
-	// Setup dependencies
-	userRepo := repository.NewUserRepository(s.db)
-	userService := services.NewUserService(userRepo)
-	
-	// For now, create a simple in-memory rate limiter (TODO: use Redis in production)
-	rateLimiter := &SimpleRateLimiter{}
-	
-	userHandler := handlers.NewUserHandler(userService, rateLimiter)
-	
-	// Register user routes
-	userHandler.RegisterRoutes(s.router)
+	// Only setup user routes if database is available (not in test mode)
+	if s.db != nil {
+		// Setup dependencies
+		userRepo := repository.NewUserRepository(s.db)
+		userService := services.NewUserService(userRepo)
+		
+		// For now, create a simple in-memory rate limiter (TODO: use Redis in production)
+		rateLimiter := &SimpleRateLimiter{}
+		
+		userHandler := handlers.NewUserHandler(userService, rateLimiter)
+		
+		// Register user routes
+		userHandler.RegisterRoutes(s.router)
+	}
 }
 
 func (s *Server) Start(addr string) error {

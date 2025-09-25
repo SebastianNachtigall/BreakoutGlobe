@@ -61,6 +61,13 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Ensure all repository tests pass with proper isolation
   - _Technical Debt: Critical for test infrastructure integrity_
 
+- [x] 6.2. Fix failing server tests (Tech Debt - URGENT)
+  - Investigate and fix database connection issues in server tests
+  - Server tests failing with "failed to connect to database" error
+  - Ensure server tests can run without external database dependencies
+  - Re-enable full test suite execution for commits
+  - _Technical Debt: Created after commit 24451e3 with SKIP_TESTS=true_
+
 - [ ] 7. Add profile retrieval endpoint for persistence
   - Write tests using newUserHandlerScenario(t) for GET /api/users/profile
   - Implement GET /api/users/profile endpoint to retrieve existing profiles

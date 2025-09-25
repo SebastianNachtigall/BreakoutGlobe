@@ -87,6 +87,15 @@ Examples:
 - `docker compose down`
 - `docker compose logs`
 
+## Technical Debt Management
+
+**CRITICAL: Never accumulate technical debt without immediate resolution**
+
+- **NEVER** disable tests to finish a commit without creating an immediate follow-up task
+- **IF** tests must be disabled for urgent commits, **IMMEDIATELY** create a task to re-enable them
+- **NEVER** build up technical debt - address issues as they arise
+- **ALWAYS** prioritize fixing broken tests over adding new features
+
 ## Code Quality
 
 - Always prioritize security best practices
