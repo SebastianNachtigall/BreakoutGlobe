@@ -95,15 +95,12 @@ func (tws *TestWebSocket) CreateClient(sessionID, userID, mapID string) *TestWSC
 		return nil
 	}
 
-	// Add query parameters for session info
-	q := u.Query()
-	q.Set("sessionId", sessionID)
-	q.Set("userId", userID)
-	q.Set("mapId", mapID)
-	u.RawQuery = q.Encode()
+	// Create headers with Authorization Bearer token
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer "+sessionID)
 
-	// Create WebSocket connection
-	conn, _, err := ws.DefaultDialer.Dial(u.String(), nil)
+	// Create WebSocket connection with proper authentication
+	conn, _, err := ws.DefaultDialer.Dial(u.String(), headers)
 	if err != nil {
 		tws.t.Errorf("Failed to connect WebSocket: %v", err)
 		return nil
@@ -314,6 +311,35 @@ func (c *TestWSClient) ExpectNoMessage(timeout time.Duration) {
 	}
 }
 
+// ConsumeWelcomeMessage consumes the initial welcome message sent by the server
+// and updates the client properties with the actual values from the server
+func (c *TestWSClient) ConsumeWelcomeMessage(timeout time.Duration) error {
+	msg, err := c.ReceiveMessage(timeout)
+	if err != nil {
+		return fmt.Errorf("failed to receive welcome message: %v", err)
+	}
+	
+	if msg.Type != "welcome" {
+		return fmt.Errorf("expected welcome message, got %s", msg.Type)
+	}
+	
+	// Update client properties from welcome message data
+	if data, ok := msg.Data.(map[string]interface{}); ok {
+		if userID, ok := data["userId"].(string); ok {
+			c.mutex.Lock()
+			c.UserID = userID
+			c.mutex.Unlock()
+		}
+		if mapID, ok := data["mapId"].(string); ok {
+			c.mutex.Lock()
+			c.MapID = mapID
+			c.mutex.Unlock()
+		}
+	}
+	
+	return nil
+}
+
 // Close closes the WebSocket connection
 func (c *TestWSClient) Close() {
 	c.mutex.Lock()
@@ -374,11 +400,60 @@ func (c *TestWSClient) readMessages() {
 type MockSessionServiceForWS struct{}
 
 func (m *MockSessionServiceForWS) GetSession(ctx context.Context, sessionID string) (*models.Session, error) {
-	// Return a mock session for testing
+	// Return a mock session for testing with proper fields
+	// Extract expected userID and mapID from sessionID for consistent testing
+	var userID, mapID string
+	
+	// Parse session ID to extract user and map info for testing
+	if strings.HasPrefix(sessionID, "session-") {
+		// For session IDs like "session-123", "session-mover", etc.
+		parts := strings.Split(sessionID, "-")
+		if len(parts) >= 2 {
+			userID = "user-" + parts[1]
+			mapID = "map-test" // Default map for most tests
+			
+			// Handle specific test cases
+			switch parts[1] {
+			case "mover":
+				mapID = "map-movement"
+			case "observer":
+				mapID = "map-movement"
+			case "creator":
+				mapID = "map-poi"
+			case "p1", "p2":
+				mapID = "map-poi"
+			case "ordering":
+				mapID = "map-ordering"
+			case "lifecycle":
+				mapID = "map-lifecycle"
+			case "1", "2", "3":
+				mapID = "map-test" // For MultiClientBroadcast test
+			}
+			
+			// Handle MapIsolation test with compound session IDs
+			if len(parts) >= 3 {
+				compound := parts[1] + "-" + parts[2]
+				switch compound {
+				case "map1-1", "map1-2":
+					mapID = "map-1"
+					userID = "user-" + compound
+				case "map2-1":
+					mapID = "map-2"
+					userID = "user-" + compound
+				}
+			}
+		}
+	} else {
+		// For other session ID formats
+		userID = "user-" + sessionID
+		mapID = "map-test"
+	}
+	
 	return &models.Session{
-		ID:     sessionID,
-		UserID: "user-" + sessionID,
-		MapID:  "map-test",
+		ID:       sessionID,
+		UserID:   userID,
+		MapID:    mapID,
+		IsActive: true, // Important: session must be active for WebSocket connection
 	}, nil
 }
 

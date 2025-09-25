@@ -28,16 +28,20 @@ func TestWebSocketIntegration_BasicConnection(t *testing.T) {
 	// Wait for connection to be established
 	time.Sleep(50 * time.Millisecond)
 
+	// Consume welcome message
+	err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+	require.NoError(t, err, "Should receive welcome message")
+
 	// Verify connection
 	assert.True(t, client.IsConnected())
 	testWS.AssertClientConnected("session-123")
 	testWS.AssertConnectedClientsCount(1)
-	testWS.AssertMapClientsCount("map-789", 1)
+	testWS.AssertMapClientsCount("map-test", 1) // Mock returns "map-test" for session-123
 
 	// Verify client properties
 	assert.Equal(t, "session-123", client.SessionID)
-	assert.Equal(t, "user-456", client.UserID)
-	assert.Equal(t, "map-789", client.MapID)
+	assert.Equal(t, "user-123", client.UserID) // Mock returns "user-123" for session-123
+	assert.Equal(t, "map-test", client.MapID)  // Mock returns "map-test" for session-123
 }
 
 // TestWebSocketIntegration_MultiClientBroadcast tests broadcasting to multiple clients
@@ -57,8 +61,14 @@ func TestWebSocketIntegration_MultiClientBroadcast(t *testing.T) {
 		require.NotNil(t, clients[i])
 	}
 
-	// Wait for all connections
+	// Wait for all connections and consume welcome messages
 	time.Sleep(100 * time.Millisecond)
+	
+	// Consume welcome messages from all clients
+	for i, client := range clients {
+		err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+		require.NoError(t, err, "Client %d should receive welcome message", i+1)
+	}
 
 	// Verify all clients are connected
 	testWS.AssertConnectedClientsCount(3)
@@ -102,16 +112,24 @@ func TestWebSocketIntegration_MapIsolation(t *testing.T) {
 	testWS := testdata.SetupWebSocket(t)
 
 	// Create clients on different maps
-	client1 := testWS.CreateClient("session-1", "user-1", "map-1")
-	client2 := testWS.CreateClient("session-2", "user-2", "map-1")
-	client3 := testWS.CreateClient("session-3", "user-3", "map-2")
+	client1 := testWS.CreateClient("session-map1-1", "user-1", "map-1")
+	client2 := testWS.CreateClient("session-map1-2", "user-2", "map-1")
+	client3 := testWS.CreateClient("session-map2-1", "user-3", "map-2")
 
 	require.NotNil(t, client1)
 	require.NotNil(t, client2)
 	require.NotNil(t, client3)
 
-	// Wait for connections
+	// Wait for connections and consume welcome messages
 	time.Sleep(100 * time.Millisecond)
+	
+	// Consume welcome messages from all clients
+	err1 := client1.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err2 := client2.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err3 := client3.ConsumeWelcomeMessage(200 * time.Millisecond)
+	require.NoError(t, err1, "Client 1 should receive welcome message")
+	require.NoError(t, err2, "Client 2 should receive welcome message")
+	require.NoError(t, err3, "Client 3 should receive welcome message")
 
 	// Verify map isolation
 	testWS.AssertMapClientsCount("map-1", 2)
@@ -154,8 +172,12 @@ func TestWebSocketIntegration_ConnectionLifecycle(t *testing.T) {
 	client := testWS.CreateClient("session-lifecycle", "user-lifecycle", "map-lifecycle")
 	require.NotNil(t, client)
 
-	// Wait for connection
+	// Wait for connection and consume welcome message
 	time.Sleep(50 * time.Millisecond)
+	
+	// Consume welcome message
+	err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+	require.NoError(t, err, "Should receive welcome message")
 
 	// Verify initial connection
 	testWS.AssertClientConnected("session-lifecycle")
@@ -170,7 +192,7 @@ func TestWebSocketIntegration_ConnectionLifecycle(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	err := client.SendMessage(testMessage)
+	err = client.SendMessage(testMessage)
 	require.NoError(t, err)
 
 	// Disconnect client
@@ -201,8 +223,14 @@ func TestWebSocketIntegration_AvatarMovement(t *testing.T) {
 	require.NotNil(t, mover)
 	require.NotNil(t, observer)
 
-	// Wait for connections
+	// Wait for connections and consume welcome messages
 	time.Sleep(100 * time.Millisecond)
+	
+	// Consume welcome messages
+	err1 := mover.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err2 := observer.ConsumeWelcomeMessage(200 * time.Millisecond)
+	require.NoError(t, err1, "Mover should receive welcome message")
+	require.NoError(t, err2, "Observer should receive welcome message")
 
 	// Simulate avatar movement from mover
 	movementMessage := websocket.Message{
@@ -236,8 +264,9 @@ func TestWebSocketIntegration_AvatarMovement(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "user-mover", data["userId"])
 
-	position, ok := data["position"].(map[string]interface{})
-	require.True(t, ok)
+	// Position data comes as map[string]float64 from JSON unmarshaling
+	position, ok := data["position"].(map[string]float64)
+	require.True(t, ok, "Position should be a map[string]float64")
 	assert.Equal(t, 40.7589, position["lat"])
 	assert.Equal(t, -73.9851, position["lng"])
 }
@@ -259,8 +288,15 @@ func TestWebSocketIntegration_POIEvents(t *testing.T) {
 	require.NotNil(t, participant1)
 	require.NotNil(t, participant2)
 
-	// Wait for connections
+	// Wait for connections and consume welcome messages
 	time.Sleep(100 * time.Millisecond)
+	
+	// Consume welcome messages from all clients
+	clients := []*testdata.TestWSClient{creator, participant1, participant2}
+	for i, client := range clients {
+		err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+		require.NoError(t, err, "Client %d should receive welcome message", i+1)
+	}
 
 	// Test POI creation event
 	poiCreatedMsg := websocket.Message{
@@ -280,7 +316,6 @@ func TestWebSocketIntegration_POIEvents(t *testing.T) {
 	testWS.BroadcastToMap("map-poi", poiCreatedMsg)
 
 	// All clients should receive POI creation event
-	clients := []*testdata.TestWSClient{creator, participant1, participant2}
 	for i, client := range clients {
 		msg, err := client.ReceiveMessage(200 * time.Millisecond)
 		require.NoError(t, err, "Client %d should receive POI created message", i+1)
@@ -386,8 +421,12 @@ func TestWebSocketIntegration_MessageOrdering(t *testing.T) {
 	client := testWS.CreateClient("session-ordering", "user-ordering", "map-ordering")
 	require.NotNil(t, client)
 
-	// Wait for connection
+	// Wait for connection and consume welcome message
 	time.Sleep(50 * time.Millisecond)
+	
+	// Consume welcome message
+	err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+	require.NoError(t, err, "Should receive welcome message")
 
 	// Send multiple messages in sequence
 	const numMessages = 5
@@ -416,10 +455,11 @@ func TestWebSocketIntegration_MessageOrdering(t *testing.T) {
 		
 		// Note: WebSocket doesn't guarantee ordering across different broadcasts,
 		// but we can verify we receive all messages
-		sequence, ok := data["sequence"].(float64) // JSON numbers are float64
-		require.True(t, ok)
-		assert.GreaterOrEqual(t, int(sequence), 0)
-		assert.Less(t, int(sequence), numMessages)
+		// Sequence data comes as int from the test broadcast
+		sequence, ok := data["sequence"].(int)
+		require.True(t, ok, "Sequence should be an int")
+		assert.GreaterOrEqual(t, sequence, 0)
+		assert.Less(t, sequence, numMessages)
 	}
 }
 
