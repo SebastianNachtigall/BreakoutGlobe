@@ -132,7 +132,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 disabled={isGuestAccount || isLoading}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 ${
                   isGuestAccount ? 'bg-gray-100 cursor-not-allowed' : ''
                 }`}
                 placeholder="Enter your display name"
@@ -155,7 +155,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
                 onChange={(e) => setAboutMe(e.target.value)}
                 disabled={isLoading}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical text-gray-900"
                 placeholder="Tell others about yourself..."
                 maxLength={1000}
               />

@@ -81,6 +81,13 @@ describe('ProfileSettingsModal', () => {
       expect(aboutMeTextarea).toHaveAttribute('placeholder', 'Tell others about yourself...');
     });
 
+    it('should have proper text color for about me textarea', () => {
+      render(<ProfileSettingsModal isOpen={true} onClose={mockOnClose} />);
+      
+      const aboutMeTextarea = screen.getByDisplayValue('Hello, I am a test user');
+      expect(aboutMeTextarea).toHaveClass('text-gray-900'); // Should have dark text color
+    });
+
     it('should allow editing display name for full accounts', () => {
       mockUserProfileStore.mockReturnValue({
         profile: mockFullProfile,
