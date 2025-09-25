@@ -75,21 +75,8 @@ func NewGuestUser(displayName string) (*User, error) {
 
 // Validate validates the user model
 func (u *User) Validate() error {
-	if u.DisplayName == "" {
-		return fmt.Errorf("display name is required")
-	}
-
-	if len(u.DisplayName) < 3 {
-		return fmt.Errorf("display name must be at least 3 characters")
-	}
-
-	if len(u.DisplayName) > 50 {
-		return fmt.Errorf("display name must be less than 50 characters")
-	}
-
-	// Check for invalid characters in display name
-	if strings.ContainsAny(u.DisplayName, `@#$%^&*()+={}[]|\:;"'<>?,./`) {
-		return fmt.Errorf("display name contains invalid characters")
+	if err := ValidateDisplayName(u.DisplayName); err != nil {
+		return err
 	}
 
 	// Validate email for full accounts
