@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -17,6 +18,7 @@ type UserServiceInterface interface {
 	CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error)
 	GetUser(ctx context.Context, userID string) (*models.User, error)
 	UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID string, req *services.UpdateProfileRequest) (*models.User, error)
 }
 
 // UserHandler handles HTTP requests for user operations
@@ -40,6 +42,7 @@ func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
 		// User profile management
 		api.POST("/users/profile", h.CreateProfile)
 		api.GET("/users/profile", h.GetProfile)
+		api.PUT("/users/profile", h.UpdateProfile)
 		api.POST("/users/avatar", h.UploadAvatar)
 	}
 }
@@ -62,6 +65,25 @@ type CreateProfileResponse struct {
 	IsActive    bool   `json:"isActive"`
 	CreatedAt   string `json:"createdAt"`
 	AvatarURL   string `json:"avatarUrl,omitempty"`
+}
+
+// UpdateProfileRequest represents the request body for updating a user profile
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"displayName,omitempty"`
+	AboutMe     *string `json:"aboutMe,omitempty"`
+}
+
+// UpdateProfileResponse represents the response for updating a user profile
+type UpdateProfileResponse struct {
+	ID          string  `json:"id"`
+	DisplayName string  `json:"displayName"`
+	AccountType string  `json:"accountType"`
+	Role        string  `json:"role"`
+	IsActive    bool    `json:"isActive"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	AvatarURL   string  `json:"avatarUrl,omitempty"`
+	AboutMe     *string `json:"aboutMe,omitempty"`
 }
 
 // CreateProfile handles POST /api/users/profile
@@ -272,6 +294,81 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// UpdateProfile handles PUT /api/users/profile
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	// Get user ID from header (temporary - will be from auth middleware later)
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    "UNAUTHORIZED",
+			Message: "User ID required",
+		})
+		return
+	}
+	
+	// Check rate limit
+	if err := h.rateLimiter.CheckRateLimit(c, userID, services.ActionUpdateProfile); err != nil {
+		h.handleRateLimitError(c, err)
+		return
+	}
+	
+	// Parse request body
+	var req UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_REQUEST",
+			Message: "Invalid request format",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Validate request
+	if err := h.validateUpdateProfileRequest(req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "VALIDATION_ERROR",
+			Message: "Invalid profile data",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Convert to service request
+	serviceReq := &services.UpdateProfileRequest{
+		DisplayName: req.DisplayName,
+		AboutMe:     req.AboutMe,
+	}
+	
+	// Update profile via service
+	user, err := h.userService.UpdateProfile(c, userID, serviceReq)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "UPDATE_FAILED",
+			Message: "Failed to update profile",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Add rate limit headers
+	h.addRateLimitHeaders(c, userID, services.ActionUpdateProfile)
+	
+	// Return updated profile
+	response := UpdateProfileResponse{
+		ID:          user.ID,
+		DisplayName: user.DisplayName,
+		AccountType: string(user.AccountType),
+		Role:        string(user.Role),
+		IsActive:    user.IsActive,
+		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),
+		AvatarURL:   stringPtrToString(user.AvatarURL),
+		AboutMe:     user.AboutMe,
+	}
+	
+	c.JSON(http.StatusOK, response)
+}
+
 // Helper methods
 
 // validateCreateProfileRequest validates the create profile request
@@ -288,6 +385,28 @@ func (h *UserHandler) validateCreateProfileRequest(req CreateProfileRequest) err
 	if req.AccountType != "guest" {
 		return errors.New("only guest account type is supported")
 	}
+	return nil
+}
+
+// validateUpdateProfileRequest validates the update profile request
+func (h *UserHandler) validateUpdateProfileRequest(req UpdateProfileRequest) error {
+	// At least one field must be provided
+	if req.DisplayName == nil && req.AboutMe == nil {
+		return errors.New("at least one field must be provided for update")
+	}
+	
+	// Validate display name if provided
+	if req.DisplayName != nil {
+		if err := models.ValidateDisplayName(*req.DisplayName); err != nil {
+			return fmt.Errorf("invalid display name: %w", err)
+		}
+	}
+	
+	// Validate about me if provided
+	if req.AboutMe != nil && len(*req.AboutMe) > 1000 {
+		return errors.New("aboutMe too long: maximum 1000 characters")
+	}
+	
 	return nil
 }
 

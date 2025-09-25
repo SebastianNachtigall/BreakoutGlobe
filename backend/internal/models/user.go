@@ -116,6 +116,28 @@ func (u *User) Validate() error {
 	return nil
 }
 
+// ValidateDisplayName validates a display name string
+func ValidateDisplayName(displayName string) error {
+	if displayName == "" {
+		return fmt.Errorf("display name is required")
+	}
+
+	if len(displayName) < 3 {
+		return fmt.Errorf("display name must be at least 3 characters")
+	}
+
+	if len(displayName) > 50 {
+		return fmt.Errorf("display name must be less than 50 characters")
+	}
+
+	// Check for invalid characters in display name
+	if strings.ContainsAny(displayName, `@#$%^&*()+={}[]|\:;"'<>?,./`) {
+		return fmt.Errorf("display name contains invalid characters")
+	}
+
+	return nil
+}
+
 // validateEmail validates the email format
 func (u *User) validateEmail() error {
 	if u.Email == nil || *u.Email == "" {

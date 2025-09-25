@@ -529,6 +529,14 @@ func (m *MockUserService) UploadAvatar(ctx context.Context, userID string, filen
 	return args.Get(0).(*models.User), args.Error(1)
 }
 
+func (m *MockUserService) UpdateProfile(ctx context.Context, userID string, req *services.UpdateProfileRequest) (*models.User, error) {
+	args := m.Called(ctx, userID, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
 // Profile Retrieval Tests - Task 7
 
 // ExpectProfileRetrievalSuccess sets up the user service to successfully retrieve a profile

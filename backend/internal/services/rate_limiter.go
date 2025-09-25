@@ -16,6 +16,7 @@ type ActionType string
 const (
 	ActionCreateSession ActionType = "create_session"
 	ActionUpdateAvatar  ActionType = "update_avatar"
+	ActionUpdateProfile ActionType = "update_profile"
 	ActionCreatePOI     ActionType = "create_poi"
 	ActionJoinPOI       ActionType = "join_poi"
 	ActionLeavePOI      ActionType = "leave_poi"

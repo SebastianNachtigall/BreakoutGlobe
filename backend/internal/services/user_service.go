@@ -11,6 +11,12 @@ import (
 	"breakoutglobe/internal/models"
 )
 
+// UpdateProfileRequest represents a request to update user profile
+type UpdateProfileRequest struct {
+	DisplayName *string `json:"displayName,omitempty"`
+	AboutMe     *string `json:"aboutMe,omitempty"`
+}
+
 // UserService handles user-related business logic
 type UserService struct {
 	userRepo interfaces.UserRepositoryInterface
@@ -94,5 +100,54 @@ func (s *UserService) UploadAvatar(ctx context.Context, userID string, filename 
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
+	return user, nil
+}
+
+// UpdateProfile updates a user's profile information
+func (s *UserService) UpdateProfile(ctx context.Context, userID string, req *UpdateProfileRequest) (*models.User, error) {
+	// Get existing user
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	
+	// Apply updates based on account type
+	if user.AccountType == models.AccountTypeGuest {
+		// Guest profiles can only update AboutMe
+		if req.AboutMe != nil {
+			// Validate AboutMe length
+			if len(*req.AboutMe) > 1000 {
+				return nil, fmt.Errorf("aboutMe too long: maximum 1000 characters")
+			}
+			user.AboutMe = req.AboutMe
+		}
+		// Ignore DisplayName updates for guest profiles
+	} else {
+		// Full profiles can update both DisplayName and AboutMe
+		if req.DisplayName != nil {
+			// Validate DisplayName
+			if err := models.ValidateDisplayName(*req.DisplayName); err != nil {
+				return nil, fmt.Errorf("invalid display name: %w", err)
+			}
+			user.DisplayName = *req.DisplayName
+		}
+		
+		if req.AboutMe != nil {
+			// Validate AboutMe length
+			if len(*req.AboutMe) > 1000 {
+				return nil, fmt.Errorf("aboutMe too long: maximum 1000 characters")
+			}
+			user.AboutMe = req.AboutMe
+		}
+	}
+	
+	// Update timestamp
+	user.UpdatedAt = time.Now()
+	
+	// Save updated user
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+	
 	return user, nil
 }
