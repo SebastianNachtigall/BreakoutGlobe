@@ -11,6 +11,7 @@ import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { getCurrentUserProfile } from './services/api'
+import { userProfileStore } from './stores/userProfileStore'
 import type { UserProfile } from './types/models'
 
 // Mock data for development
@@ -48,30 +49,53 @@ function App() {
 
     const initializeApp = async () => {
       try {
-        // Check if user has a profile first
-        try {
-          const profile = await getCurrentUserProfile()
-          if (profile) {
-            console.info('✅ User profile found:', profile.displayName)
-            setUserProfile(profile)
-            setProfileCheckComplete(true)
-          } else {
-            // No profile exists, show profile creation modal
-            console.info('ℹ️ No user profile found - showing profile creation modal')
+        // Check if user has a profile first - try localStorage first, then backend
+        let profile = userProfileStore.getState().getProfileOffline()
+        
+        if (profile) {
+          console.info('✅ User profile loaded from localStorage:', profile.displayName)
+          setUserProfile(profile)
+          setProfileCheckComplete(true)
+          
+          // Try to sync with backend in the background (don't block UI)
+          try {
+            const backendProfile = await getCurrentUserProfile()
+            if (backendProfile && backendProfile.id === profile.id) {
+              // Update local profile with any backend changes
+              userProfileStore.getState().setProfile(backendProfile)
+              setUserProfile(backendProfile)
+              console.info('🔄 Profile synced with backend')
+            }
+          } catch (syncError) {
+            console.info('ℹ️ Backend sync failed, using cached profile')
+          }
+        } else {
+          // No cached profile, try backend
+          try {
+            const backendProfile = await getCurrentUserProfile()
+            if (backendProfile) {
+              console.info('✅ User profile found on backend:', backendProfile.displayName)
+              userProfileStore.getState().setProfile(backendProfile)
+              setUserProfile(backendProfile)
+              setProfileCheckComplete(true)
+            } else {
+              // No profile exists anywhere, show profile creation modal
+              console.info('ℹ️ No user profile found - showing profile creation modal')
+              setShowProfileCreation(true)
+              setProfileCheckComplete(true)
+              return // Don't continue initialization until profile is created
+            }
+          } catch (error) {
+            // Handle 404 as expected behavior for new users
+            if (error instanceof Error && error.message.includes('404')) {
+              console.info('ℹ️ New user detected - showing profile creation modal')
+            } else {
+              console.info('ℹ️ No existing profile found - showing profile creation modal')
+            }
             setShowProfileCreation(true)
             setProfileCheckComplete(true)
             return // Don't continue initialization until profile is created
           }
-        } catch (error) {
-          // Handle 404 as expected behavior for new users
-          if (error instanceof Error && error.message.includes('404')) {
-            console.info('ℹ️ New user detected - showing profile creation modal')
-          } else {
-            console.info('ℹ️ No existing profile found - showing profile creation modal')
-          }
-          setShowProfileCreation(true)
-          setProfileCheckComplete(true)
-          return // Don't continue initialization until profile is created
         }
 
         // Create or restore session
@@ -301,6 +325,9 @@ function App() {
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
     console.info('🎉 Profile created successfully:', profile.displayName)
+    
+    // Save to localStorage and update state
+    userProfileStore.getState().setProfile(profile)
     setUserProfile(profile)
     setShowProfileCreation(false)
     
