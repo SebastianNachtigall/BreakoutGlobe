@@ -38,6 +38,43 @@ When adding new methods/fields/functionality:
 3. **MUST** run tests after each batch of fixes
 4. **NEVER** make feature changes while fixing broken tests
 
+## Integration Test Requirements
+
+**MANDATORY: Complete Test Coverage for New Functionality**
+
+### Test Pyramid Compliance
+- **Unit Tests**: Models, Services, Utilities (isolated, fast)
+- **Integration Tests**: Handlers, Cross-layer flows (with real dependencies)
+- **End-to-End Tests**: Full HTTP flows (browser/API testing)
+
+### Integration Test Rules
+- **MUST** create or update integration tests for new API endpoints
+- **MUST** test complete request-response flows (HTTP → Service → Database)
+- **MUST** verify error handling across all layers
+- **MUST** test with real database connections (not mocks)
+- **MUST** include integration tests in CI/CD pipeline
+
+### Integration Test Execution
+- **Environment Setup**: `TEST_INTEGRATION=1` environment variable required
+- **Database**: `docker compose up -d postgres redis` before running
+- **Command**: `TEST_INTEGRATION=1 go test ./internal/integration -v`
+- **Coverage**: Integration tests must cover new functionality end-to-end
+
+### Integration Test Patterns
+- Use established `TestXXXFlow` naming convention
+- Test complete business workflows, not just technical integration
+- Include error scenarios and edge cases
+- Verify data persistence and retrieval
+- Test concurrent operations where applicable
+
+### When Integration Tests Are Required
+- **New API endpoints** - MUST have integration test coverage
+- **New database models** - MUST test persistence and retrieval
+- **New business workflows** - MUST test complete end-to-end flow
+- **Cross-service interactions** - MUST test service boundaries
+- **File operations** - MUST test file upload/download flows
+- **Authentication/Authorization** - MUST test security boundaries
+
 ## Docker Commands
 
 **CRITICAL: Always use modern syntax**

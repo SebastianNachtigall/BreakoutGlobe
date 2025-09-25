@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"testing"
 	"time"
 
@@ -95,6 +98,20 @@ func (s *UserTestScenario) ExpectGuestProfileCreationError(displayName string, e
 	return s
 }
 
+// ExpectAvatarUploadSuccess sets up the user service to successfully upload an avatar
+func (s *UserTestScenario) ExpectAvatarUploadSuccess(userID string, filename string, fileData []byte, expectedUser *models.User) *UserTestScenario {
+	s.mockUserService.On("UploadAvatar", mock.Anything, userID, filename, fileData).Return(expectedUser, nil)
+	
+	return s
+}
+
+// ExpectAvatarUploadError sets up the user service to return an error during avatar upload
+func (s *UserTestScenario) ExpectAvatarUploadError(userID string, filename string, fileData []byte, err error) *UserTestScenario {
+	s.mockUserService.On("UploadAvatar", mock.Anything, userID, filename, fileData).Return(nil, err)
+	
+	return s
+}
+
 // CreateGuestProfile executes a guest profile creation request and returns the response
 func (s *UserTestScenario) CreateGuestProfile(t *testing.T, displayName string) *CreateProfileResponse {
 	t.Helper()
@@ -157,6 +174,74 @@ func (s *UserTestScenario) CreateGuestProfileExpectingError(t *testing.T, displa
 	
 	// Execute request
 	s.router.ServeHTTP(recorder, req)
+	
+	// Verify expected error status
+	if recorder.Code != expectedStatus {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			expectedStatus, recorder.Code, recorder.Body.String())
+	}
+	
+	return recorder
+}
+
+// UploadAvatar executes an avatar upload request and returns the response
+func (s *UserTestScenario) UploadAvatar(t *testing.T, userID string, filename string, fileData []byte, contentType string) *httptest.ResponseRecorder {
+	t.Helper()
+	
+	// Create multipart form data
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	
+	// Create form file with proper content type
+	part, err := writer.CreateFormFile("avatar", filename)
+	if err != nil {
+		t.Errorf("Failed to create form file: %v", err)
+		return nil
+	}
+	
+	// Set content type in the part header
+	if contentType != "" {
+		// We need to create the part manually to set the content type
+		writer.Close()
+		body.Reset()
+		writer = multipart.NewWriter(body)
+		
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="avatar"; filename="%s"`, filename))
+		h.Set("Content-Type", contentType)
+		part, err = writer.CreatePart(h)
+		if err != nil {
+			t.Errorf("Failed to create form part: %v", err)
+			return nil
+		}
+	}
+	
+	// Write file data
+	_, err = part.Write(fileData)
+	if err != nil {
+		t.Errorf("Failed to write file data: %v", err)
+		return nil
+	}
+	
+	// Close writer
+	writer.Close()
+	
+	req := httptest.NewRequest(http.MethodPost, "/api/users/avatar", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-User-ID", userID) // Simulate authenticated user
+	recorder := httptest.NewRecorder()
+	
+	// Execute request
+	s.router.ServeHTTP(recorder, req)
+	
+	return recorder
+}
+
+// UploadAvatarExpectingError executes an avatar upload request expecting an error
+func (s *UserTestScenario) UploadAvatarExpectingError(t *testing.T, userID string, filename string, fileData []byte, contentType string, expectedStatus int) *httptest.ResponseRecorder {
+	t.Helper()
+	
+	recorder := s.UploadAvatar(t, userID, filename, fileData, contentType)
 	
 	// Verify expected error status
 	if recorder.Code != expectedStatus {
@@ -267,6 +352,119 @@ func TestCreateGuestProfile_RateLimited(t *testing.T) {
 
 
 
+func TestUploadAvatar_Success(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+
+	userID := uuid.New().String()
+	filename := "avatar.jpg"
+	fileData := []byte("fake-jpeg-data")
+	
+	// Create expected user with avatar URL
+	expectedUser := &models.User{
+		ID:          userID,
+		DisplayName: "Test User",
+		AvatarURL:   "/api/users/avatar/" + filename,
+		AccountType: models.AccountTypeGuest,
+		Role:        models.UserRoleUser,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	// Configure expectations
+	scenario.ExpectRateLimitSuccess().
+		ExpectAvatarUploadSuccess(userID, filename, fileData, expectedUser)
+
+	// Execute avatar upload
+	recorder := scenario.UploadAvatar(t, userID, filename, fileData, "image/jpeg")
+
+	// Verify success
+	if recorder.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d. Response: %s", 
+			http.StatusOK, recorder.Code, recorder.Body.String())
+	}
+
+	// Parse response
+	var response CreateProfileResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Errorf("Failed to parse response: %v. Body: %s", err, recorder.Body.String())
+	}
+
+	// Verify avatar URL is set
+	if response.ID != userID {
+		t.Errorf("Expected user ID %s, got %s", userID, response.ID)
+	}
+}
+
+func TestUploadAvatar_InvalidFileType(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+
+	userID := uuid.New().String()
+	filename := "avatar.txt"
+	fileData := []byte("not-an-image")
+
+	// Rate limiting happens before file validation, but rate limit headers are not added on validation errors
+	scenario.mockRateLimiter.On("CheckRateLimit", mock.Anything, mock.Anything, services.ActionCreatePOI).Return(nil)
+
+	// Execute request expecting validation error
+	recorder := scenario.UploadAvatarExpectingError(t, userID, filename, fileData, "text/plain", 400)
+
+	// Verify error response
+	body := recorder.Body.String()
+	if !contains(body, "INVALID_FILE_TYPE") {
+		t.Errorf("Expected error response to contain 'INVALID_FILE_TYPE', got: %s", body)
+	}
+}
+
+func TestUploadAvatar_FileTooLarge(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+
+	userID := uuid.New().String()
+	filename := "avatar.jpg"
+	// Create file data larger than 2MB
+	fileData := make([]byte, 3*1024*1024) // 3MB
+
+	// Rate limiting happens before file validation, but rate limit headers are not added on validation errors
+	scenario.mockRateLimiter.On("CheckRateLimit", mock.Anything, mock.Anything, services.ActionCreatePOI).Return(nil)
+
+	// Execute request expecting validation error
+	recorder := scenario.UploadAvatarExpectingError(t, userID, filename, fileData, "image/jpeg", 400)
+
+	// Verify error response
+	body := recorder.Body.String()
+	if !contains(body, "FILE_TOO_LARGE") {
+		t.Errorf("Expected error response to contain 'FILE_TOO_LARGE', got: %s", body)
+	}
+}
+
+func TestUploadAvatar_RateLimited(t *testing.T) {
+	scenario := NewUserTestScenario(t)
+	defer scenario.Cleanup(t)
+
+	userID := uuid.New().String()
+	filename := "avatar.jpg"
+	fileData := []byte("fake-jpeg-data")
+
+	// Rate limit scenario
+	scenario.ExpectRateLimitExceeded()
+
+	// Execute request expecting rate limit error
+	recorder := scenario.UploadAvatarExpectingError(t, userID, filename, fileData, "image/jpeg", 429)
+
+	// Verify rate limit error
+	if recorder.Code != 429 {
+		t.Errorf("Expected status 429, got %d", recorder.Code)
+	}
+	
+	retryAfter := recorder.Header().Get("Retry-After")
+	if retryAfter != "3600" {
+		t.Errorf("Expected Retry-After header '3600', got '%s'", retryAfter)
+	}
+}
+
 // Note: CreateProfileRequest and CreateProfileResponse are defined in user_handler.go
 
 // Helper function to check if a string contains a substring
@@ -319,4 +517,12 @@ func (m *MockUserService) UpdateUser(ctx context.Context, userID string, updateD
 func (m *MockUserService) DeleteUser(ctx context.Context, userID string) error {
 	args := m.Called(ctx, userID)
 	return args.Error(0)
+}
+
+func (m *MockUserService) UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error) {
+	args := m.Called(ctx, userID, filename, fileData)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
 }

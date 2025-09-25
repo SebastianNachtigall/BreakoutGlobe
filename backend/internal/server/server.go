@@ -1,24 +1,47 @@
 package server
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"breakoutglobe/internal/config"
+	"breakoutglobe/internal/handlers"
+	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/repository"
+	"breakoutglobe/internal/services"
 )
 
 type Server struct {
 	config *config.Config
 	router *gin.Engine
+	db     *gorm.DB
 	// Simple in-memory storage for POI participants (for testing)
 	poiParticipants map[string]map[string]string // poiId -> sessionId -> username
 }
 
 func New(cfg *config.Config) *Server {
 	gin.SetMode(cfg.GinMode)
+	
+	// Setup database connection
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	
+	// Auto-migrate models
+	if err := db.AutoMigrate(&models.User{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
 	
 	router := gin.Default()
 	
@@ -33,6 +56,7 @@ func New(cfg *config.Config) *Server {
 	s := &Server{
 		config: cfg,
 		router: router,
+		db:     db,
 		poiParticipants: make(map[string]map[string]string),
 	}
 	
@@ -70,19 +94,162 @@ func (s *Server) setupRoutes() {
 		api.POST("/pois/:poiId/join", s.joinPOI)
 		api.POST("/pois/:poiId/leave", s.leavePOI)
 		
-		// Simple user profile endpoints for testing
-		api.GET("/users/profile", s.getUserProfile)
-		api.POST("/users/profile", s.createUserProfile)
-		api.PUT("/users/profile", s.updateUserProfile)
-		api.POST("/users/avatar", s.uploadAvatar)
+		// User profile endpoints with proper handlers
+		s.setupUserRoutes(api)
 	}
 	
 	// WebSocket endpoint (simple echo for now)
 	s.router.GET("/ws", s.handleWebSocket)
 }
 
+func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
+	// Setup dependencies
+	userRepo := repository.NewUserRepository(s.db)
+	userService := services.NewUserService(userRepo)
+	
+	// For now, create a simple in-memory rate limiter (TODO: use Redis in production)
+	rateLimiter := &SimpleRateLimiter{}
+	
+	userHandler := handlers.NewUserHandler(userService, rateLimiter)
+	
+	// Register user routes
+	userHandler.RegisterRoutes(s.router)
+}
+
 func (s *Server) Start(addr string) error {
 	return s.router.Run(addr)
+}
+
+// SimpleRateLimiter is a simple in-memory rate limiter for testing
+type SimpleRateLimiter struct {
+	mu sync.Mutex
+	requests map[string][]time.Time
+}
+
+func (r *SimpleRateLimiter) IsAllowed(ctx context.Context, userID string, action services.ActionType) (bool, error) {
+	allowed, _ := r.checkLimit(userID, action, false)
+	return allowed, nil
+}
+
+func (r *SimpleRateLimiter) CheckRateLimit(ctx context.Context, userID string, action services.ActionType) error {
+	allowed, err := r.checkLimit(userID, action, true)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return &services.RateLimitError{
+			UserID:     userID,
+			Action:     action,
+			Limit:      100,
+			RetryAfter: 3600, // 1 hour in seconds
+		}
+	}
+	return nil
+}
+
+func (r *SimpleRateLimiter) checkLimit(userID string, action services.ActionType, addRequest bool) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	if r.requests == nil {
+		r.requests = make(map[string][]time.Time)
+	}
+	
+	key := fmt.Sprintf("%s:%s", userID, action)
+	now := time.Now()
+	window := 1 * time.Hour // Simple 1-hour window
+	limit := 100 // Simple limit of 100 requests per hour
+	
+	// Clean old requests
+	var validRequests []time.Time
+	for _, reqTime := range r.requests[key] {
+		if now.Sub(reqTime) < window {
+			validRequests = append(validRequests, reqTime)
+		}
+	}
+	
+	// Check if limit exceeded
+	if len(validRequests) >= limit {
+		return false, nil
+	}
+	
+	// Add current request if requested
+	if addRequest {
+		validRequests = append(validRequests, now)
+		r.requests[key] = validRequests
+	}
+	
+	return true, nil
+}
+
+func (r *SimpleRateLimiter) GetRemainingRequests(ctx context.Context, userID string, action services.ActionType) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	if r.requests == nil {
+		return 100, nil
+	}
+	
+	key := fmt.Sprintf("%s:%s", userID, action)
+	now := time.Now()
+	window := 1 * time.Hour
+	limit := 100
+	
+	// Count valid requests
+	count := 0
+	for _, reqTime := range r.requests[key] {
+		if now.Sub(reqTime) < window {
+			count++
+		}
+	}
+	
+	remaining := limit - count
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, nil
+}
+
+func (r *SimpleRateLimiter) GetWindowResetTime(ctx context.Context, userID string, action services.ActionType) (time.Time, error) {
+	return time.Now().Add(1 * time.Hour), nil
+}
+
+func (r *SimpleRateLimiter) SetCustomLimit(userID string, action services.ActionType, limit services.RateLimit) {
+	// Simple implementation - ignore custom limits for now
+}
+
+func (r *SimpleRateLimiter) ClearUserLimits(ctx context.Context, userID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	if r.requests == nil {
+		return nil
+	}
+	
+	// Remove all entries for this user
+	for key := range r.requests {
+		if len(key) > len(userID) && key[:len(userID)] == userID {
+			delete(r.requests, key)
+		}
+	}
+	
+	return nil
+}
+
+func (r *SimpleRateLimiter) GetUserStats(ctx context.Context, userID string) (*services.UserRateLimitStats, error) {
+	return &services.UserRateLimitStats{
+		UserID:      userID,
+		ActionStats: make(map[services.ActionType]services.ActionStats),
+		GeneratedAt: time.Now(),
+	}, nil
+}
+
+func (r *SimpleRateLimiter) GetRateLimitHeaders(ctx context.Context, userID string, action services.ActionType) (map[string]string, error) {
+	remaining, _ := r.GetRemainingRequests(ctx, userID, action)
+	return map[string]string{
+		"X-RateLimit-Limit":     "100",
+		"X-RateLimit-Remaining": fmt.Sprintf("%d", remaining),
+	}, nil
 }
 
 // Simple handlers for testing integration

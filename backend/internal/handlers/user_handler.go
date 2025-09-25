@@ -15,6 +15,7 @@ import (
 // UserServiceInterface defines the interface for user service operations
 type UserServiceInterface interface {
 	CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error)
+	UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error)
 }
 
 // UserHandler handles HTTP requests for user operations
@@ -37,6 +38,7 @@ func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
 	{
 		// User profile management
 		api.POST("/users/profile", h.CreateProfile)
+		api.POST("/users/avatar", h.UploadAvatar)
 	}
 }
 
@@ -111,6 +113,111 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusCreated, response)
+}
+
+// UploadAvatar handles POST /api/users/avatar
+func (h *UserHandler) UploadAvatar(c *gin.Context) {
+	// Get user ID from header (temporary - will be from auth middleware later)
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    "UNAUTHORIZED",
+			Message: "User ID required",
+		})
+		return
+	}
+	
+	// Check rate limit
+	if err := h.rateLimiter.CheckRateLimit(c, userID, services.ActionCreatePOI); err != nil {
+		h.handleRateLimitError(c, err)
+		return
+	}
+	
+	// Parse multipart form
+	err := c.Request.ParseMultipartForm(2 << 20) // 2MB max
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_REQUEST",
+			Message: "Failed to parse multipart form",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Get file from form
+	file, header, err := c.Request.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "MISSING_FILE",
+			Message: "Avatar file is required",
+			Details: err.Error(),
+		})
+		return
+	}
+	defer file.Close()
+	
+	// Validate file size (max 2MB)
+	if header.Size > 2*1024*1024 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "FILE_TOO_LARGE",
+			Message: "File size must be less than 2MB",
+		})
+		return
+	}
+	
+	// Validate file type by checking file extension and content type
+	contentType := header.Header.Get("Content-Type")
+	validTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/jpg":  true,
+		"image/png":  true,
+	}
+	
+	if !validTypes[contentType] {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_FILE_TYPE",
+			Message: "Only JPEG and PNG files are allowed",
+		})
+		return
+	}
+	
+	// Read file data
+	fileData := make([]byte, header.Size)
+	_, err = file.Read(fileData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "FILE_READ_ERROR",
+			Message: "Failed to read file data",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Upload avatar via service
+	user, err := h.userService.UploadAvatar(c, userID, header.Filename, fileData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "UPLOAD_FAILED",
+			Message: "Failed to upload avatar",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Add rate limit headers
+	h.addRateLimitHeaders(c, userID, services.ActionCreatePOI)
+	
+	// Return updated user profile
+	response := CreateProfileResponse{
+		ID:          user.ID,
+		DisplayName: user.DisplayName,
+		AccountType: string(user.AccountType),
+		Role:        string(user.Role),
+		IsActive:    user.IsActive,
+		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+	}
+	
+	c.JSON(http.StatusOK, response)
 }
 
 // Helper methods
