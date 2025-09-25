@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useUserProfileStore } from '../stores/userProfileStore';
+import { userProfileStore } from '../stores/userProfileStore';
 import { updateUserProfile } from '../services/api';
 
 interface ProfileSettingsModalProps {
@@ -8,7 +8,7 @@ interface ProfileSettingsModalProps {
 }
 
 const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { profile, updateProfile } = useUserProfileStore();
+  const { profile, setProfile } = userProfileStore();
   const [displayName, setDisplayName] = useState('');
   const [aboutMe, setAboutMe] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -84,7 +84,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
       }
 
       const updatedProfile = await updateUserProfile(updates);
-      updateProfile(updatedProfile);
+      setProfile(updatedProfile);
       onClose();
     } catch (err) {
       setError('Failed to update profile. Please try again.');

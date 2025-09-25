@@ -1,14 +1,14 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import ProfileSettingsModal from './ProfileSettingsModal';
-import { useUserProfileStore } from '../stores/userProfileStore';
+import { userProfileStore } from '../stores/userProfileStore';
 import * as api from '../services/api';
 
 // Mock the user profile store
 vi.mock('../stores/userProfileStore', () => ({
-  useUserProfileStore: vi.fn()
+  userProfileStore: vi.fn()
 }));
-const mockUseUserProfileStore = vi.mocked(useUserProfileStore);
+const mockUserProfileStore = vi.mocked(userProfileStore);
 
 // Mock the API
 vi.mock('../services/api');
@@ -16,7 +16,7 @@ const mockApi = vi.mocked(api);
 
 describe('ProfileSettingsModal', () => {
   const mockOnClose = vi.fn();
-  const mockUpdateProfile = vi.fn();
+  const mockSetProfile = vi.fn();
   
   const mockGuestProfile = {
     id: 'user-123',
@@ -37,15 +37,22 @@ describe('ProfileSettingsModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockUseUserProfileStore.mockReturnValue({
+    mockUserProfileStore.mockReturnValue({
       profile: mockGuestProfile,
-      updateProfile: mockUpdateProfile,
-      isLoading: false,
-      error: null,
-      createProfile: vi.fn(),
-      uploadAvatar: vi.fn(),
-      clearError: vi.fn(),
-      syncWithBackend: vi.fn()
+      setProfile: mockSetProfile,
+      getProfile: vi.fn(),
+      clearProfile: vi.fn(),
+      loadFromLocalStorage: vi.fn(),
+      saveToLocalStorage: vi.fn(),
+      syncToBackend: vi.fn(),
+      queueForSync: vi.fn(),
+      syncWithRetry: vi.fn(),
+      getProfileOffline: vi.fn(),
+      isFromCache: vi.fn(),
+      getCacheInfo: vi.fn(),
+      getPendingChanges: vi.fn(),
+      cacheInfo: { lastUpdated: 0, isFromCache: false },
+      pendingChanges: []
     });
   });
 
@@ -75,15 +82,22 @@ describe('ProfileSettingsModal', () => {
     });
 
     it('should allow editing display name for full accounts', () => {
-      mockUseUserProfileStore.mockReturnValue({
+      mockUserProfileStore.mockReturnValue({
         profile: mockFullProfile,
-        updateProfile: mockUpdateProfile,
-        isLoading: false,
-        error: null,
-        createProfile: vi.fn(),
-        uploadAvatar: vi.fn(),
-        clearError: vi.fn(),
-        syncWithBackend: vi.fn()
+        setProfile: mockSetProfile,
+        getProfile: vi.fn(),
+        clearProfile: vi.fn(),
+        loadFromLocalStorage: vi.fn(),
+        saveToLocalStorage: vi.fn(),
+        syncToBackend: vi.fn(),
+        queueForSync: vi.fn(),
+        syncWithRetry: vi.fn(),
+        getProfileOffline: vi.fn(),
+        isFromCache: vi.fn(),
+        getCacheInfo: vi.fn(),
+        getPendingChanges: vi.fn(),
+        cacheInfo: { lastUpdated: 0, isFromCache: false },
+        pendingChanges: []
       });
 
       render(<ProfileSettingsModal isOpen={true} onClose={mockOnClose} />);
@@ -115,7 +129,7 @@ describe('ProfileSettingsModal', () => {
         });
       });
       
-      expect(mockUpdateProfile).toHaveBeenCalledWith({
+      expect(mockSetProfile).toHaveBeenCalledWith({
         ...mockGuestProfile,
         aboutMe: 'Updated about me text'
       });
@@ -123,15 +137,22 @@ describe('ProfileSettingsModal', () => {
     });
 
     it('should update both display name and about me for full profile', async () => {
-      mockUseUserProfileStore.mockReturnValue({
+      mockUserProfileStore.mockReturnValue({
         profile: mockFullProfile,
-        updateProfile: mockUpdateProfile,
-        isLoading: false,
-        error: null,
-        createProfile: vi.fn(),
-        uploadAvatar: vi.fn(),
-        clearError: vi.fn(),
-        syncWithBackend: vi.fn()
+        setProfile: mockSetProfile,
+        getProfile: vi.fn(),
+        clearProfile: vi.fn(),
+        loadFromLocalStorage: vi.fn(),
+        saveToLocalStorage: vi.fn(),
+        syncToBackend: vi.fn(),
+        queueForSync: vi.fn(),
+        syncWithRetry: vi.fn(),
+        getProfileOffline: vi.fn(),
+        isFromCache: vi.fn(),
+        getCacheInfo: vi.fn(),
+        getPendingChanges: vi.fn(),
+        cacheInfo: { lastUpdated: 0, isFromCache: false },
+        pendingChanges: []
       });
 
       mockApi.updateUserProfile.mockResolvedValue({
@@ -195,15 +216,22 @@ describe('ProfileSettingsModal', () => {
 
   describe('Form Validation', () => {
     it('should validate display name length for full accounts', async () => {
-      mockUseUserProfileStore.mockReturnValue({
+      mockUserProfileStore.mockReturnValue({
         profile: mockFullProfile,
-        updateProfile: mockUpdateProfile,
-        isLoading: false,
-        error: null,
-        createProfile: vi.fn(),
-        uploadAvatar: vi.fn(),
-        clearError: vi.fn(),
-        syncWithBackend: vi.fn()
+        setProfile: mockSetProfile,
+        getProfile: vi.fn(),
+        clearProfile: vi.fn(),
+        loadFromLocalStorage: vi.fn(),
+        saveToLocalStorage: vi.fn(),
+        syncToBackend: vi.fn(),
+        queueForSync: vi.fn(),
+        syncWithRetry: vi.fn(),
+        getProfileOffline: vi.fn(),
+        isFromCache: vi.fn(),
+        getCacheInfo: vi.fn(),
+        getPendingChanges: vi.fn(),
+        cacheInfo: { lastUpdated: 0, isFromCache: false },
+        pendingChanges: []
       });
 
       render(<ProfileSettingsModal isOpen={true} onClose={mockOnClose} />);
