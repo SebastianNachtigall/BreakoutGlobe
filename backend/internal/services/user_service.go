@@ -50,6 +50,32 @@ func (s *UserService) CreateGuestProfile(ctx context.Context, displayName string
 	return user, nil
 }
 
+// CreateGuestProfileWithAboutMe creates a new guest user profile with aboutMe field
+func (s *UserService) CreateGuestProfileWithAboutMe(ctx context.Context, displayName, aboutMe string) (*models.User, error) {
+	// Create new guest user
+	user, err := models.NewGuestUser(displayName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create guest user: %w", err)
+	}
+
+	// Set aboutMe if provided
+	if aboutMe != "" {
+		user.AboutMe = &aboutMe
+	}
+
+	// Validate user
+	if err := user.Validate(); err != nil {
+		return nil, fmt.Errorf("user validation failed: %w", err)
+	}
+
+	// Save to repository
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to save user: %w", err)
+	}
+
+	return user, nil
+}
+
 // GetUser retrieves a user by ID
 func (s *UserService) GetUser(ctx context.Context, userID string) (*models.User, error) {
 	if userID == "" {

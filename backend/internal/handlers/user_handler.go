@@ -16,6 +16,7 @@ import (
 // UserServiceInterface defines the interface for user service operations
 type UserServiceInterface interface {
 	CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error)
+	CreateGuestProfileWithAboutMe(ctx context.Context, displayName, aboutMe string) (*models.User, error)
 	GetUser(ctx context.Context, userID string) (*models.User, error)
 	UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error)
 	UpdateProfile(ctx context.Context, userID string, req *services.UpdateProfileRequest) (*models.User, error)
@@ -58,13 +59,14 @@ type CreateProfileRequest struct {
 
 // CreateProfileResponse represents the response for creating a user profile
 type CreateProfileResponse struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
-	AccountType string `json:"accountType"`
-	Role        string `json:"role"`
-	IsActive    bool   `json:"isActive"`
-	CreatedAt   string `json:"createdAt"`
-	AvatarURL   string `json:"avatarUrl,omitempty"`
+	ID          string  `json:"id"`
+	DisplayName string  `json:"displayName"`
+	AccountType string  `json:"accountType"`
+	Role        string  `json:"role"`
+	IsActive    bool    `json:"isActive"`
+	CreatedAt   string  `json:"createdAt"`
+	AvatarURL   string  `json:"avatarUrl,omitempty"`
+	AboutMe     *string `json:"aboutMe,omitempty"`
 }
 
 // UpdateProfileRequest represents the request body for updating a user profile
@@ -113,8 +115,8 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 		return
 	}
 	
-	// Create guest profile
-	user, err := h.userService.CreateGuestProfile(c, req.DisplayName)
+	// Create guest profile with aboutMe
+	user, err := h.userService.CreateGuestProfileWithAboutMe(c, req.DisplayName, req.AboutMe)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    "INTERNAL_ERROR",
@@ -136,6 +138,7 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
 		AvatarURL:   stringPtrToString(user.AvatarURL),
+		AboutMe:     user.AboutMe,
 	}
 	
 	c.JSON(http.StatusCreated, response)
@@ -289,6 +292,7 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
 		AvatarURL:   stringPtrToString(user.AvatarURL),
+		AboutMe:     user.AboutMe,
 	}
 	
 	c.JSON(http.StatusOK, response)

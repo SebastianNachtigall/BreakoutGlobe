@@ -87,14 +87,14 @@ func (s *UserTestScenario) ExpectRateLimitExceeded() *UserTestScenario {
 
 // ExpectGuestProfileCreationSuccess sets up the user service to successfully create a guest profile
 func (s *UserTestScenario) ExpectGuestProfileCreationSuccess(displayName string, expectedUser *models.User) *UserTestScenario {
-	s.mockUserService.On("CreateGuestProfile", mock.Anything, displayName).Return(expectedUser, nil)
+	s.mockUserService.On("CreateGuestProfileWithAboutMe", mock.Anything, displayName, mock.AnythingOfType("string")).Return(expectedUser, nil)
 	
 	return s
 }
 
 // ExpectGuestProfileCreationError sets up the user service to return an error during guest profile creation
 func (s *UserTestScenario) ExpectGuestProfileCreationError(displayName string, err error) *UserTestScenario {
-	s.mockUserService.On("CreateGuestProfile", mock.Anything, displayName).Return(nil, err)
+	s.mockUserService.On("CreateGuestProfileWithAboutMe", mock.Anything, displayName, mock.AnythingOfType("string")).Return(nil, err)
 	
 	return s
 }
@@ -494,6 +494,14 @@ type MockUserService struct {
 
 func (m *MockUserService) CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error) {
 	args := m.Called(ctx, displayName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) CreateGuestProfileWithAboutMe(ctx context.Context, displayName, aboutMe string) (*models.User, error) {
+	args := m.Called(ctx, displayName, aboutMe)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

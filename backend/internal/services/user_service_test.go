@@ -417,3 +417,35 @@ func (m *MockUserRepository) Update(ctx context.Context, user *models.User) erro
 	args := m.Called(ctx, user)
 	return args.Error(0)
 }
+
+func TestUserService_CreateGuestProfile_WithAboutMe(t *testing.T) {
+	// This test demonstrates the current limitation - aboutMe is not supported
+	// Following TDD, this test should fail first, then we implement the feature
+	scenario := newUserServiceTestScenario(t)
+	defer scenario.cleanup()
+
+	displayName := "Test User"
+	aboutMe := "Hello, I am a test user!"
+	
+	// Configure expectations for aboutMe support
+	scenario.mockUserRepo.On("Create", mock.Anything, mock.MatchedBy(func(user *models.User) bool {
+		return user.DisplayName == displayName && 
+			user.AccountType == models.AccountTypeGuest &&
+			user.AboutMe != nil && *user.AboutMe == aboutMe
+	})).Return(nil)
+
+	// This should create a guest profile with aboutMe
+	// Currently this will fail because CreateGuestProfile doesn't accept aboutMe
+	user, err := scenario.service.CreateGuestProfileWithAboutMe(context.Background(), displayName, aboutMe)
+
+	// Verify aboutMe is set correctly
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if user == nil {
+		t.Errorf("Expected user to be created, got nil")
+	}
+	if user.AboutMe == nil || *user.AboutMe != aboutMe {
+		t.Errorf("Expected aboutMe '%s', got %v", aboutMe, user.AboutMe)
+	}
+}
