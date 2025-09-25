@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
 import ProfileCreationModal from './components/ProfileCreationModal'
+import ProfileMenu from './components/ProfileMenu'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
@@ -488,10 +489,15 @@ function App() {
               <h1 className="text-2xl font-bold">BreakoutGlobe</h1>
               <p className="text-blue-100">Interactive Workshop Platform</p>
             </div>
-            <ConnectionStatus 
-              status={connectionStatus}
-              sessionId={sessionState.sessionId}
-            />
+            <div className="flex items-center space-x-4">
+              <ConnectionStatus 
+                status={connectionStatus}
+                sessionId={sessionState.sessionId}
+              />
+              {userProfile && (
+                <ProfileMenu userProfile={userProfile} />
+              )}
+            </div>
           </div>
         </div>
 

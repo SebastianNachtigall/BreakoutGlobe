@@ -124,14 +124,14 @@ This implementation plan uses a **vertical slice approach** to deliver working f
 
 ### Slice 3: Profile Management & Settings
 
-- [ ] 10. Implement profile update functionality
+- [x] 10. Implement profile update functionality
   - Extend User model with AboutMe field and update migration
   - Write tests using expectProfileUpdateAuthorization() for guest profile updates
   - Add PUT /api/users/profile endpoint with display name and about me updates
   - Use expectGuestProfileUpdateRestrictions() for limited editing capabilities
   - _Requirements: 5.1, 5.2_
 
-- [ ] 11. Create basic profile settings UI
+- [x] 11. Create basic profile settings UI
   - Write tests using component test patterns for ProfileSettingsModal
   - Use expectProfileSettingsAccess() for guest profile editing restrictions
   - Create settings modal with display name (read-only) and about me (editable)
