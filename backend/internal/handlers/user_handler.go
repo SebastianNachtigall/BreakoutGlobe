@@ -229,9 +229,11 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	// Get user ID from header (session-based user identification)
 	userID := c.GetHeader("X-User-ID")
 	if userID == "" {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Code:    "UNAUTHORIZED",
-			Message: "User ID required",
+		// For guest profiles, no user ID means no profile exists yet
+		// This is expected behavior before profile creation
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Code:    "NO_PROFILE",
+			Message: "No user profile found",
 		})
 		return
 	}

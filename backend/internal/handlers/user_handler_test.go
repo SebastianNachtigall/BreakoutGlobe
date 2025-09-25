@@ -628,10 +628,10 @@ func TestGetProfile_MissingUserID(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	scenario.router.ServeHTTP(recorder, req)
 	
-	// Verify error response
-	if recorder.Code != http.StatusUnauthorized {
+	// Verify error response - should be 404 for guest profiles (no profile exists yet)
+	if recorder.Code != http.StatusNotFound {
 		t.Errorf("Expected status %d, got %d. Response: %s", 
-			http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+			http.StatusNotFound, recorder.Code, recorder.Body.String())
 	}
 }
 

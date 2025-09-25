@@ -450,14 +450,14 @@ func TestUserProfileFlow_GetProfile(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		env.userRouter.ServeHTTP(recorder, req)
 
-		// Verify response
-		assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+		// Verify response - should be 404 for guest profiles (no profile exists yet)
+		assert.Equal(t, http.StatusNotFound, recorder.Code)
 
 		var errorResponse map[string]interface{}
 		err := json.Unmarshal(recorder.Body.Bytes(), &errorResponse)
 		require.NoError(t, err)
 
-		assert.Equal(t, "UNAUTHORIZED", errorResponse["code"])
-		assert.Equal(t, "User ID required", errorResponse["message"])
+		assert.Equal(t, "NO_PROFILE", errorResponse["code"])
+		assert.Equal(t, "No user profile found", errorResponse["message"])
 	})
 }
