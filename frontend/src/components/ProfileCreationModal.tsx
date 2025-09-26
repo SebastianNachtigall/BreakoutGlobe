@@ -75,15 +75,34 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
     setErrors({});
 
     try {
-      const profile = await createGuestProfile({
+      console.log('🚀 ProfileCreationModal: Starting profile creation...');
+      console.log('📝 ProfileCreationModal: Form data:', {
+        displayName: formData.displayName.trim(),
+        aboutMe: formData.aboutMe.trim(),
+        aboutMeLength: formData.aboutMe.trim().length,
+        aboutMeAfterProcessing: formData.aboutMe.trim() || undefined,
+      });
+
+      const requestData = {
         displayName: formData.displayName.trim(),
         aboutMe: formData.aboutMe.trim() || undefined,
         avatarFile: formData.avatarFile,
+      };
+
+      console.log('📡 ProfileCreationModal: Sending to API:', requestData);
+
+      const profile = await createGuestProfile(requestData);
+
+      console.log('✅ ProfileCreationModal: Profile created successfully:', profile);
+      console.log('📦 ProfileCreationModal: aboutMe in response:', {
+        aboutMe: profile.aboutMe,
+        aboutMeType: typeof profile.aboutMe,
+        aboutMeLength: profile.aboutMe?.length || 0,
       });
 
       onProfileCreated(profile);
     } catch (error) {
-      console.error('Failed to create profile:', error);
+      console.error('❌ ProfileCreationModal: Failed to create profile:', error);
       
       if (error instanceof APIError) {
         setErrors({ general: error.message });

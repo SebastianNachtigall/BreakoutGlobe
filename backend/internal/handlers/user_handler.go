@@ -115,9 +115,13 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 		return
 	}
 	
+	// Log the incoming request for debugging
+	fmt.Printf("🚀 UserHandler: CreateProfile called with DisplayName='%s', AboutMe='%s'\n", req.DisplayName, req.AboutMe)
+	
 	// Create guest profile with aboutMe
 	user, err := h.userService.CreateGuestProfileWithAboutMe(c, req.DisplayName, req.AboutMe)
 	if err != nil {
+		fmt.Printf("❌ UserHandler: Failed to create profile: %v\n", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    "INTERNAL_ERROR",
 			Message: "Failed to create profile",
@@ -125,6 +129,8 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 		})
 		return
 	}
+	
+	fmt.Printf("✅ UserHandler: Profile created successfully, AboutMe='%v'\n", user.AboutMe)
 	
 	// Add rate limit headers
 	h.addRateLimitHeaders(c, user.ID, services.ActionCreatePOI)

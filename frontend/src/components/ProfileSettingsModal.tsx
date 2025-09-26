@@ -17,11 +17,30 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
 
   // Initialize form values when profile changes or modal opens
   useEffect(() => {
+    console.log('🔄 ProfileSettingsModal: useEffect triggered', { 
+      hasProfile: !!profile, 
+      isOpen,
+      profileId: profile?.id,
+    });
+    
     if (profile && isOpen) {
+      console.log('📋 ProfileSettingsModal: Initializing form with profile:', {
+        displayName: profile.displayName,
+        aboutMe: profile.aboutMe,
+        aboutMeType: typeof profile.aboutMe,
+        aboutMeProcessed: profile.aboutMe || '',
+      });
+      
       setDisplayName(profile.displayName);
       setAboutMe(profile.aboutMe || '');
       setHasChanges(false);
       setError(null);
+      
+      console.log('✅ ProfileSettingsModal: Form initialized');
+    } else {
+      console.log('⏭️ ProfileSettingsModal: Skipping initialization', {
+        reason: !profile ? 'no profile' : 'modal not open'
+      });
     }
   }, [profile, isOpen]);
 

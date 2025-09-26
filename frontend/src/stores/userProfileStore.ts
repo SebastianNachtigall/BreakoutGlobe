@@ -51,6 +51,13 @@ export const userProfileStore = create<UserProfileState>((set, get) => ({
   pendingChanges: [],
 
   setProfile: (profile: UserProfile) => {
+    console.log('🏪 UserProfileStore: setProfile called with:', {
+      id: profile.id,
+      displayName: profile.displayName,
+      aboutMe: profile.aboutMe,
+      aboutMeType: typeof profile.aboutMe,
+    });
+    
     set({
       profile,
       cacheInfo: {
@@ -61,6 +68,8 @@ export const userProfileStore = create<UserProfileState>((set, get) => ({
     
     // Save to localStorage
     get().saveToLocalStorage(profile);
+    
+    console.log('✅ UserProfileStore: Profile set and saved to localStorage');
   },
 
   getProfile: () => {

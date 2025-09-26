@@ -32,12 +32,16 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function createGuestProfile(request: CreateGuestProfileRequest): Promise<UserProfile> {
+  console.log('🌐 API: createGuestProfile called with:', request);
+  
   // First create the profile
   const requestBody = {
     displayName: request.displayName,
     accountType: 'guest', // Required by backend
     aboutMe: request.aboutMe || ''
   };
+
+  console.log('📡 API: Sending request body to backend:', requestBody);
 
   const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
     method: 'POST',
@@ -47,8 +51,13 @@ export async function createGuestProfile(request: CreateGuestProfileRequest): Pr
     body: JSON.stringify(requestBody),
   });
 
+  console.log('📨 API: Response status:', response.status);
+
   let profile = await handleResponse<UserProfileAPI>(response);
+  console.log('📦 API: Raw response from backend:', profile);
+  
   let transformedProfile = transformUserProfileFromAPI(profile);
+  console.log('🔄 API: Transformed profile:', transformedProfile);
 
   // If avatar file is provided, upload it after profile creation
   if (request.avatarFile) {

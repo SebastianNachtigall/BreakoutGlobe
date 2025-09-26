@@ -52,16 +52,17 @@ func (s *UserService) CreateGuestProfile(ctx context.Context, displayName string
 
 // CreateGuestProfileWithAboutMe creates a new guest user profile with aboutMe field
 func (s *UserService) CreateGuestProfileWithAboutMe(ctx context.Context, displayName, aboutMe string) (*models.User, error) {
+	fmt.Printf("🏗️ UserService: CreateGuestProfileWithAboutMe called with displayName='%s', aboutMe='%s'\n", displayName, aboutMe)
+	
 	// Create new guest user
 	user, err := models.NewGuestUser(displayName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create guest user: %w", err)
 	}
 
-	// Set aboutMe if provided
-	if aboutMe != "" {
-		user.AboutMe = &aboutMe
-	}
+	// Always set aboutMe field (even if empty) to ensure consistent behavior
+	user.AboutMe = &aboutMe
+	fmt.Printf("📝 UserService: Set user.AboutMe to '%v' (pointer to '%s')\n", user.AboutMe, aboutMe)
 
 	// Validate user
 	if err := user.Validate(); err != nil {
@@ -69,10 +70,12 @@ func (s *UserService) CreateGuestProfileWithAboutMe(ctx context.Context, display
 	}
 
 	// Save to repository
+	fmt.Printf("💾 UserService: Saving user to repository...\n")
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
+	fmt.Printf("✅ UserService: User saved successfully, returning user with AboutMe='%v'\n", user.AboutMe)
 	return user, nil
 }
 

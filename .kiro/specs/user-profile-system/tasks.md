@@ -138,6 +138,20 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Write tests using expectProfileUpdateSuccess() for save functionality
   - _Requirements: 5.1, 5.4_
 
+- [ ] 11.1. Investigate aboutMe field not displaying in ProfileSettingsModal
+  - Profile creation saves aboutMe field correctly (backend verified)
+  - ProfileSettingsModal shows empty aboutMe field after profile creation
+  - Need to investigate frontend data loading and display logic
+  - Check profile data flow from creation → storage → settings modal
+  - _Technical Debt: Critical for user experience_
+
+- [ ] 11.2. Fix integration test failures
+  - Multiple integration tests failing due to missing CreatedBy fields
+  - Foreign key constraint violations in concurrent operations
+  - WebSocket message type mismatches in real-time event tests
+  - Need to update test data and fix test infrastructure issues
+  - _Technical Debt: Critical for CI/CD pipeline stability_
+
 **Result after Slice 3**: Users can edit their profiles and manage their information through a settings interface.
 
 ### Slice 4: Full Account Upgrade & Authentication
