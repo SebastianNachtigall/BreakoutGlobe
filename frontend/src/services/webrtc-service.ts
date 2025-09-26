@@ -22,12 +22,33 @@ export class WebRTCService {
   
   private readonly defaultConfig: WebRTCConfig = {
     iceServers: [
+      // STUN servers for NAT discovery
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' }
-    ]
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      // Free TURN servers for traffic relay (when STUN isn't enough)
+      { 
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      { 
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject', 
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ],
+    // ICE configuration for better connectivity
+    iceCandidatePoolSize: 10,
+    iceTransportPolicy: 'all',
+    bundlePolicy: 'max-bundle',
+    rtcpMuxPolicy: 'require'
   };
 
   constructor(config?: Partial<WebRTCConfig>) {
@@ -52,7 +73,11 @@ export class WebRTCService {
     // Handle ICE candidates
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        console.log('🧊 WebRTC: ICE candidate generated');
+        const candidate = event.candidate;
+        const candidateType = candidate.candidate.includes('typ relay') ? 'TURN' : 
+                             candidate.candidate.includes('typ srflx') ? 'STUN' : 
+                             candidate.candidate.includes('typ host') ? 'HOST' : 'UNKNOWN';
+        console.log(`🧊 WebRTC: ICE candidate generated (${candidateType}):`, candidate.candidate.substring(0, 50) + '...');
         this.callbacks.onIceCandidate?.(event.candidate);
       }
     };
@@ -68,24 +93,44 @@ export class WebRTCService {
     this.peerConnection.onconnectionstatechange = () => {
       const state = this.peerConnection?.connectionState;
       console.log('🔄 WebRTC: Connection state changed to:', state);
+      
+      if (state === 'connected') {
+        console.log('🎉 WebRTC: Peer connection fully established');
+      } else if (state === 'disconnected') {
+        console.warn('⚠️ WebRTC: Peer connection disconnected');
+      } else if (state === 'failed') {
+        console.error('❌ WebRTC: Peer connection failed');
+      }
+      
       if (state) {
         this.callbacks.onConnectionStateChange?.(state);
       }
     };
 
-    // Handle ICE connection state changes
+    // Handle ICE connection state changes with retry logic
     this.peerConnection.oniceconnectionstatechange = () => {
       const state = this.peerConnection?.iceConnectionState;
       console.log('🧊 WebRTC: ICE connection state changed to:', state);
       
-      // Additional debugging for ICE connection issues
       if (state === 'failed') {
         console.error('❌ WebRTC: ICE connection failed');
         this.callbacks.onError?.(new Error('ICE connection failed'));
       } else if (state === 'disconnected') {
-        console.warn('⚠️ WebRTC: ICE connection disconnected');
+        console.warn('⚠️ WebRTC: ICE connection disconnected - attempting to reconnect...');
+        // Don't immediately fail on disconnected - give it more time to reconnect with TURN
+        setTimeout(() => {
+          const currentState = this.peerConnection?.iceConnectionState;
+          if (currentState === 'disconnected' || currentState === 'failed') {
+            console.error('❌ WebRTC: ICE connection failed after extended retry timeout');
+            this.callbacks.onError?.(new Error('ICE connection failed after retry'));
+          } else if (currentState === 'connected' || currentState === 'completed') {
+            console.log('✅ WebRTC: ICE connection recovered successfully');
+          }
+        }, 10000); // Wait 10 seconds before giving up (TURN servers need more time)
       } else if (state === 'connected') {
         console.log('✅ WebRTC: ICE connection established');
+      } else if (state === 'completed') {
+        console.log('🎉 WebRTC: ICE connection completed (optimal path found)');
       }
     };
 
@@ -250,15 +295,25 @@ export class WebRTCService {
     // Stop local media tracks
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => {
+        console.log(`🛑 Stopping ${track.kind} track`);
         track.stop();
       });
       this.localStream = null;
     }
 
-    // Close peer connection
+    // Properly close peer connection with all event handlers
     if (this.peerConnection) {
+      // Remove all event listeners to prevent callbacks during cleanup
+      this.peerConnection.onicecandidate = null;
+      this.peerConnection.ontrack = null;
+      this.peerConnection.onconnectionstatechange = null;
+      this.peerConnection.oniceconnectionstatechange = null;
+      this.peerConnection.onicegatheringstatechange = null;
+      
+      // Close the connection
       this.peerConnection.close();
       this.peerConnection = null;
+      console.log('🔌 Peer connection closed and nullified');
     }
 
     // Clear callbacks

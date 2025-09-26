@@ -61,6 +61,15 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   
   // Actions
   initiateCall: async (targetUserId, targetUserName, targetUserAvatar) => {
+    // Clean up any existing call first
+    const { webrtcService, callState } = get();
+    if (webrtcService || callState !== 'idle') {
+      console.log('🧹 Cleaning up existing call before starting new one');
+      get().clearCall();
+      // Wait a bit for cleanup to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
     const callId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     console.log('📞 Initiating call to:', targetUserName);
@@ -100,13 +109,20 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         },
         onConnectionStateChange: (state) => {
           console.log('🔄 Connection state:', state);
-          if (state === 'failed' || state === 'disconnected') {
+          const currentState = get();
+          // Only end call on connection failure if we're still in an active call
+          if (state === 'failed' && currentState.callState !== 'ended' && currentState.callState !== 'idle') {
+            console.log('❌ WebRTC connection failed, ending call');
             get().endCall();
           }
+          // Don't auto-end on 'disconnected' as this happens during normal cleanup
         },
         onError: (error) => {
           console.error('❌ WebRTC error:', error);
-          get().endCall();
+          const currentState = get();
+          if (currentState.callState !== 'ended' && currentState.callState !== 'idle') {
+            get().endCall();
+          }
         }
       });
       
@@ -141,6 +157,13 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   
   receiveCall: (callId, fromUserId, fromUserName, fromUserAvatar) => {
     console.log('📞 Receiving call from:', fromUserName);
+    
+    // Clean up any existing call first
+    const { webrtcService, callState } = get();
+    if (webrtcService || callState !== 'idle') {
+      console.log('🧹 Cleaning up existing call before receiving new one');
+      get().clearCall();
+    }
     
     set({
       callState: 'ringing',
@@ -188,13 +211,20 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         },
         onConnectionStateChange: (state) => {
           console.log('🔄 Connection state:', state);
-          if (state === 'failed' || state === 'disconnected') {
+          const currentState = get();
+          // Only end call on connection failure if we're still in an active call
+          if (state === 'failed' && currentState.callState !== 'ended' && currentState.callState !== 'idle') {
+            console.log('❌ WebRTC connection failed, ending call');
             get().endCall();
           }
+          // Don't auto-end on 'disconnected' as this happens during normal cleanup
         },
         onError: (error) => {
           console.error('❌ WebRTC error:', error);
-          get().endCall();
+          const currentState = get();
+          if (currentState.callState !== 'ended' && currentState.callState !== 'idle') {
+            get().endCall();
+          }
         }
       });
       
@@ -244,16 +274,16 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   },
   
   endCall: () => {
-    const { currentCall, webrtcService } = get();
-    if (!currentCall) {
+    const { currentCall, webrtcService, callState } = get();
+    if (!currentCall || callState === 'ended' || callState === 'idle') {
       console.warn('No current call to end');
       return;
     }
     
     console.log('📵 Call ended');
     
-    // Send call end via WebSocket
-    if (wsClient && wsClient.isConnected()) {
+    // Send call end via WebSocket (only if we're ending the call, not if we received end)
+    if (wsClient && wsClient.isConnected() && callState !== 'ended') {
       wsClient.sendCallEnd(currentCall.callId, currentCall.targetUserId);
     }
     
@@ -284,6 +314,13 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   
   clearCall: () => {
     console.log('🧹 Clearing call state');
+    const { webrtcService } = get();
+    
+    // Ensure WebRTC service is properly cleaned up
+    if (webrtcService) {
+      webrtcService.cleanup();
+    }
+    
     set({
       callState: 'idle',
       currentCall: null,
