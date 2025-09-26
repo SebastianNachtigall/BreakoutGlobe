@@ -181,6 +181,21 @@ This implementation plan uses a **vertical slice approach** to deliver working f
 
 **Result after Slice 3**: Users can edit their profiles and manage their information through a settings interface.
 
+### Slice 3.5: Multi-User Avatar Visibility (Real-time Collaboration)
+
+- [ ] 11.3. Implement multi-user avatar state management and real-time synchronization
+  - Create avatarStore using Zustand to track all users' avatars and positions on current map
+  - Write tests using expectMultiUserAvatarDisplay() for avatar visibility across different browsers
+  - Extend WebSocket client to handle avatar_moved, user_joined, user_left message types
+  - Use expectAvatarPositionSync() for real-time position updates from other users
+  - Add initial state loading to fetch existing users when joining a map
+  - Write tests using expectInitialUserStateLoad() for showing current active users
+  - Update App.tsx avatars array to include other users from avatarStore state
+  - Use expectMapUserIsolation() to ensure users only see avatars from their current map
+  - _Requirements: 3.1.1, 3.1.2, 3.1.3, 3.1.7_
+
+**Result after Slice 3.5**: Users can see each other's avatars in real-time across different browsers. Complete multi-user collaboration experience!
+
 ### Slice 4: Full Account Upgrade & Authentication
 
 - [ ] 12. Add email and password fields to User model

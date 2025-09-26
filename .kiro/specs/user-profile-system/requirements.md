@@ -47,6 +47,20 @@ This feature introduces a comprehensive user profile and account system that rep
 5. WHEN users move on the map THEN their avatar SHALL move in real-time for all other users
 6. WHEN a user updates their avatar THEN it SHALL update in real-time for all connected users
 
+### Requirement 3.1: Multi-User Avatar Visibility
+
+**User Story:** As a user, I want to see all other users' avatars on the map in real-time so that I can collaborate effectively and know who else is present.
+
+#### Acceptance Criteria
+
+1. WHEN I join a map THEN the system SHALL display all currently active users' avatars with their profiles
+2. WHEN another user joins the same map THEN their avatar SHALL appear immediately on my map
+3. WHEN another user moves their avatar THEN I SHALL see their movement in real-time within 200ms
+4. WHEN another user leaves the map THEN their avatar SHALL disappear from my map immediately
+5. WHEN I am on a different map THEN I SHALL NOT see avatars from users on other maps
+6. WHEN another user updates their profile or avatar THEN the changes SHALL reflect on their map avatar immediately
+7. WHEN the system loads initial state THEN it SHALL show the current positions of all active users on the map
+
 ### Requirement 4: Access Control & Authentication
 
 **User Story:** As a system, I want to ensure only users with profiles can access maps and enforce appropriate permissions based on account type.

@@ -1,6 +1,7 @@
 import { sessionStore } from '../stores/sessionStore';
 import { poiStore } from '../stores/poiStore';
-import type { POIData } from '../components/MapContainer';
+import { avatarStore } from '../stores/avatarStore';
+import type { POIData, AvatarData } from '../components/MapContainer';
 
 export enum ConnectionStatus {
   DISCONNECTED = 'disconnected',
@@ -61,6 +62,7 @@ export class WebSocketClient {
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
+          console.log('🔌 WebSocket: Connected successfully to', this.url);
           this.connectionStatus = ConnectionStatus.CONNECTED;
           this.reconnectAttempts = 0;
           this.reconnectDelay = 1000; // Reset delay
@@ -228,9 +230,18 @@ export class WebSocketClient {
 
   // Message Handling
   send(message: WebSocketMessage): void {
+    console.log('📤 WebSocket: Sending message', {
+      type: message.type,
+      data: message.data,
+      sessionId: this.sessionId,
+      connected: this.isConnected(),
+      queued: !this.isConnected()
+    });
+    
     if (this.isConnected() && this.ws) {
       this.ws.send(JSON.stringify(message));
     } else {
+      console.log('📋 WebSocket: Queueing message (not connected)', message.type);
       // Queue message for later
       this.messageQueue.push(message);
     }
@@ -253,9 +264,18 @@ export class WebSocketClient {
       if (!message.timestamp) {
         message.timestamp = new Date();
       }
+      
+      console.log('📨 WebSocket: Raw message received', {
+        type: message.type,
+        data: message.data,
+        sessionId: this.sessionId,
+        timestamp: message.timestamp
+      });
+      
       this.notifyMessage(message);
       this.processMessage(message);
     } catch (error) {
+      console.error('❌ WebSocket: Failed to parse message', error, event.data);
       this.notifyError({
         message: 'Failed to parse WebSocket message',
         timestamp: new Date()
@@ -264,15 +284,43 @@ export class WebSocketClient {
   }
 
   private processMessage(message: WebSocketMessage): void {
+    console.log('🔄 WebSocket: Processing message', {
+      type: message.type,
+      data: message.data,
+      sessionId: this.sessionId,
+      isOwnSession: message.data?.sessionId === this.sessionId
+    });
+    
     switch (message.type) {
+      case 'welcome':
+        this.handleWelcome(message.data);
+        break;
+      case 'error':
+        this.handleError(message.data);
+        break;
       case 'avatar_update':
         this.handleAvatarUpdate(message.data);
+        break;
+      case 'avatar_move_ack':
+        this.handleAvatarMoveAck(message.data);
         break;
       case 'avatar_move_confirmed':
         this.handleAvatarMoveConfirmed(message.data);
         break;
       case 'avatar_move_rejected':
         this.handleAvatarMoveRejected(message.data);
+        break;
+      case 'avatar_moved':
+        this.handleAvatarMoved(message.data);
+        break;
+      case 'user_joined':
+        this.handleUserJoined(message.data);
+        break;
+      case 'user_left':
+        this.handleUserLeft(message.data);
+        break;
+      case 'initial_users':
+        this.handleInitialUsers(message.data);
         break;
       case 'poi_update':
         this.handlePOIUpdate(message.data);
@@ -287,12 +335,33 @@ export class WebSocketClient {
         this.handlePOICreateRejected(message.data);
         break;
       default:
-        // Unknown message type, ignore or log
+        console.log('❓ WebSocket: Unknown message type', message.type);
         break;
     }
   }
 
   // Store Integration Handlers
+  private handleWelcome(data: any): void {
+    console.log('🎉 WebSocket: Welcome message received', data);
+    // Welcome message - connection established successfully
+  }
+
+  private handleError(data: any): void {
+    console.error('❌ WebSocket: Server error', data);
+    this.notifyError({
+      message: data.message || 'Server error',
+      timestamp: new Date()
+    });
+  }
+
+  private handleAvatarMoveAck(data: any): void {
+    console.log('✅ WebSocket: Avatar move acknowledged', data);
+    // Avatar move was acknowledged by server
+    if (data.sessionId === this.sessionId) {
+      sessionStore.getState().confirmAvatarPosition(data.position);
+    }
+  }
+
   private handleAvatarUpdate(data: any): void {
     if (data.sessionId === this.sessionId) {
       sessionStore.getState().confirmAvatarPosition(data.position);
@@ -366,6 +435,12 @@ export class WebSocketClient {
 
   // Optimistic Update Methods
   moveAvatar(position: { lat: number; lng: number }): void {
+    console.log('🚀 WebSocket: Sending avatar move', {
+      sessionId: this.sessionId,
+      position,
+      connected: this.isConnected()
+    });
+    
     // Perform optimistic update
     sessionStore.getState().updateAvatarPosition(position, true);
 
@@ -484,12 +559,126 @@ export class WebSocketClient {
 
   // Leave current POI (for map clicks)
   leaveCurrentPOI(): void {
-    const userId = this.sessionId;
     const currentPOI = poiStore.getState().getCurrentUserPOI();
 
     if (currentPOI) {
       this.leavePOI(currentPOI);
     }
+  }
+
+  // Multi-User Avatar Handlers
+  private handleAvatarMoved(data: any): void {
+    console.log('🏃 WebSocket: Received avatar_moved', {
+      data,
+      mySessionId: this.sessionId,
+      isOwnMovement: data.sessionId === this.sessionId
+    });
+    
+    // Handle other users' avatar movements
+    if (data.sessionId !== this.sessionId) {
+      console.log('👤 WebSocket: Updating other user avatar position', {
+        sessionId: data.sessionId,
+        userId: data.userId,
+        position: data.position,
+        mySessionId: this.sessionId
+      });
+      
+      avatarStore.getState().updateAvatarPosition(
+        data.sessionId,
+        data.position,
+        true // Mark as moving
+      );
+
+      this.notifyStateSync({
+        type: 'avatar',
+        data: { sessionId: data.sessionId, position: data.position },
+        timestamp: new Date()
+      });
+    } else {
+      console.log('🚫 WebSocket: Ignoring own avatar movement', {
+        sessionId: data.sessionId,
+        mySessionId: this.sessionId
+      });
+    }
+  }
+
+  private handleUserJoined(data: any): void {
+    console.log('👋 WebSocket: Received user_joined', data);
+    // Handle new user joining the map
+    if (data.sessionId !== this.sessionId) {
+      const avatarData: AvatarData = {
+        sessionId: data.sessionId,
+        userId: data.userId,
+        displayName: data.displayName || data.userId,
+        avatarURL: data.avatarURL,
+        position: data.position || { lat: 0, lng: 0 },
+        isCurrentUser: false,
+        isMoving: false,
+        role: data.role || 'user'
+      };
+
+      console.log('➕ WebSocket: Adding new user avatar', avatarData);
+      avatarStore.getState().addOrUpdateAvatar(avatarData);
+
+      this.notifyStateSync({
+        type: 'avatar',
+        data: { action: 'joined', avatar: avatarData },
+        timestamp: new Date()
+      });
+    } else {
+      console.log('🚫 WebSocket: Ignoring own user joined event');
+    }
+  }
+
+  private handleUserLeft(data: any): void {
+    // Handle user leaving the map
+    if (data.sessionId !== this.sessionId) {
+      avatarStore.getState().removeAvatar(data.sessionId);
+
+      this.notifyStateSync({
+        type: 'avatar',
+        data: { action: 'left', sessionId: data.sessionId },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  private handleInitialUsers(data: any): void {
+    console.log('📋 WebSocket: Received initial_users', data);
+    // Handle initial user state when joining a map
+    if (data.users && Array.isArray(data.users)) {
+      const otherUsers: AvatarData[] = data.users
+        .filter((user: any) => user.sessionId !== this.sessionId)
+        .map((user: any) => ({
+          sessionId: user.sessionId,
+          userId: user.userId,
+          displayName: user.displayName || user.userId,
+          avatarURL: user.avatarURL,
+          position: user.position || { lat: 0, lng: 0 },
+          isCurrentUser: false,
+          isMoving: false,
+          role: user.role || 'user'
+        }));
+
+      console.log('📥 WebSocket: Loading initial users', otherUsers);
+      avatarStore.getState().loadInitialUsers(otherUsers);
+
+      this.notifyStateSync({
+        type: 'avatar',
+        data: { action: 'initial_load', users: otherUsers },
+        timestamp: new Date()
+      });
+    }
+  }
+
+  // Request initial users when connecting
+  requestInitialUsers(): void {
+    console.log('📋 WebSocket: Requesting initial users');
+    this.send({
+      type: 'request_initial_users',
+      data: { mapId: 'default-map' }, // TODO: Use actual map ID
+      timestamp: new Date()
+    });
   }
 
 

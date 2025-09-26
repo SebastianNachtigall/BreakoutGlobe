@@ -30,7 +30,7 @@ func NewManager() *Manager {
 		mapClients: make(map[string]map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		broadcast:  make(chan BroadcastMessage),
+		broadcast:  make(chan BroadcastMessage, 100), // Buffer for 100 messages
 		logger:     slog.Default(),
 	}
 	
@@ -205,12 +205,19 @@ func (m *Manager) registerClient(client *Client) {
 	}
 	m.mapClients[client.MapID][client.SessionID] = client
 	
-	m.logger.Info("Client registered", 
+	// Log all clients in this map for debugging
+	var mapClientSessions []string
+	for sessionID := range m.mapClients[client.MapID] {
+		mapClientSessions = append(mapClientSessions, sessionID)
+	}
+	
+	m.logger.Info("✅ Client registered", 
 		"sessionId", client.SessionID, 
 		"userId", client.UserID, 
 		"mapId", client.MapID,
 		"totalClients", len(m.clients),
-		"mapClients", len(m.mapClients[client.MapID]))
+		"mapClients", len(m.mapClients[client.MapID]),
+		"mapClientSessions", mapClientSessions)
 }
 
 // unregisterClient handles client unregistration
@@ -246,24 +253,61 @@ func (m *Manager) broadcastToMap(broadcastMsg BroadcastMessage) {
 	
 	mapClients, exists := m.mapClients[broadcastMsg.MapID]
 	if !exists {
+		m.logger.Warn("🚫 No clients found for map during broadcast", 
+			"mapId", broadcastMsg.MapID, 
+			"messageType", broadcastMsg.Message.Type)
 		return
 	}
 	
+	totalClients := len(mapClients)
+	eligibleClients := 0
 	sentCount := 0
+	failedCount := 0
+	
+	// Count eligible clients (excluding sender)
+	for sessionID := range mapClients {
+		if broadcastMsg.ExceptID == "" || sessionID != broadcastMsg.ExceptID {
+			eligibleClients++
+		}
+	}
+	
+	m.logger.Info("📡 Starting broadcast to map", 
+		"mapId", broadcastMsg.MapID, 
+		"messageType", broadcastMsg.Message.Type,
+		"totalClients", totalClients,
+		"eligibleClients", eligibleClients,
+		"exceptId", broadcastMsg.ExceptID)
+	
 	for sessionID, client := range mapClients {
 		// Skip the excluded session if specified
 		if broadcastMsg.ExceptID != "" && sessionID == broadcastMsg.ExceptID {
+			m.logger.Debug("⏭️ Skipping sender client", 
+				"sessionId", sessionID,
+				"mapId", broadcastMsg.MapID)
 			continue
 		}
+		
+		m.logger.Debug("📤 Attempting to send message to client", 
+			"sessionId", sessionID,
+			"userId", client.UserID,
+			"mapId", broadcastMsg.MapID,
+			"messageType", broadcastMsg.Message.Type)
 		
 		select {
 		case client.Send <- broadcastMsg.Message:
 			sentCount++
+			m.logger.Debug("✅ Message sent successfully to client", 
+				"sessionId", sessionID,
+				"userId", client.UserID,
+				"messageType", broadcastMsg.Message.Type)
 		default:
+			failedCount++
 			// Client's send channel is full, close it
-			m.logger.Warn("Client send channel full during broadcast, closing connection", 
+			m.logger.Warn("❌ Client send channel full during broadcast, closing connection", 
 				"sessionId", client.SessionID,
-				"mapId", broadcastMsg.MapID)
+				"userId", client.UserID,
+				"mapId", broadcastMsg.MapID,
+				"messageType", broadcastMsg.Message.Type)
 			
 			// Close channel safely
 			select {
@@ -278,12 +322,13 @@ func (m *Manager) broadcastToMap(broadcastMsg BroadcastMessage) {
 		}
 	}
 	
-	if sentCount > 0 {
-		m.logger.Debug("Message broadcasted to map", 
-			"mapId", broadcastMsg.MapID, 
-			"messageType", broadcastMsg.Message.Type,
-			"recipients", sentCount)
-	}
+	m.logger.Info("📊 Broadcast completed", 
+		"mapId", broadcastMsg.MapID, 
+		"messageType", broadcastMsg.Message.Type,
+		"totalClients", totalClients,
+		"eligibleClients", eligibleClients,
+		"sentCount", sentCount,
+		"failedCount", failedCount)
 }
 
 // Shutdown gracefully shuts down the manager

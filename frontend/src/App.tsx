@@ -10,6 +10,7 @@ import ProfileMenu from './components/ProfileMenu'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
+import { avatarStore } from './stores/avatarStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { getCurrentUserProfile } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
@@ -26,7 +27,18 @@ function App() {
   // Store subscriptions
   const sessionState = sessionStore()
   const poiState = poiStore()
-  const errorState = errorStore()
+  // const errorState = errorStore() // Not used in current implementation
+  const avatarState = avatarStore()
+  
+  // Force re-render when avatar store changes by subscribing to the entire store
+  const [avatarStoreVersion, setAvatarStoreVersion] = useState(0)
+  
+  useEffect(() => {
+    const unsubscribe = avatarStore.subscribe(() => {
+      setAvatarStoreVersion(prev => prev + 1)
+    })
+    return unsubscribe
+  }, [])
   
   // Local component state
   const [wsClient, setWsClient] = useState<WebSocketClient | null>(null)
@@ -60,7 +72,7 @@ function App() {
           
           // Try to sync with backend in the background (don't block UI)
           try {
-            const backendProfile = await getCurrentUserProfile()
+            const backendProfile = await getCurrentUserProfile(profile.id)
             if (backendProfile && backendProfile.id === profile.id) {
               // Update local profile with any backend changes
               userProfileStore.getState().setProfile(backendProfile)
@@ -124,12 +136,12 @@ function App() {
           sessionId = sessionData.sessionId || sessionData.id
           
           // Update session store
-          sessionStore.getState().createSession(sessionId, sessionData.position || mockSession.position)
+          sessionStore.getState().createSession(sessionId!, sessionData.position || mockSession.position)
         }
 
         // Initialize WebSocket connection
         const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`
-        const client = new WebSocketClient(wsUrl, sessionId)
+        const client = new WebSocketClient(wsUrl, sessionId!)
         
         // Set up WebSocket event handlers
         client.onStatusChange((status) => {
@@ -146,9 +158,20 @@ function App() {
           })
         })
         
+        // Set up multi-user avatar event handlers
+        client.onStateSync((data) => {
+          if (data.type === 'avatar') {
+            // Handle avatar-related state sync events
+            console.log('Avatar state sync:', data);
+          }
+        })
+        
         // Connect WebSocket
         await client.connect()
         setWsClient(client)
+        
+        // Request initial users after connection
+        client.requestInitialUsers()
         
         // Load initial POIs
         await loadPOIs()
@@ -377,9 +400,20 @@ function App() {
           })
         })
         
+        // Set up multi-user avatar event handlers
+        client.onStateSync((data) => {
+          if (data.type === 'avatar') {
+            // Handle avatar-related state sync events
+            console.log('Avatar state sync:', data);
+          }
+        })
+        
         // Connect WebSocket
         await client.connect()
         setWsClient(client)
+        
+        // Request initial users after connection
+        client.requestInitialUsers()
         
         // Load initial POIs
         await loadPOIs()
@@ -409,8 +443,8 @@ function App() {
 
   // Convert session state to avatar data for MapContainer
   // CRITICAL: Memoize avatars array to prevent unnecessary re-renders and marker recreation
-  const avatars: AvatarData[] = useMemo(() => [
-    {
+  const avatars: AvatarData[] = useMemo(() => {
+    const currentUserAvatar: AvatarData = {
       sessionId: sessionState.sessionId || 'current-user',
       userId: userProfile?.id,
       displayName: userProfile?.displayName,
@@ -419,16 +453,21 @@ function App() {
       isCurrentUser: true,
       isMoving: sessionState.isMoving,
       role: userProfile?.role
-    }
-    // TODO: Add other users' avatars from real-time updates
-  ], [
+    };
+    
+    // Get other users' avatars from avatarStore
+    const otherUsersAvatars = avatarState.getAvatarsForCurrentMap();
+    
+    return [currentUserAvatar, ...otherUsersAvatars];
+  }, [
     sessionState.sessionId,
     userProfile?.id,
     userProfile?.displayName,
     userProfile?.avatarURL,
     sessionState.avatarPosition,
     sessionState.isMoving,
-    userProfile?.role
+    userProfile?.role,
+    avatarStoreVersion // Use version to trigger re-renders when avatar store changes
   ])
 
 

@@ -86,10 +86,20 @@ export async function createGuestProfile(request: CreateGuestProfileRequest): Pr
   return transformedProfile;
 }
 
-export async function getCurrentUserProfile(): Promise<UserProfile | null> {
+export async function getCurrentUserProfile(userId?: string): Promise<UserProfile | null> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add X-User-ID header if userId is provided
+    if (userId) {
+      headers['X-User-ID'] = userId;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/api/users/profile`, {
       method: 'GET',
+      headers,
       credentials: 'include',
     });
 

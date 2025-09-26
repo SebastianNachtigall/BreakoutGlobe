@@ -151,7 +151,7 @@ func TestDatabaseIntegration_SessionOperations(t *testing.T) {
 	
 	// Test querying active sessions for a map
 	var activeSessions []models.Session
-	err = testDB.DB.Where("map_id = ? AND is_active = ?", "integration-map", true).Find(&activeSessions).Error
+	err = testDB.DB.Where("map_id = ? AND is_active = ?", basicData.GetTestMap().ID, true).Find(&activeSessions).Error
 	assert.NoError(t, err)
 	assert.Len(t, activeSessions, 1)
 	assert.Equal(t, originalSession.ID, activeSessions[0].ID)

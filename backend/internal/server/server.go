@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -22,6 +21,7 @@ import (
 	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
+	"breakoutglobe/internal/websocket"
 )
 
 type Server struct {
@@ -33,23 +33,32 @@ type Server struct {
 }
 
 func New(cfg *config.Config) *Server {
+	log.Printf("🚀 Creating new server with config: GinMode=%s, DatabaseURL=%s", cfg.GinMode, cfg.DatabaseURL)
 	gin.SetMode(cfg.GinMode)
 	
 	var db *gorm.DB
 	
 	// Only connect to database if not in test mode
 	if cfg.GinMode != "test" {
+		log.Printf("🔗 Attempting to connect to database: %s", cfg.DatabaseURL)
+		
 		// Setup database connection
 		var err error
 		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
+			log.Fatalf("❌ Failed to connect to database: %v", err)
 		}
+		
+		log.Println("✅ Database connection established")
 		
 		// Auto-migrate models
 		if err := db.AutoMigrate(&models.User{}); err != nil {
-			log.Fatalf("Failed to migrate database: %v", err)
+			log.Fatalf("❌ Failed to migrate database: %v", err)
 		}
+		
+		log.Println("✅ Database migration completed")
+	} else {
+		log.Println("⚠️ Running in test mode, skipping database connection")
 	}
 	
 	router := gin.Default()
@@ -75,6 +84,8 @@ func New(cfg *config.Config) *Server {
 }
 
 func (s *Server) setupRoutes() {
+	log.Println("🔧 Setting up routes...")
+	
 	// Health check
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -104,19 +115,24 @@ func (s *Server) setupRoutes() {
 		api.POST("/pois/:poiId/leave", s.leavePOI)
 		
 		// User profile endpoints with proper handlers
+		log.Println("About to call setupUserRoutes")
 		s.setupUserRoutes(api)
+		log.Println("setupUserRoutes call completed")
 		
 		// Serve uploaded avatar files
 		api.GET("/users/avatar/:filename", s.serveAvatar)
 	}
 	
-	// WebSocket endpoint (simple echo for now)
-	s.router.GET("/ws", s.handleWebSocket)
+	// WebSocket handler setup removed during phantom debugging
 }
 
 func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
+	log.Printf("🔧 setupUserRoutes called, db is nil: %v", s.db == nil)
+	
 	// Only setup user routes if database is available (not in test mode)
 	if s.db != nil {
+		log.Println("📊 Database available, setting up user routes and WebSocket handler")
+		
 		// Setup dependencies
 		userRepo := repository.NewUserRepository(s.db)
 		userService := services.NewUserService(userRepo)
@@ -128,7 +144,30 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		
 		// Register user routes
 		userHandler.RegisterRoutes(s.router)
+		
+		// Setup WebSocket handler for multi-user functionality
+		s.setupWebSocketHandler(userService, rateLimiter)
+	} else {
+		log.Println("⚠️ Database not available, skipping user routes and WebSocket handler setup")
 	}
+}
+
+func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLimiter services.RateLimiterInterface) {
+	log.Println("🔧 Setting up WebSocket handler...")
+	
+	// Create a simple session service adapter for the WebSocket handler
+	sessionService := &SimpleSessionService{
+		server:    s,
+		positions: make(map[string]models.LatLng),
+	}
+	
+	// Create WebSocket handler
+	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService)
+	
+	// Register the WebSocket handler
+	s.router.GET("/ws", wsHandler.HandleWebSocket)
+	
+	log.Println("✅ WebSocket handler setup complete - using proper multi-user handler")
 }
 
 func (s *Server) Start(addr string) error {
@@ -467,33 +506,7 @@ func (s *Server) leavePOI(c *gin.Context) {
 	})
 }
 
-func (s *Server) handleWebSocket(c *gin.Context) {
-	// Simple WebSocket echo server for testing
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all origins for testing
-		},
-	}
-	
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to upgrade connection"})
-		return
-	}
-	defer conn.Close()
-	
-	for {
-		messageType, message, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-		
-		// Echo the message back
-		if err := conn.WriteMessage(messageType, message); err != nil {
-			break
-		}
-	}
-}
+
 
 // serveAvatar serves uploaded avatar files with comprehensive security validation
 // Implements secure file serving with:
@@ -645,3 +658,69 @@ func (s *Server) uploadAvatar(c *gin.Context) {
 	
 	c.JSON(http.StatusOK, profile)
 }
+
+// SimpleSessionService is an adapter that makes the server's session functions work with WebSocket handler
+type SimpleSessionService struct {
+	server *Server
+	// In-memory storage for session positions (in production, this would be in Redis/DB)
+	positions map[string]models.LatLng
+	mutex     sync.RWMutex
+}
+
+func (s *SimpleSessionService) GetSession(ctx context.Context, sessionID string) (*models.Session, error) {
+	// Parse the session ID to extract user ID and map ID
+	// Session ID format: "session-{userID}-{mapID}"
+	// Note: userID is a UUID with hyphens, so we need to be careful with parsing
+	
+	if !strings.HasPrefix(sessionID, "session-") {
+		return nil, fmt.Errorf("invalid session ID format: must start with 'session-'")
+	}
+	
+	// Remove "session-" prefix
+	remainder := sessionID[8:] // len("session-") = 8
+	
+	// Find the last occurrence of "-default-map" to extract the mapID
+	mapSuffix := "-default-map"
+	mapIndex := strings.LastIndex(remainder, mapSuffix)
+	if mapIndex == -1 {
+		return nil, fmt.Errorf("invalid session ID format: must end with '-default-map'")
+	}
+	
+	userID := remainder[:mapIndex]
+	mapID := remainder[mapIndex+1:] // Skip the "-" before "default-map"
+	
+	// Get stored position or use default
+	s.mutex.RLock()
+	position, exists := s.positions[sessionID]
+	s.mutex.RUnlock()
+	
+	if !exists {
+		position = models.LatLng{Lat: 40.7128, Lng: -74.0060} // Default position
+	}
+	
+	// Create a mock session for WebSocket handler
+	session := &models.Session{
+		ID:       sessionID,
+		UserID:   userID,
+		MapID:    mapID,
+		AvatarPos: position,
+		IsActive: true,
+	}
+	
+	return session, nil
+}
+
+func (s *SimpleSessionService) SessionHeartbeat(ctx context.Context, sessionID string) error {
+	// For now, just return success
+	return nil
+}
+
+func (s *SimpleSessionService) UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) error {
+	// Store the position in memory
+	s.mutex.Lock()
+	s.positions[sessionID] = position
+	s.mutex.Unlock()
+	
+	return nil
+}
+

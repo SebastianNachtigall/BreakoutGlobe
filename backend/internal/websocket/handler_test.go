@@ -105,7 +105,7 @@ func (suite *WebSocketHandlerTestSuite) SetupTest() {
 	suite.mockRateLimiter = new(MockRateLimiter)
 	
 	// Create handler
-	suite.handler = NewHandler(suite.mockSessionService, suite.mockRateLimiter)
+	suite.handler = NewHandler(suite.mockSessionService, suite.mockRateLimiter, nil)
 	
 	// Setup test server
 	router := gin.New()

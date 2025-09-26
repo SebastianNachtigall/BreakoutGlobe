@@ -45,20 +45,27 @@ type RateLimiterInterface interface {
 	CheckRateLimit(ctx context.Context, userID string, action services.ActionType) error
 }
 
+// UserServiceInterface defines the interface for user operations
+type UserServiceInterface interface {
+	GetUser(ctx context.Context, userID string) (*models.User, error)
+}
+
 // Handler handles WebSocket connections and messages
 type Handler struct {
 	sessionService SessionServiceInterface
 	rateLimiter    RateLimiterInterface
+	userService    UserServiceInterface
 	manager        *Manager
 	upgrader       ws.Upgrader
 	logger         *slog.Logger
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterInterface) *Handler {
+func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterInterface, userService UserServiceInterface) *Handler {
 	return &Handler{
 		sessionService: sessionService,
 		rateLimiter:    rateLimiter,
+		userService:    userService,
 		manager:        NewManager(),
 		upgrader: ws.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -74,11 +81,13 @@ func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterI
 
 // HandleWebSocket handles WebSocket connection upgrades
 func (h *Handler) HandleWebSocket(c *gin.Context) {
-	// Extract session ID from Authorization header
-	authHeader := c.GetHeader("Authorization")
-	sessionID, err := extractSessionID(authHeader)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
+	// Extract session ID from query parameter
+	sessionID := c.Query("sessionId")
+	h.logger.Info("WebSocket connection attempt", "sessionId", sessionID)
+	
+	if sessionID == "" {
+		h.logger.Warn("WebSocket connection failed: missing sessionId")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing sessionId query parameter"})
 		return
 	}
 	
@@ -138,6 +147,70 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 	}
 	client.Send <- welcomeMsg
 	
+	// Automatically send initial users to the new client
+	h.logger.Info("📋 Automatically sending initial users to new client", "sessionId", sessionID)
+	h.handleRequestInitialUsers(c.Request.Context(), client, Message{Type: "request_initial_users"})
+	
+	// Try to get user profile for display name and avatar
+	displayName := session.UserID
+	var avatarURL *string
+	
+	if h.userService != nil {
+		user, err := h.userService.GetUser(c.Request.Context(), session.UserID)
+		if err == nil && user != nil {
+			displayName = user.DisplayName
+			avatarURL = user.AvatarURL
+		} else {
+			h.logger.Debug("Could not get user profile for user_joined", 
+				"userId", session.UserID, 
+				"error", err)
+			// Fallback to first 8 characters of UUID
+			if len(session.UserID) > 8 {
+				displayName = session.UserID[:8]
+			}
+		}
+	} else {
+		// Fallback to first 8 characters of UUID
+		if len(session.UserID) > 8 {
+			displayName = session.UserID[:8]
+		}
+	}
+	
+	// Convert relative avatar URL to absolute URL
+	// TODO: Make base URL configurable instead of hardcoded localhost:8080
+	var fullAvatarURL *string
+	if avatarURL != nil && *avatarURL != "" {
+		// Convert relative path to full URL
+		fullURL := "http://localhost:8080" + *avatarURL
+		fullAvatarURL = &fullURL
+	}
+	
+	userJoinedMsg := Message{
+		Type: "user_joined",
+		Data: map[string]interface{}{
+			"sessionId":   sessionID,
+			"userId":      session.UserID,
+			"displayName": displayName,
+			"avatarURL":   fullAvatarURL,
+			"position": map[string]float64{
+				"lat": session.AvatarPos.Lat,
+				"lng": session.AvatarPos.Lng,
+			},
+			"role": "user", // Default role
+		},
+		Timestamp: time.Now(),
+	}
+	
+	mapClientCount := h.manager.GetMapClients(session.MapID)
+	h.logger.Info("📡 Broadcasting user joined", 
+		"sessionId", sessionID, 
+		"userId", session.UserID, 
+		"mapId", session.MapID,
+		"mapClientCount", mapClientCount,
+		"broadcastType", "user_joined")
+	
+	h.manager.BroadcastToMapExcept(session.MapID, sessionID, userJoinedMsg)
+	
 	// Start goroutines for reading and writing
 	go client.writePump()
 	go client.readPump(h)
@@ -146,6 +219,17 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 // readPump handles reading messages from the WebSocket connection
 func (c *Client) readPump(handler *Handler) {
 	defer func() {
+		// Broadcast user left to other clients in the same map
+		userLeftMsg := Message{
+			Type: "user_left",
+			Data: map[string]interface{}{
+				"sessionId": c.SessionID,
+				"userId":    c.UserID,
+			},
+			Timestamp: time.Now(),
+		}
+		c.Manager.BroadcastToMapExcept(c.MapID, c.SessionID, userLeftMsg)
+		
 		c.Manager.UnregisterClient(c)
 		c.Conn.Close()
 	}()
@@ -228,6 +312,9 @@ func (h *Handler) handleMessage(client *Client, msg Message) {
 		h.handleHeartbeat(ctx, client, msg)
 	case "avatar_move":
 		h.handleAvatarMove(ctx, client, msg)
+	case "request_initial_users":
+		h.logger.Info("📋 Request initial users received", "sessionId", client.SessionID)
+		h.handleRequestInitialUsers(ctx, client, msg)
 	case "poi_join":
 		h.handlePOIJoin(ctx, client, msg)
 	case "poi_leave":
@@ -276,6 +363,11 @@ func (h *Handler) handleHeartbeat(ctx context.Context, client *Client, msg Messa
 
 // handleAvatarMove processes avatar movement messages
 func (h *Handler) handleAvatarMove(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("🏃 Avatar move request received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID, 
+		"mapId", client.MapID)
+	
 	// Check rate limit
 	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionUpdateAvatar); err != nil {
 		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
@@ -403,10 +495,20 @@ func (h *Handler) handleAvatarMove(ctx context.Context, client *Client, msg Mess
 		Timestamp: time.Now(),
 	}
 	
+	// Get current map clients for logging
+	mapClientCount := h.manager.GetMapClients(client.MapID)
+	h.logger.Info("📡 Broadcasting avatar movement", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID, 
+		"mapId", client.MapID,
+		"position", position,
+		"mapClientCount", mapClientCount,
+		"broadcastType", "avatar_moved")
+	
 	// Broadcast to all clients in the same map except the sender
 	h.manager.BroadcastToMapExcept(client.MapID, client.SessionID, broadcastMsg)
 	
-	h.logger.Debug("Avatar position updated", 
+	h.logger.Info("✅ Avatar position updated and broadcasted", 
 		"sessionId", client.SessionID, 
 		"userId", client.UserID, 
 		"position", position)
@@ -469,6 +571,10 @@ func validateMessage(msg Message) error {
 			return errors.New("longitude is required")
 		}
 		
+		return nil
+		
+	case "request_initial_users":
+		// Request initial users message - no additional validation needed
 		return nil
 		
 	case "poi_join", "poi_leave":
@@ -617,3 +723,112 @@ func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Messag
 	
 	h.logger.Info("User left POI", "sessionId", client.SessionID, "userId", client.UserID, "poiId", poiID)
 }
+
+
+// handleRequestInitialUsers sends the list of currently connected users to a new client
+func (h *Handler) handleRequestInitialUsers(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📋 Processing initial users request", 
+		"sessionId", client.SessionID, 
+		"mapId", client.MapID)
+	
+	// Get all sessions for the current map
+	sessions := h.manager.GetMapClientSessions(client.MapID)
+	
+	var users []map[string]interface{}
+	
+	// For each session, get the user information
+	for _, sessionID := range sessions {
+		if sessionID == client.SessionID {
+			continue // Skip the requesting client
+		}
+		
+		// Get session info from the session service
+		session, err := h.sessionService.GetSession(ctx, sessionID)
+		if err != nil {
+			h.logger.Warn("Failed to get session for initial users", 
+				"sessionId", sessionID, 
+				"error", err.Error())
+			continue
+		}
+		
+		if !session.IsActive {
+			continue
+		}
+		
+		// Try to get user profile for display name and avatar
+		displayName := session.UserID
+		var avatarURL *string
+		
+		if h.userService != nil {
+			user, err := h.userService.GetUser(ctx, session.UserID)
+			if err == nil && user != nil {
+				displayName = user.DisplayName
+				avatarURL = user.AvatarURL
+				h.logger.Info("📸 User profile found for initial users", 
+					"userId", session.UserID, 
+					"displayName", displayName,
+					"hasAvatar", avatarURL != nil,
+					"avatarURL", func() string {
+						if avatarURL != nil {
+							return *avatarURL
+						}
+						return "nil"
+					}())
+			} else {
+				h.logger.Debug("Could not get user profile for display name", 
+					"userId", session.UserID, 
+					"error", err)
+				// Fallback to first 8 characters of UUID
+				if len(session.UserID) > 8 {
+					displayName = session.UserID[:8]
+				}
+			}
+		} else {
+			// Fallback to first 8 characters of UUID
+			if len(session.UserID) > 8 {
+				displayName = session.UserID[:8]
+			}
+		}
+		
+		// Convert relative avatar URL to absolute URL
+		// TODO: Make base URL configurable instead of hardcoded localhost:8080
+		var fullAvatarURL *string
+		if avatarURL != nil && *avatarURL != "" {
+			// Convert relative path to full URL
+			fullURL := "http://localhost:8080" + *avatarURL
+			fullAvatarURL = &fullURL
+		}
+		
+		userData := map[string]interface{}{
+			"sessionId":   sessionID,
+			"userId":      session.UserID,
+			"displayName": displayName,
+			"avatarURL":   fullAvatarURL,
+			"position": map[string]float64{
+				"lat": session.AvatarPos.Lat,
+				"lng": session.AvatarPos.Lng,
+			},
+			"role": "user", // Default role
+		}
+		
+		users = append(users, userData)
+	}
+	
+	// Send initial users message
+	initialUsersMsg := Message{
+		Type: "initial_users",
+		Data: map[string]interface{}{
+			"users": users,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	select {
+	case client.Send <- initialUsersMsg:
+		h.logger.Info("Sent initial users to client", 
+			"sessionId", client.SessionID, 
+			"userCount", len(users))
+	default:
+		h.logger.Warn("Failed to send initial users to client", 
+			"sessionId", client.SessionID)
+	}}
