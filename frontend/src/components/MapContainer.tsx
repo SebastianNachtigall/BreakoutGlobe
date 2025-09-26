@@ -9,6 +9,7 @@ export interface AvatarData {
   userId?: string;
   displayName?: string;
   avatarURL?: string;
+  aboutMe?: string;
   position: {
     lat: number;
     lng: number;
@@ -52,7 +53,7 @@ export interface MapContainerProps {
   onAvatarMove?: (position: { lat: number; lng: number }) => void;
   onPOIClick?: (poiId: string) => void;
   onPOICreate?: (position: { lat: number; lng: number }) => void;
-  onAvatarClick?: (userId: string) => void;
+  onAvatarClick?: (userId: string, clickPosition: { x: number; y: number }) => void;
   showProfileCard?: boolean;
   selectedUserProfile?: import('../types/models').UserProfile;
   onProfileCardClose?: () => void;
@@ -180,7 +181,11 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     markerElement.addEventListener('click', (event) => {
       event.stopPropagation();
       if (onAvatarClick && avatar.userId) {
-        onAvatarClick(avatar.userId);
+        const clickPosition = {
+          x: event.clientX,
+          y: event.clientY
+        };
+        onAvatarClick(avatar.userId, clickPosition);
       }
     });
 

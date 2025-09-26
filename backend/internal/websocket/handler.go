@@ -157,15 +157,17 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 	h.logger.Info("📋 Automatically sending initial users to new client", "sessionId", sessionID)
 	h.handleRequestInitialUsers(c.Request.Context(), client, Message{Type: "request_initial_users"})
 	
-	// Try to get user profile for display name and avatar
+	// Try to get user profile for display name, avatar, and about me
 	displayName := session.UserID
 	var avatarURL *string
+	var aboutMe *string
 	
 	if h.userService != nil {
 		user, err := h.userService.GetUser(c.Request.Context(), session.UserID)
 		if err == nil && user != nil {
 			displayName = user.DisplayName
 			avatarURL = user.AvatarURL
+			aboutMe = user.AboutMe
 		} else {
 			h.logger.Debug("Could not get user profile for user_joined", 
 				"userId", session.UserID, 
@@ -198,6 +200,7 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 			"userId":      session.UserID,
 			"displayName": displayName,
 			"avatarURL":   fullAvatarURL,
+			"aboutMe":     aboutMe,
 			"position": map[string]float64{
 				"lat": session.AvatarPos.Lat,
 				"lng": session.AvatarPos.Lng,
@@ -868,15 +871,17 @@ func (h *Handler) handleRequestInitialUsers(ctx context.Context, client *Client,
 			continue
 		}
 		
-		// Try to get user profile for display name and avatar
+		// Try to get user profile for display name, avatar, and about me
 		displayName := session.UserID
 		var avatarURL *string
+		var aboutMe *string
 		
 		if h.userService != nil {
 			user, err := h.userService.GetUser(ctx, session.UserID)
 			if err == nil && user != nil {
 				displayName = user.DisplayName
 				avatarURL = user.AvatarURL
+				aboutMe = user.AboutMe
 				h.logger.Info("📸 User profile found for initial users", 
 					"userId", session.UserID, 
 					"displayName", displayName,
@@ -917,6 +922,7 @@ func (h *Handler) handleRequestInitialUsers(ctx context.Context, client *Client,
 			"userId":      session.UserID,
 			"displayName": displayName,
 			"avatarURL":   fullAvatarURL,
+			"aboutMe":     aboutMe,
 			"position": map[string]float64{
 				"lat": session.AvatarPos.Lat,
 				"lng": session.AvatarPos.Lng,

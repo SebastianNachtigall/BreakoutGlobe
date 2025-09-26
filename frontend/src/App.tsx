@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
 import { VideoCallModal } from './components/VideoCallModal'
+import { AvatarTooltip } from './components/AvatarTooltip'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
 import { sessionStore } from './stores/sessionStore'
@@ -55,6 +56,17 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
+
+  // Avatar tooltip state
+  const [avatarTooltip, setAvatarTooltip] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    avatar: AvatarData | null;
+  }>({
+    isOpen: false,
+    position: { x: 0, y: 0 },
+    avatar: null
+  })
 
   const initializationRef = useRef(false)
 
@@ -559,11 +571,11 @@ function App() {
     avatarStoreVersion // Use version to trigger re-renders when avatar store changes
   ])
 
-  // Handle avatar click for video calls (defined after avatars array)
-  const handleAvatarClick = useCallback((userId: string) => {
-    // Don't allow calling yourself
+  // Handle avatar click to show tooltip (defined after avatars array)
+  const handleAvatarClick = useCallback((userId: string, clickPosition: { x: number; y: number }) => {
+    // Don't allow clicking on yourself
     if (userId === userProfile?.id) {
-      console.log('Cannot call yourself');
+      console.log('Cannot interact with your own avatar');
       return;
     }
 
@@ -574,15 +586,37 @@ function App() {
       return;
     }
 
-    console.log('📞 Avatar clicked, initiating call to:', targetAvatar.displayName);
+    console.log('👤 Avatar clicked, showing tooltip for:', targetAvatar.displayName);
+
+    // Show avatar tooltip
+    setAvatarTooltip({
+      isOpen: true,
+      position: clickPosition,
+      avatar: targetAvatar
+    });
+  }, [userProfile?.id, avatars])
+
+  // Handle starting a video call from the tooltip
+  const handleStartCall = useCallback(() => {
+    if (!avatarTooltip.avatar) return;
+
+    console.log('📞 Starting call to:', avatarTooltip.avatar.displayName);
+
+    // Close tooltip
+    setAvatarTooltip({ isOpen: false, position: { x: 0, y: 0 }, avatar: null });
 
     // Initiate video call
     videoCallStore.getState().initiateCall(
-      userId,
-      targetAvatar.displayName || targetAvatar.sessionId,
-      targetAvatar.avatarURL
+      avatarTooltip.avatar.userId,
+      avatarTooltip.avatar.displayName || avatarTooltip.avatar.sessionId,
+      avatarTooltip.avatar.avatarURL
     );
-  }, [userProfile?.id, avatars])
+  }, [avatarTooltip.avatar])
+
+  // Handle closing the avatar tooltip
+  const handleCloseTooltip = useCallback(() => {
+    setAvatarTooltip({ isOpen: false, position: { x: 0, y: 0 }, avatar: null });
+  }, [])
 
   // Show loading screen while checking for profile
   if (!profileCheckComplete) {
@@ -740,6 +774,17 @@ function App() {
             onEndCall={handleEndCall}
             onToggleAudio={handleToggleAudio}
             onToggleVideo={handleToggleVideo}
+          />
+        )}
+
+        {/* Avatar Tooltip */}
+        {avatarTooltip.avatar && (
+          <AvatarTooltip
+            isOpen={avatarTooltip.isOpen}
+            position={avatarTooltip.position}
+            avatar={avatarTooltip.avatar}
+            onClose={handleCloseTooltip}
+            onStartCall={handleStartCall}
           />
         )}
 

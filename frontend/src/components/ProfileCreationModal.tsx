@@ -156,7 +156,7 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
       data-testid="modal-backdrop"
       onClick={handleBackdropClick}
     >

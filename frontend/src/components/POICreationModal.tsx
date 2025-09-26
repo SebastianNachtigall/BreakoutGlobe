@@ -197,17 +197,17 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
 
     return (
         <div 
-            className="modal-overlay"
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
             data-testid="modal-overlay"
             onClick={handleOverlayClick}
             onKeyDown={handleKeyDown}
             tabIndex={-1}
         >
-            <div className="modal-content" data-testid="poi-creation-modal">
-                <div className="modal-header">
-                    <h2>Create New POI</h2>
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden" data-testid="poi-creation-modal">
+                <div className="bg-gray-800 text-white p-4 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">Create New POI</h2>
                     <button 
-                        className="modal-close-button"
+                        className="text-gray-400 hover:text-white text-xl transition-colors"
                         onClick={onCancel}
                         aria-label="Close modal"
                     >
