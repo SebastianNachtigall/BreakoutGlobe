@@ -25,17 +25,23 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 	testRedis := testdata.SetupRedis(t)
 	testWS := testdata.SetupWebSocket(t)
 
+	// Create fixtures for valid foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+
 	ctx := context.Background()
 
 	// Test 1: Database + Redis Integration
 	t.Run("DatabaseRedisIntegration", func(t *testing.T) {
 		t.Log("Starting Database + Redis integration test")
-		// Create a session in database
+		// Create a session in database with valid foreign keys
 		session := &models.Session{
 			ID:        "test-session-1",
-			UserID:    "user-123",
-			MapID:     "map-456",
+			UserID:    basicData.GetUser(0).ID, // Use valid user ID from fixtures
+			MapID:     basicData.GetTestMap().ID, // Use valid map ID from fixtures
 			AvatarPos: models.LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedAt: time.Now(),
+			LastActive: time.Now(),
 			IsActive:  true,
 		}
 
@@ -67,6 +73,8 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 			CreatedBy:       session.UserID,
 			MapID:           session.MapID,
 			MaxParticipants: 5,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
 		}
 
 		err = testDB.DB.Create(poi).Error
@@ -128,9 +136,11 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 		// Step 1: Create user session (Database + Redis)
 		userSession := &models.Session{
 			ID:        "flow-session-1",
-			UserID:    "flow-user-1",
-			MapID:     "flow-map-1",
+			UserID:    basicData.GetUser(1).ID, // Use valid user ID from fixtures
+			MapID:     basicData.GetTestMap().ID, // Use valid map ID from fixtures
 			AvatarPos: models.LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedAt: time.Now(),
+			LastActive: time.Now(),
 			IsActive:  true,
 		}
 
@@ -163,6 +173,8 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 			CreatedBy:       userSession.UserID,
 			MapID:           userSession.MapID,
 			MaxParticipants: 10,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
 		}
 
 		err = testDB.DB.Create(poi).Error
@@ -241,11 +253,15 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 
 		// Create multiple users
 		for i := 0; i < numUsers; i++ {
+			// Use existing users from fixtures, cycling through them
+			userIndex := i % len(basicData.Users)
 			session := &models.Session{
 				ID:        fmt.Sprintf("multi-session-%d", i+1),
-				UserID:    fmt.Sprintf("multi-user-%d", i+1),
-				MapID:     "multi-map",
+				UserID:    basicData.GetUser(userIndex).ID, // Use valid user ID from fixtures
+				MapID:     basicData.GetTestMap().ID, // Use valid map ID from fixtures
 				AvatarPos: models.LatLng{Lat: 40.7100 + float64(i)*0.001, Lng: -74.0050 + float64(i)*0.001},
+				CreatedAt: time.Now(),
+				LastActive: time.Now(),
 				IsActive:  true,
 			}
 
@@ -284,8 +300,10 @@ func TestInfrastructureFlow_DatabaseRedisWebSocketIntegration(t *testing.T) {
 			Description:     "Multi-user test POI",
 			Position:        models.LatLng{Lat: 40.7128, Lng: -74.0060},
 			CreatedBy:       sessions[0].UserID,
-			MapID:           "multi-map",
+			MapID:           basicData.GetTestMap().ID, // Use valid map ID from fixtures
 			MaxParticipants: 10,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
 		}
 
 		err := testDB.DB.Create(sharedPOI).Error
@@ -316,25 +334,45 @@ func TestInfrastructureFlow_ErrorHandling(t *testing.T) {
 	testRedis := testdata.SetupRedis(t)
 	testWS := testdata.SetupWebSocket(t)
 
+	// Create fixtures for valid foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+
 	ctx := context.Background()
 
 	t.Run("DatabaseErrorHandling", func(t *testing.T) {
-		// Try to create session with invalid data
+		// Try to create session with invalid foreign key
 		invalidSession := &models.Session{
-			ID:        "", // Empty ID should cause error
-			UserID:    "error-user",
-			MapID:     "error-map",
+			ID:        "error-session-1",
+			UserID:    "nonexistent-user", // Invalid user ID - should cause foreign key violation
+			MapID:     basicData.GetTestMap().ID, // Valid map ID
 			AvatarPos: models.LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedAt: time.Now(),
+			LastActive: time.Now(),
 			IsActive:  true,
 		}
 
 		err := testDB.DB.Create(invalidSession).Error
-		assert.Error(t, err, "Creating session with empty ID should fail")
+		assert.Error(t, err, "Creating session with invalid user ID should fail")
 
 		// Verify no data was persisted
 		var count int64
-		testDB.DB.Model(&models.Session{}).Where("user_id = ?", "error-user").Count(&count)
+		testDB.DB.Model(&models.Session{}).Where("user_id = ?", "nonexistent-user").Count(&count)
 		assert.Equal(t, int64(0), count)
+		
+		// Test successful creation with valid foreign keys
+		validSession := &models.Session{
+			ID:        "error-session-2",
+			UserID:    basicData.GetUser(0).ID, // Valid user ID from fixtures
+			MapID:     basicData.GetTestMap().ID, // Valid map ID from fixtures
+			AvatarPos: models.LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedAt: time.Now(),
+			LastActive: time.Now(),
+			IsActive:  true,
+		}
+
+		err = testDB.DB.Create(validSession).Error
+		assert.NoError(t, err, "Creating session with valid foreign keys should succeed")
 	})
 
 	t.Run("RedisErrorHandling", func(t *testing.T) {
@@ -377,11 +415,29 @@ func TestInfrastructureFlow_Performance(t *testing.T) {
 	testRedis := testdata.SetupRedis(t)
 	testWS := testdata.SetupWebSocket(t)
 
+	// Create fixtures and additional users for performance testing
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+	
+	// Create additional users for performance testing
+	const numOperations = 50
+	for i := 0; i < numOperations; i++ {
+		user := &models.User{
+			ID:          fmt.Sprintf("perf-user-%d", i),
+			DisplayName: fmt.Sprintf("Performance User %d", i),
+			AccountType: models.AccountTypeGuest,
+			Role:        models.UserRoleUser,
+			IsActive:    true,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		err := testDB.DB.Create(user).Error
+		require.NoError(t, err, "Should create performance test user %d", i)
+	}
+
 	ctx := context.Background()
 
 	t.Run("ConcurrentOperations", func(t *testing.T) {
-		const numOperations = 50
-
 		// Test concurrent database operations
 		t.Run("DatabaseConcurrency", func(t *testing.T) {
 			done := make(chan error, numOperations)
@@ -390,9 +446,11 @@ func TestInfrastructureFlow_Performance(t *testing.T) {
 				go func(index int) {
 					session := &models.Session{
 						ID:        fmt.Sprintf("perf-session-%d", index),
-						UserID:    fmt.Sprintf("perf-user-%d", index),
-						MapID:     "perf-map",
+						UserID:    fmt.Sprintf("perf-user-%d", index), // Use created performance users
+						MapID:     basicData.GetTestMap().ID, // Use valid map from fixtures
 						AvatarPos: models.LatLng{Lat: 40.7128, Lng: -74.0060},
+						CreatedAt: time.Now(),
+						LastActive: time.Now(),
 						IsActive:  true,
 					}
 

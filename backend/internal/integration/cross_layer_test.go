@@ -30,6 +30,7 @@ func TestCrossLayerErrorPropagation(t *testing.T) {
 			Name:            "Invalid POI",
 			Description:     "This should fail",
 			Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedBy:       "test-user-1", // Valid user ID
 			MaxParticipants: -1, // Negative participants should be invalid
 		}
 
@@ -50,10 +51,11 @@ func TestCrossLayerErrorPropagation(t *testing.T) {
 	t.Run("RedisFailureHandling", func(t *testing.T) {
 		// Create a valid POI first
 		createRequest := CreatePOIRequest{
-			MapID:           "map-redis-test",
+			MapID:           "map-test", // Use existing map from fixtures
 			Name:            "Redis Test POI",
 			Description:     "Testing Redis failure handling",
 			Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedBy:       "test-user-1", // Valid user ID from fixtures
 			MaxParticipants: 5,
 		}
 
@@ -83,10 +85,11 @@ func TestCrossLayerErrorPropagation(t *testing.T) {
 	t.Run("WebSocketFailureIsolation", func(t *testing.T) {
 		// Create POI without WebSocket clients
 		createRequest := CreatePOIRequest{
-			MapID:           "map-ws-isolation",
+			MapID:           "map-test", // Use existing map from fixtures
 			Name:            "WS Isolation POI",
 			Description:     "Testing WebSocket isolation",
 			Position:        LatLng{Lat: 40.7589, Lng: -73.9851},
+			CreatedBy:       "test-user-1", // Valid user ID from fixtures
 			MaxParticipants: 3,
 		}
 
@@ -137,10 +140,11 @@ func TestConcurrentOperationsAcrossLayers(t *testing.T) {
 				defer wg.Done()
 
 				createRequest := CreatePOIRequest{
-					MapID:           "map-concurrent",
+					MapID:           "map-test", // Use existing map from fixtures
 					Name:            fmt.Sprintf("Concurrent POI %d", index+1),
 					Description:     fmt.Sprintf("POI created concurrently %d", index+1),
 					Position:        LatLng{Lat: 40.7128 + float64(index)*0.001, Lng: -74.0060 + float64(index)*0.001},
+					CreatedBy:       "test-user-1", // Valid user ID from fixtures
 					MaxParticipants: 10,
 				}
 
@@ -219,8 +223,8 @@ func TestConcurrentOperationsAcrossLayers(t *testing.T) {
 				defer wg.Done()
 
 				createRequest := CreateSessionRequest{
-					UserID: fmt.Sprintf("concurrent-session-user-%d", index),
-					MapID:  "map-concurrent-sessions",
+					UserID: "test-user-1", // Use existing user from fixtures
+					MapID:  "map-test", // Use existing map from fixtures
 					AvatarPosition: LatLng{
 						Lat: 40.7128 + float64(index)*0.001,
 						Lng: -74.0060 + float64(index)*0.001,
@@ -299,19 +303,26 @@ func TestRealTimeEventBroadcasting(t *testing.T) {
 	for i := 0; i < numClients; i++ {
 		sessionID := fmt.Sprintf("broadcast-session-%d", i+1)
 		userID := fmt.Sprintf("broadcast-user-%d", i+1)
-		clients[i] = env.websocket.CreateClient(sessionID, userID, "map-broadcast-test")
+		clients[i] = env.websocket.CreateClient(sessionID, userID, "map-test")
 		require.NotNil(t, clients[i])
 	}
 
 	env.WaitForAsyncOperations()
 
+	// Consume welcome messages from all clients once at the beginning
+	for i, client := range clients {
+		err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+		require.NoError(t, err, "Client %d should receive welcome message", i+1)
+	}
+
 	// Test 1: POI creation should broadcast to all clients
 	t.Run("POICreationBroadcast", func(t *testing.T) {
 		createRequest := CreatePOIRequest{
-			MapID:           "map-broadcast-test",
+			MapID:           "map-test", // Use existing map from fixtures
 			Name:            "Broadcast POI",
 			Description:     "POI for testing broadcasts",
 			Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
+			CreatedBy:       "test-user-1", // Valid user ID from fixtures
 			MaxParticipants: 20,
 		}
 
@@ -330,15 +341,15 @@ func TestRealTimeEventBroadcasting(t *testing.T) {
 			Data: map[string]interface{}{
 				"poiId":           poiID,
 				"name":            "Broadcast POI",
-				"mapId":           "map-broadcast-test",
+				"mapId":           "map-test",
 				"maxParticipants": 20,
 			},
 			Timestamp: time.Now(),
 		}
 
-		env.websocket.BroadcastToMap("map-broadcast-test", broadcastEvent)
+		env.websocket.BroadcastToMap("map-test", broadcastEvent)
 
-		// All clients should receive the broadcast
+		// All clients should receive the broadcast (welcome messages already consumed)
 		for i, client := range clients {
 			msg := client.ExpectMessage("poi_created", 300*time.Millisecond)
 
@@ -353,8 +364,8 @@ func TestRealTimeEventBroadcasting(t *testing.T) {
 	t.Run("AvatarMovementBroadcast", func(t *testing.T) {
 		// Create a session for one of the clients
 		createRequest := CreateSessionRequest{
-			UserID:         "broadcast-user-1",
-			MapID:          "map-broadcast-test",
+			UserID:         "test-user-1", // Use existing user from fixtures
+			MapID:          "map-test", // Use existing map from fixtures
 			AvatarPosition: LatLng{Lat: 40.7128, Lng: -74.0060},
 		}
 
@@ -380,26 +391,26 @@ func TestRealTimeEventBroadcasting(t *testing.T) {
 			Type: "avatar_movement",
 			Data: map[string]interface{}{
 				"sessionId": sessionID,
-				"userId":    "broadcast-user-1",
+				"userId":    "test-user-1",
 				"position": map[string]float64{
 					"lat": 40.7589,
 					"lng": -73.9851,
 				},
-				"mapId": "map-broadcast-test",
+				"mapId": "map-test",
 			},
 			Timestamp: time.Now(),
 		}
 
-		env.websocket.BroadcastToMap("map-broadcast-test", movementEvent)
+		env.websocket.BroadcastToMap("map-test", movementEvent)
 
-		// All clients should receive the movement event
+		// All clients should receive the movement event (welcome messages already consumed)
 		for i, client := range clients {
 			msg := client.ExpectMessage("avatar_movement", 300*time.Millisecond)
 
 			data, ok := msg.Data.(map[string]interface{})
 			require.True(t, ok, "Client %d should receive movement data", i+1)
 			assert.Equal(t, sessionID, data["sessionId"])
-			assert.Equal(t, "broadcast-user-1", data["userId"])
+			assert.Equal(t, "test-user-1", data["userId"])
 		}
 	})
 
@@ -410,25 +421,29 @@ func TestRealTimeEventBroadcasting(t *testing.T) {
 		require.NotNil(t, otherMapClient)
 		env.WaitForAsyncOperations()
 
+		// Consume welcome message from other map client
+		err := otherMapClient.ConsumeWelcomeMessage(200 * time.Millisecond)
+		require.NoError(t, err, "Other map client should receive welcome message")
+
 		// Broadcast event to original map
 		isolationEvent := websocket.Message{
 			Type: "map_event",
 			Data: map[string]interface{}{
-				"mapId":   "map-broadcast-test",
-				"message": "This should only go to map-broadcast-test",
+				"mapId":   "map-test",
+				"message": "This should only go to map-test",
 			},
 			Timestamp: time.Now(),
 		}
 
-		env.websocket.BroadcastToMap("map-broadcast-test", isolationEvent)
+		env.websocket.BroadcastToMap("map-test", isolationEvent)
 
-		// Original map clients should receive the event
+		// Original map clients should receive the event (welcome messages already consumed)
 		for i, client := range clients {
 			msg := client.ExpectMessage("map_event", 200*time.Millisecond)
 
 			data, ok := msg.Data.(map[string]interface{})
 			require.True(t, ok, "Client %d should receive map event", i+1)
-			assert.Equal(t, "map-broadcast-test", data["mapId"])
+			assert.Equal(t, "map-test", data["mapId"])
 		}
 
 		// Other map client should not receive the event
@@ -461,10 +476,11 @@ func TestPerformanceUnderLoad(t *testing.T) {
 				for j := 0; j < numOperations/concurrency; j++ {
 					// Create POI
 					createRequest := CreatePOIRequest{
-						MapID:           fmt.Sprintf("map-load-%d", workerID),
+						MapID:           "map-test", // Use existing map from fixtures
 						Name:            fmt.Sprintf("Load POI %d-%d", workerID, j),
 						Description:     "Load testing POI",
 						Position:        LatLng{Lat: 40.7128 + float64(j)*0.0001, Lng: -74.0060 + float64(j)*0.0001},
+						CreatedBy:       "test-user-1", // Valid user ID from fixtures
 						MaxParticipants: 5,
 					}
 
@@ -511,11 +527,17 @@ func TestPerformanceUnderLoad(t *testing.T) {
 		for i := 0; i < numClients; i++ {
 			sessionID := fmt.Sprintf("perf-session-%d", i)
 			userID := fmt.Sprintf("perf-user-%d", i)
-			clients[i] = env.websocket.CreateClient(sessionID, userID, "map-performance")
+			clients[i] = env.websocket.CreateClient(sessionID, userID, "map-test")
 			require.NotNil(t, clients[i])
 		}
 
 		env.WaitForAsyncOperations()
+
+		// Consume welcome messages from all clients
+		for i, client := range clients {
+			err := client.ConsumeWelcomeMessage(200 * time.Millisecond)
+			require.NoError(t, err, "Client %d should receive welcome message", i)
+		}
 
 		startTime := time.Now()
 
@@ -530,7 +552,7 @@ func TestPerformanceUnderLoad(t *testing.T) {
 				Timestamp: time.Now(),
 			}
 
-			env.websocket.BroadcastToMap("map-performance", broadcastEvent)
+			env.websocket.BroadcastToMap("map-test", broadcastEvent)
 		}
 
 		// Verify all clients receive all messages

@@ -125,7 +125,7 @@ func TestAvatarMovementFlow(t *testing.T) {
 
 	// Step 2: Create WebSocket clients
 	mover := env.websocket.CreateClient(sessionID, "user-mover", "map-movement-test")
-	observer := env.websocket.CreateClient("session-observer", "user-observer", "map-movement-test")
+	observer := env.websocket.CreateClient("session-movement-observer", "user-observer", "map-movement-test")
 	otherMapClient := env.websocket.CreateClient("session-other", "user-other", "map-other")
 
 	require.NotNil(t, mover)

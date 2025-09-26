@@ -138,7 +138,7 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - Write tests using expectProfileUpdateSuccess() for save functionality
   - _Requirements: 5.1, 5.4_
 
-- [ ] 11.1. Investigate aboutMe field not displaying in ProfileSettingsModal
+- [x] 11.1. Investigate aboutMe field not displaying in ProfileSettingsModal
   - Profile creation saves aboutMe field correctly (backend verified)
   - ProfileSettingsModal shows empty aboutMe field after profile creation
   - Need to investigate frontend data loading and display logic
@@ -151,6 +151,33 @@ This implementation plan uses a **vertical slice approach** to deliver working f
   - WebSocket message type mismatches in real-time event tests
   - Need to update test data and fix test infrastructure issues
   - _Technical Debt: Critical for CI/CD pipeline stability_
+  
+  **Fix Phases:**
+  - [x] 11.2.1. Fix Redis connection issues (port 6380 → 6379, error handling)
+  - [x] 11.2.2. Fix foreign key constraints (test data builders, proper relationships)
+  - [x] 11.2.3. Fix WebSocket message types (format validation, type assertions)
+  - [x] 11.2.4. Fix database integration test failures
+    - Fix TestDatabaseIntegration_Transaction foreign key constraint violations
+    - Update POI creation tests to use proper fixture data relationships
+    - Ensure all database tests use existing user/map IDs from fixtures
+    - _Technical Debt: Database layer test stability_
+  - [x] 11.2.5. Fix infrastructure flow test failures
+    - Fix TestInfrastructureFlow_DatabaseRedisWebSocketIntegration session creation issues
+    - Update all infrastructure tests to use proper user/map relationships
+    - Fix foreign key constraint violations in concurrent session operations
+    - _Technical Debt: Infrastructure integration test stability_
+  - [x] 11.2.6. Fix performance test failures
+    - Fix TestInfrastructureFlow_Performance concurrent operation failures
+    - Update performance tests to create proper user fixtures before session creation
+    - Fix database concurrency test foreign key constraint violations
+    - _Technical Debt: Performance test infrastructure_
+  - [x] 11.2.7. Fix POI flow test failures
+    - Fix TestPOIJoinFlow missing CreatedBy field and welcome message consumption
+    - Update POI flow tests to properly consume WebSocket welcome messages
+    - Fix POI ID validation and Redis participant tracking
+    - _Technical Debt: POI workflow test stability_
+    - **✅ RESOLVED**: WebSocket infrastructure issue completely fixed - clients now connect to correct maps
+  - [ ] 11.2.8. Update test infrastructure (data setup utilities, cleanup mechanisms)
 
 **Result after Slice 3**: Users can edit their profiles and manage their information through a settings interface.
 

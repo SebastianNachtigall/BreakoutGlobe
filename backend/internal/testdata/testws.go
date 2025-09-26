@@ -412,12 +412,26 @@ func (m *MockSessionServiceForWS) GetSession(ctx context.Context, sessionID stri
 			userID = "user-" + parts[1]
 			mapID = "map-test" // Default map for most tests
 			
-			// Handle specific test cases
-			switch parts[1] {
-			case "mover":
+			// Handle specific test cases - be more specific about which tests need special map assignments
+			switch sessionID {
+			// WebSocket movement test specific sessions
+			case "session-mover":
 				mapID = "map-movement"
-			case "observer":
+			case "session-observer":
+				// This is used by both websocket_test.go (expects map-movement) and session_flow_test.go (expects map-movement-test)
+				// For now, default to map-movement for the websocket test
 				mapID = "map-movement"
+			// Session flow test specific sessions  
+			case "session-movement-observer":
+				mapID = "map-movement-test"
+			// POI flow test observers should use map-test (default)
+			case "session-observer1", "session-observer2", "session-poi-observer":
+				mapID = "map-test"
+			// Cross-map isolation test
+			case "session-other":
+				mapID = "map-other"
+			case "other":
+				mapID = "map-other" // For cross-map isolation testing
 			case "creator":
 				mapID = "map-poi"
 			case "p1", "p2":
@@ -428,6 +442,50 @@ func (m *MockSessionServiceForWS) GetSession(ctx context.Context, sessionID stri
 				mapID = "map-lifecycle"
 			case "1", "2", "3":
 				mapID = "map-test" // For MultiClientBroadcast test
+			// New test cases for message validation
+			case "welcome":
+				if len(parts) >= 3 && parts[2] == "test" {
+					userID = "user-welcome-test"
+					mapID = "map-welcome-test"
+				}
+			case "type":
+				if len(parts) >= 3 && parts[2] == "test" {
+					userID = "user-type-test"
+					mapID = "map-type-test"
+				}
+			case "data":
+				if len(parts) >= 3 && parts[2] == "test" {
+					userID = "user-data-test"
+					mapID = "map-data-test"
+				}
+			case "invalid":
+				if len(parts) >= 3 && parts[2] == "test" {
+					userID = "user-invalid-test"
+					mapID = "map-invalid-test"
+				}
+			case "sequence":
+				if len(parts) >= 3 && parts[2] == "test" {
+					userID = "user-sequence-test"
+					mapID = "map-sequence-test"
+				}
+			}
+			
+			// Handle broadcast session IDs (broadcast-session-1, broadcast-session-2, etc.)
+			if strings.HasPrefix(sessionID, "broadcast-session-") {
+				parts := strings.Split(sessionID, "-")
+				if len(parts) >= 3 {
+					userID = "user-broadcast-session-" + parts[2]
+					mapID = "map-test"
+				}
+			}
+			
+			// Handle perf session IDs (perf-session-1, perf-session-2, etc.)
+			if strings.HasPrefix(sessionID, "perf-session-") {
+				parts := strings.Split(sessionID, "-")
+				if len(parts) >= 3 {
+					userID = "user-perf-session-" + parts[2]
+					mapID = "map-test"
+				}
 			}
 			
 			// Handle MapIsolation test with compound session IDs
@@ -447,6 +505,16 @@ func (m *MockSessionServiceForWS) GetSession(ctx context.Context, sessionID stri
 		// For other session ID formats
 		userID = "user-" + sessionID
 		mapID = "map-test"
+		
+		// Handle special cases for cross-layer tests
+		if sessionID == "other-session" {
+			userID = "user-other-session"
+			mapID = "map-other"
+		}
+		if sessionID == "session-other" {
+			userID = "user-other"
+			mapID = "map-other"
+		}
 	}
 	
 	return &models.Session{

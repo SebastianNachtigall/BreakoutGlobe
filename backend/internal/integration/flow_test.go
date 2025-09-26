@@ -28,6 +28,8 @@ type FlowTestEnvironment struct {
 	db             *testdata.TestDB
 	redis          *testdata.TestRedis
 	websocket      *testdata.TestWebSocket
+	fixtures       *testdata.TestFixtures
+	testData       *testdata.BasicTestData
 	server         *httptest.Server
 	router         *gin.Engine
 	poiService     *services.POIService
@@ -50,9 +52,16 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 
 	// Setup Redis
 	testRedis := testdata.SetupRedis(t)
+	if testRedis == nil {
+		t.Fatal("Failed to setup Redis for integration tests")
+	}
 
 	// Setup WebSocket
 	testWS := testdata.SetupWebSocket(t)
+
+	// Setup test fixtures and basic test data
+	fixtures := testdata.NewTestFixtures(testDB)
+	testData := fixtures.SetupBasicTestData()
 
 	// Create repositories
 	poiRepo := repository.NewPOIRepository(testDB.DB)
@@ -94,6 +103,8 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 		db:             testDB,
 		redis:          testRedis,
 		websocket:      testWS,
+		fixtures:       fixtures,
+		testData:       testData,
 		server:         server,
 		router:         router,
 		poiService:     poiService,
@@ -125,6 +136,7 @@ type CreatePOIRequest struct {
 	Name            string  `json:"name"`
 	Description     string  `json:"description"`
 	Position        LatLng  `json:"position"`
+	CreatedBy       string  `json:"createdBy"`
 	MaxParticipants int     `json:"maxParticipants"`
 }
 

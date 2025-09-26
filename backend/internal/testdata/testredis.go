@@ -22,7 +22,7 @@ func SetupRedis(t TestingT) *TestRedis {
 	
 	// Get Redis connection details from environment
 	host := getRedisEnvOrDefault("TEST_REDIS_HOST", "localhost")
-	port := getRedisEnvOrDefault("TEST_REDIS_PORT", "6380")
+	port := getRedisEnvOrDefault("TEST_REDIS_PORT", "6379") // Use production Redis port for tests
 	password := getRedisEnvOrDefault("TEST_REDIS_PASSWORD", "")
 	
 	// Generate unique database number for this test
@@ -38,7 +38,8 @@ func SetupRedis(t TestingT) *TestRedis {
 	// Test connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
-		t.Errorf("Failed to connect to Redis: %v", err)
+		t.Errorf("Failed to connect to Redis at %s:%s: %v", host, port, err)
+		t.Errorf("Make sure Redis is running with: docker compose up -d redis")
 		return nil
 	}
 	
@@ -63,6 +64,9 @@ func SetupRedis(t TestingT) *TestRedis {
 
 // Client returns the Redis client for testing
 func (tr *TestRedis) Client() *redis.Client {
+	if tr == nil || tr.client == nil {
+		panic("TestRedis client is nil - Redis connection failed during setup")
+	}
 	return tr.client
 }
 

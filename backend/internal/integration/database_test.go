@@ -52,10 +52,15 @@ func TestDatabaseIntegration_POIOperations(t *testing.T) {
 	testDB := testdata.Setup(t)
 	require.NotNil(t, testDB)
 	
+	// Create required fixtures for foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+	
 	// Test POI creation and retrieval
 	originalPOI := testdata.NewDatabasePOI().
 		WithName("Integration Test POI").
-		WithMapID("integration-map").
+		WithMapID(basicData.GetTestMap().ID).
+		WithCreator(basicData.GetUser(0).ID).
 		WithPosition(40.7128, -74.0060).
 		Build()
 	
@@ -108,10 +113,14 @@ func TestDatabaseIntegration_SessionOperations(t *testing.T) {
 	testDB := testdata.Setup(t)
 	require.NotNil(t, testDB)
 	
+	// Create required fixtures for foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+	
 	// Test session creation and retrieval
 	originalSession := testdata.NewDatabaseSession().
-		WithUserID("integration-user").
-		WithMapID("integration-map").
+		WithUserID(basicData.GetUser(0).ID).
+		WithMapID(basicData.GetTestMap().ID).
 		WithPosition(40.7128, -74.0060).
 		WithActive(true).
 		Build()
@@ -156,10 +165,27 @@ func TestDatabaseIntegration_Fixtures(t *testing.T) {
 	testDB := testdata.Setup(t)
 	require.NotNil(t, testDB)
 	
-	// Create test fixtures
-	poi1 := testdata.NewDatabasePOI().WithName("Coffee Shop").WithPosition(40.7128, -74.0060).Build()
-	poi2 := testdata.NewDatabasePOI().WithName("Park Bench").WithPosition(40.7589, -73.9851).Build()
-	session1 := testdata.NewDatabaseSession().WithUserID("user-123").Build()
+	// Create required fixtures for foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+	
+	// Create test fixtures with valid foreign keys
+	poi1 := testdata.NewDatabasePOI().
+		WithName("Coffee Shop").
+		WithPosition(40.7128, -74.0060).
+		WithMapID(basicData.GetTestMap().ID).
+		WithCreator(basicData.GetUser(0).ID).
+		Build()
+	poi2 := testdata.NewDatabasePOI().
+		WithName("Park Bench").
+		WithPosition(40.7589, -73.9851).
+		WithMapID(basicData.GetTestMap().ID).
+		WithCreator(basicData.GetUser(1).ID).
+		Build()
+	session1 := testdata.NewDatabaseSession().
+		WithUserID(basicData.GetUser(0).ID).
+		WithMapID(basicData.GetTestMap().ID).
+		Build()
 	
 	// Seed fixtures
 	err := testDB.SeedFixtures(poi1, poi2, session1)
@@ -223,10 +249,17 @@ func TestDatabaseIntegration_Transaction(t *testing.T) {
 	testDB := testdata.Setup(t)
 	require.NotNil(t, testDB)
 	
+	// Create required fixtures for foreign key relationships
+	fixtures := testdata.NewTestFixtures(testDB)
+	basicData := fixtures.SetupBasicTestData()
+	
 	// Test transaction rollback on error
 	err := testDB.Transaction(func(tx *gorm.DB) error {
-		// Create a POI
-		poi := testdata.NewDatabasePOI().Build()
+		// Create a POI with valid foreign keys
+		poi := testdata.NewDatabasePOI().
+			WithMapID(basicData.GetTestMap().ID).
+			WithCreator(basicData.GetUser(0).ID).
+			Build()
 		if err := tx.Create(poi).Error; err != nil {
 			return err
 		}
@@ -245,8 +278,16 @@ func TestDatabaseIntegration_Transaction(t *testing.T) {
 	
 	// Test successful transaction
 	err = testDB.Transaction(func(tx *gorm.DB) error {
-		poi1 := testdata.NewDatabasePOI().WithName("POI 1").Build()
-		poi2 := testdata.NewDatabasePOI().WithName("POI 2").Build()
+		poi1 := testdata.NewDatabasePOI().
+			WithName("POI 1").
+			WithMapID(basicData.GetTestMap().ID).
+			WithCreator(basicData.GetUser(0).ID).
+			Build()
+		poi2 := testdata.NewDatabasePOI().
+			WithName("POI 2").
+			WithMapID(basicData.GetTestMap().ID).
+			WithCreator(basicData.GetUser(1).ID).
+			Build()
 		
 		if err := tx.Create(poi1).Error; err != nil {
 			return err

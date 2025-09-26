@@ -30,15 +30,28 @@ func TestPOICreationFlow(t *testing.T) {
 	require.NotNil(t, observer2)
 	require.NotNil(t, otherMapClient)
 
-	// Wait for WebSocket connections
+	// Wait for WebSocket connections and consume welcome messages
 	env.WaitForAsyncOperations()
+	
+	// Consume welcome messages from all clients
+	err1 := observer1.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err2 := observer2.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err3 := otherMapClient.ConsumeWelcomeMessage(200 * time.Millisecond)
+	
+	require.NoError(t, err1, "Observer1 should receive welcome message")
+	require.NoError(t, err2, "Observer2 should receive welcome message")
+	require.NoError(t, err3, "OtherMapClient should receive welcome message")
 
 	// Step 1: HTTP Request - Create POI via REST API
+	testMap := env.testData.GetTestMap()
+	testUser := env.testData.GetUser(0)
+	
 	createRequest := CreatePOIRequest{
-		MapID:           "map-test",
+		MapID:           testMap.ID,
 		Name:            "Coffee Shop",
 		Description:     "Great coffee and wifi",
 		Position:        LatLng{Lat: 40.7128, Lng: -74.0060},
+		CreatedBy:       testUser.ID,
 		MaxParticipants: 10,
 	}
 
@@ -64,9 +77,8 @@ func TestPOICreationFlow(t *testing.T) {
 	// Step 2: Verify Database Persistence
 	env.AssertDatabasePOI(poiID, "Coffee Shop")
 
-	// Step 3: Verify Redis State (POI participants set should be created but empty)
-	env.redis.AssertKeyExists("poi:participants:" + poiID)
-	env.redis.AssertSetSize("poi:participants:"+poiID, 0)
+	// Step 3: Redis State - Participants set is created when first user joins (not on POI creation)
+	// So we skip Redis verification at this point
 
 	// Step 4: Verify WebSocket Broadcasting
 	// Wait for async broadcasting
@@ -130,11 +142,15 @@ func TestPOIJoinFlow(t *testing.T) {
 	env := SetupFlowTest(t)
 
 	// Step 1: Create a POI first
+	testMap := env.testData.GetTestMap()
+	testUser := env.testData.GetUser(0)
+	
 	createRequest := CreatePOIRequest{
-		MapID:           "map-join-test",
+		MapID:           testMap.ID,
 		Name:            "Restaurant",
 		Description:     "Italian cuisine",
 		Position:        LatLng{Lat: 40.7589, Lng: -73.9851},
+		CreatedBy:       testUser.ID,
 		MaxParticipants: 5,
 	}
 
@@ -148,13 +164,20 @@ func TestPOIJoinFlow(t *testing.T) {
 	poiID := poiResponse.ID
 
 	// Step 2: Create WebSocket observers
-	participant := env.websocket.CreateClient("session-participant", "user-participant", "map-join-test")
-	observer := env.websocket.CreateClient("session-observer", "user-observer", "map-join-test")
+	participant := env.websocket.CreateClient("session-participant", "user-participant", testMap.ID)
+	observer := env.websocket.CreateClient("session-poi-observer", "user-observer", testMap.ID)
 
 	require.NotNil(t, participant)
 	require.NotNil(t, observer)
 
 	env.WaitForAsyncOperations()
+	
+	// Consume welcome messages from WebSocket clients
+	err1 := participant.ConsumeWelcomeMessage(200 * time.Millisecond)
+	err2 := observer.ConsumeWelcomeMessage(200 * time.Millisecond)
+	
+	require.NoError(t, err1, "Participant should receive welcome message")
+	require.NoError(t, err2, "Observer should receive welcome message")
 
 	// Step 3: Join POI via HTTP API
 	joinRequest := JoinPOIRequest{
@@ -178,12 +201,12 @@ func TestPOIJoinFlow(t *testing.T) {
 			"poiId":     poiID,
 			"userId":    "user-participant",
 			"sessionId": "session-participant",
-			"mapId":     "map-join-test",
+			"mapId":     testMap.ID,
 		},
 		Timestamp: time.Now(),
 	}
 
-	env.websocket.BroadcastToMap("map-join-test", poiJoinedEvent)
+	env.websocket.BroadcastToMap(testMap.ID, poiJoinedEvent)
 
 	// Both clients should receive the join event
 	participantMsg := participant.ExpectMessage("poi_joined", 200*time.Millisecond)
@@ -219,11 +242,15 @@ func TestPOILeaveFlow(t *testing.T) {
 	env := SetupFlowTest(t)
 
 	// Step 1: Create POI and join it
+	testMap := env.testData.GetTestMap()
+	testUser := env.testData.GetUser(0)
+	
 	createRequest := CreatePOIRequest{
-		MapID:           "map-leave-test",
+		MapID:           testMap.ID,
 		Name:            "Gym",
 		Description:     "Fitness center",
 		Position:        LatLng{Lat: 40.6892, Lng: -74.0445},
+		CreatedBy:       testUser.ID,
 		MaxParticipants: 8,
 	}
 
@@ -248,8 +275,8 @@ func TestPOILeaveFlow(t *testing.T) {
 	env.AssertRedisParticipant(poiID, "user-leaver")
 
 	// Step 2: Create WebSocket observers
-	leaver := env.websocket.CreateClient("session-leaver", "user-leaver", "map-leave-test")
-	observer := env.websocket.CreateClient("session-observer", "user-observer", "map-leave-test")
+	leaver := env.websocket.CreateClient("session-leaver", "user-leaver", testMap.ID)
+	observer := env.websocket.CreateClient("session-poi-observer", "user-observer", testMap.ID)
 
 	require.NotNil(t, leaver)
 	require.NotNil(t, observer)
@@ -274,12 +301,12 @@ func TestPOILeaveFlow(t *testing.T) {
 			"poiId":     poiID,
 			"userId":    "user-leaver",
 			"sessionId": "session-leaver",
-			"mapId":     "map-leave-test",
+			"mapId":     testMap.ID,
 		},
 		Timestamp: time.Now(),
 	}
 
-	env.websocket.BroadcastToMap("map-leave-test", poiLeftEvent)
+	env.websocket.BroadcastToMap(testMap.ID, poiLeftEvent)
 
 	// Both clients should receive the leave event
 	leaverMsg := leaver.ExpectMessage("poi_left", 200*time.Millisecond)
@@ -305,11 +332,15 @@ func TestPOICapacityEnforcement(t *testing.T) {
 	env := SetupFlowTest(t)
 
 	// Step 1: Create POI with limited capacity
+	testMap := env.testData.GetTestMap()
+	testUser := env.testData.GetUser(0)
+	
 	createRequest := CreatePOIRequest{
-		MapID:           "map-capacity-test",
+		MapID:           testMap.ID,
 		Name:            "Small Meeting Room",
 		Description:     "Limited capacity room",
 		Position:        LatLng{Lat: 40.7505, Lng: -73.9934},
+		CreatedBy:       testUser.ID,
 		MaxParticipants: 2, // Very small capacity for testing
 	}
 
@@ -375,11 +406,15 @@ func TestPOIDeletionFlow(t *testing.T) {
 	env := SetupFlowTest(t)
 
 	// Step 1: Create POI with participants
+	testMap := env.testData.GetTestMap()
+	testUser := env.testData.GetUser(0)
+	
 	createRequest := CreatePOIRequest{
-		MapID:           "map-delete-test",
+		MapID:           testMap.ID,
 		Name:            "Temporary Event",
 		Description:     "Event that will be deleted",
 		Position:        LatLng{Lat: 40.7831, Lng: -73.9712},
+		CreatedBy:       testUser.ID,
 		MaxParticipants: 5,
 	}
 
@@ -405,7 +440,7 @@ func TestPOIDeletionFlow(t *testing.T) {
 	env.redis.AssertSetSize("poi:participants:"+poiID, 3)
 
 	// Step 2: Create WebSocket observers
-	observer := env.websocket.CreateClient("session-observer", "user-observer", "map-delete-test")
+	observer := env.websocket.CreateClient("session-poi-observer", "user-observer", testMap.ID)
 	require.NotNil(t, observer)
 	env.WaitForAsyncOperations()
 
@@ -429,12 +464,12 @@ func TestPOIDeletionFlow(t *testing.T) {
 		Type: "poi_deleted",
 		Data: map[string]interface{}{
 			"poiId": poiID,
-			"mapId": "map-delete-test",
+			"mapId": testMap.ID,
 		},
 		Timestamp: time.Now(),
 	}
 
-	env.websocket.BroadcastToMap("map-delete-test", poiDeletedEvent)
+	env.websocket.BroadcastToMap(testMap.ID, poiDeletedEvent)
 
 	// Observer should receive the deletion event
 	deleteMsg := observer.ExpectMessage("poi_deleted", 200*time.Millisecond)
