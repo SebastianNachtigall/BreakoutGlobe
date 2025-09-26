@@ -12,7 +12,7 @@ import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
-import { videoCallStore } from './stores/videoCallStore'
+import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { getCurrentUserProfile } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
@@ -173,6 +173,9 @@ function App() {
         try {
           await client.connect()
           setWsClient(client)
+          
+          // Set WebSocket client for video call store
+          setWebSocketClient(client)
           
           // Request initial users after connection
           client.requestInitialUsers()
@@ -426,6 +429,9 @@ function App() {
         // Connect WebSocket
         await client.connect()
         setWsClient(client)
+        
+        // Set WebSocket client for video call store
+        setWebSocketClient(client)
         
         // Request initial users after connection
         client.requestInitialUsers()

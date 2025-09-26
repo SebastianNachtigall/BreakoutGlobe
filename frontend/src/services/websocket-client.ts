@@ -237,7 +237,7 @@ export class WebSocketClient {
       connected: this.isConnected(),
       queued: !this.isConnected()
     });
-    
+
     if (this.isConnected() && this.ws) {
       this.ws.send(JSON.stringify(message));
     } else {
@@ -264,14 +264,14 @@ export class WebSocketClient {
       if (!message.timestamp) {
         message.timestamp = new Date();
       }
-      
+
       console.log('📨 WebSocket: Raw message received', {
         type: message.type,
         data: message.data,
         sessionId: this.sessionId,
         timestamp: message.timestamp
       });
-      
+
       this.notifyMessage(message);
       this.processMessage(message);
     } catch (error) {
@@ -290,7 +290,7 @@ export class WebSocketClient {
       sessionId: this.sessionId,
       isOwnSession: message.data?.sessionId === this.sessionId
     });
-    
+
     switch (message.type) {
       case 'welcome':
         this.handleWelcome(message.data);
@@ -333,6 +333,18 @@ export class WebSocketClient {
         break;
       case 'poi_create_rejected':
         this.handlePOICreateRejected(message.data);
+        break;
+      case 'call_request':
+        this.handleCallRequest(message.data);
+        break;
+      case 'call_accept':
+        this.handleCallAccept(message.data);
+        break;
+      case 'call_reject':
+        this.handleCallReject(message.data);
+        break;
+      case 'call_end':
+        this.handleCallEnd(message.data);
         break;
       default:
         console.log('❓ WebSocket: Unknown message type', message.type);
@@ -440,7 +452,7 @@ export class WebSocketClient {
       position,
       connected: this.isConnected()
     });
-    
+
     // Perform optimistic update
     sessionStore.getState().updateAvatarPosition(position, true);
 
@@ -573,7 +585,7 @@ export class WebSocketClient {
       mySessionId: this.sessionId,
       isOwnMovement: data.sessionId === this.sessionId
     });
-    
+
     // Handle other users' avatar movements
     if (data.sessionId !== this.sessionId) {
       console.log('👤 WebSocket: Updating other user avatar position', {
@@ -582,7 +594,7 @@ export class WebSocketClient {
         position: data.position,
         mySessionId: this.sessionId
       });
-      
+
       avatarStore.getState().updateAvatarPosition(
         data.sessionId,
         data.position,
@@ -681,5 +693,140 @@ export class WebSocketClient {
     });
   }
 
+  // Video Call Methods
+  sendCallRequest(targetUserId: string, callId: string, callerName?: string): void {
+    console.log('📞 WebSocket: Sending call request', { targetUserId, callId });
+    this.send({
+      type: 'call_request',
+      data: {
+        targetUserId,
+        callId,
+        callerName
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendCallAccept(callId: string, callerUserId: string): void {
+    console.log('✅ WebSocket: Sending call accept', { callId, callerUserId });
+    this.send({
+      type: 'call_accept',
+      data: {
+        callId,
+        callerUserId
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendCallReject(callId: string, callerUserId: string): void {
+    console.log('❌ WebSocket: Sending call reject', { callId, callerUserId });
+    this.send({
+      type: 'call_reject',
+      data: {
+        callId,
+        callerUserId
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendCallEnd(callId: string, otherUserId: string): void {
+    console.log('📵 WebSocket: Sending call end', { callId, otherUserId });
+    this.send({
+      type: 'call_end',
+      data: {
+        callId,
+        otherUserId
+      },
+      timestamp: new Date()
+    });
+  }
+
+  // Video Call Message Handlers
+  private handleCallRequest(data: any): void {
+    console.log('📞 WebSocket: Received call request', data);
+
+    // Import videoCallStore dynamically to avoid circular dependencies
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId, callerInfo } = data;
+
+      if (callerInfo && callId) {
+        videoCallStore.getState().receiveCall(
+          callId,
+          callerInfo.userId,
+          callerInfo.displayName || callerInfo.sessionId,
+          callerInfo.avatarURL
+        );
+      }
+    });
+  }
+
+  private handleCallAccept(data: any): void {
+    console.log('✅ WebSocket: Received call accept', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId } = data;
+      const state = videoCallStore.getState();
+
+      // Only process if this is our current call
+      if (state.currentCall?.callId === callId) {
+        // Don't call acceptCall() as it would send another message
+        // Just update the state to connecting/connected
+        state.setCallState('connecting');
+
+        // Simulate connection process
+        setTimeout(() => {
+          const currentState = videoCallStore.getState();
+          if (currentState.callState === 'connecting') {
+            currentState.setCallState('connected');
+            console.log('🎥 Call connected');
+          }
+        }, 2000);
+      }
+    });
+  }
+
+  private handleCallReject(data: any): void {
+    console.log('❌ WebSocket: Received call reject', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId } = data;
+      const state = videoCallStore.getState();
+
+      // Only process if this is our current call
+      if (state.currentCall?.callId === callId) {
+        // Don't call rejectCall() as it would send another message
+        // Just update the state to ended and clear
+        state.setCallState('ended');
+
+        // Auto-clear after showing "ended" state briefly
+        setTimeout(() => {
+          state.clearCall();
+        }, 2000);
+      }
+    });
+  }
+
+  private handleCallEnd(data: any): void {
+    console.log('📵 WebSocket: Received call end', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId } = data;
+      const state = videoCallStore.getState();
+
+      // Only process if this is our current call
+      if (state.currentCall?.callId === callId) {
+        // Don't call endCall() as it would send another message
+        // Just update the state to ended and clear
+        state.setCallState('ended');
+
+        // Auto-clear after showing "ended" state briefly
+        setTimeout(() => {
+          state.clearCall();
+        }, 2000);
+      }
+    });
+  }
 
 }

@@ -1,5 +1,12 @@
 import { create } from 'zustand';
 
+// Get WebSocket client instance (will be set by App.tsx)
+let wsClient: any = null;
+
+export const setWebSocketClient = (client: any) => {
+  wsClient = client;
+};
+
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended';
 
 interface CallInfo {
@@ -49,8 +56,20 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       }
     });
     
-    // TODO: Send call request via WebSocket in Phase 2
-    // For now, just simulate the calling state
+    // Send call request via WebSocket
+    if (wsClient && wsClient.isConnected()) {
+      wsClient.sendCallRequest(targetUserId, callId, targetUserName);
+    } else {
+      console.warn('📞 WebSocket not connected, cannot send call request');
+      // Simulate call failure after a delay
+      setTimeout(() => {
+        const { callState } = get();
+        if (callState === 'calling') {
+          set({ callState: 'ended' });
+          setTimeout(() => get().clearCall(), 2000);
+        }
+      }, 3000);
+    }
   },
   
   receiveCall: (callId, fromUserId, fromUserName, fromUserAvatar) => {
@@ -79,6 +98,11 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     console.log('✅ Call accepted');
     set({ callState: 'connecting' });
     
+    // Send call accept via WebSocket
+    if (wsClient && wsClient.isConnected()) {
+      wsClient.sendCallAccept(currentCall.callId, currentCall.targetUserId);
+    }
+    
     // Simulate connection process
     setTimeout(() => {
       const { callState } = get();
@@ -100,6 +124,11 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     
     console.log('❌ Call rejected');
     
+    // Send call reject via WebSocket
+    if (wsClient && wsClient.isConnected()) {
+      wsClient.sendCallReject(currentCall.callId, currentCall.targetUserId);
+    }
+    
     set({ 
       callState: 'ended',
     });
@@ -108,8 +137,6 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     setTimeout(() => {
       get().clearCall();
     }, 2000);
-    
-    // TODO: Send rejection via WebSocket in Phase 2
   },
   
   endCall: () => {
@@ -121,6 +148,11 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     
     console.log('📵 Call ended');
     
+    // Send call end via WebSocket
+    if (wsClient && wsClient.isConnected()) {
+      wsClient.sendCallEnd(currentCall.callId, currentCall.targetUserId);
+    }
+    
     set({ callState: 'ended' });
     
     // Auto-clear after showing "ended" state briefly
@@ -128,7 +160,6 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       get().clearCall();
     }, 2000);
     
-    // TODO: Send end call via WebSocket in Phase 2
     // TODO: Clean up WebRTC resources in Phase 3
   },
   

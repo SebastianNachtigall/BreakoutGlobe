@@ -46,14 +46,14 @@
   - Include user availability checking
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 6.4_
 
-- [ ] 7. Connect frontend to WebSocket signaling
+- [x] 7. Connect frontend to WebSocket signaling
   - Extend WebSocketClient to handle call messages
   - Connect VideoCallStore actions to WebSocket message sending
   - Add incoming call message handlers
   - Implement call state synchronization between users
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 5.1, 5.2, 5.3_
 
-- [ ] 8. Test two-browser call signaling
+- [x] 8. Test two-browser call signaling
   - Test call initiation between two browser tabs
   - Verify incoming call notifications work correctly
   - Test accept/reject flows and state synchronization
