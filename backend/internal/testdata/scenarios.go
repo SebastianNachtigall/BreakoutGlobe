@@ -954,6 +954,7 @@ func NewWebSocketTestScenario() *WebSocketTestScenario {
 	scenario.handler = websocket.NewHandler(
 		mockSetup.SessionService.Mock(),
 		mockSetup.RateLimiter.Mock(),
+		mockSetup.UserService.Mock(),
 	)
 	
 	// Setup HTTP server with WebSocket endpoint

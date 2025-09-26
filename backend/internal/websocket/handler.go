@@ -81,13 +81,14 @@ func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterI
 
 // HandleWebSocket handles WebSocket connection upgrades
 func (h *Handler) HandleWebSocket(c *gin.Context) {
-	// Extract session ID from query parameter
-	sessionID := c.Query("sessionId")
+	// Extract session ID from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	sessionID, err := extractSessionID(authHeader)
 	h.logger.Info("WebSocket connection attempt", "sessionId", sessionID)
 	
-	if sessionID == "" {
+	if err != nil {
 		h.logger.Warn("WebSocket connection failed: missing sessionId")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing sessionId query parameter"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
 		return
 	}
 	

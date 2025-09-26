@@ -48,7 +48,7 @@ func SetupWebSocket(t TestingT) *TestWebSocket {
 	sessionService := &MockSessionServiceForWS{}
 
 	// Create WebSocket handler (it creates its own manager internally)
-	handler := websocket.NewHandler(sessionService, nil)
+	handler := websocket.NewHandler(sessionService, nil, nil)
 
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
