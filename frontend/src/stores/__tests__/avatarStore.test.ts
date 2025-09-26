@@ -180,6 +180,38 @@ describe('avatarStore', () => {
     });
   });
 
+  describe('Call Status Management', () => {
+    it('should update avatar call status by userId', () => {
+      const store = avatarStore.getState();
+      
+      // Add avatar first
+      store.addOrUpdateAvatar(mockAvatar1);
+      
+      // Update call status to in call
+      store.updateAvatarCallStatus('user-1', true);
+      
+      const avatar = store.getAvatarBySessionId('session-1');
+      expect(avatar?.isInCall).toBe(true);
+      
+      // Update call status to not in call
+      store.updateAvatarCallStatus('user-1', false);
+      
+      const updatedAvatar = store.getAvatarBySessionId('session-1');
+      expect(updatedAvatar?.isInCall).toBe(false);
+    });
+
+    it('should handle call status update for non-existent user gracefully', () => {
+      const store = avatarStore.getState();
+      const initialSize = store.avatars.size;
+      
+      // Try to update call status for non-existent user
+      store.updateAvatarCallStatus('non-existent-user', true);
+      
+      // Should not change the store
+      expect(store.avatars.size).toBe(initialSize);
+    });
+  });
+
   describe('Store State Management', () => {
     it('should clear all avatars', () => {
       const store = avatarStore.getState();

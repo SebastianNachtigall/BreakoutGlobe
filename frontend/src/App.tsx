@@ -607,7 +607,7 @@ function App() {
 
     // Initiate video call
     videoCallStore.getState().initiateCall(
-      avatarTooltip.avatar.userId,
+      avatarTooltip.avatar.userId || avatarTooltip.avatar.sessionId,
       avatarTooltip.avatar.displayName || avatarTooltip.avatar.sessionId,
       avatarTooltip.avatar.avatarURL
     );
@@ -778,15 +778,21 @@ function App() {
         )}
 
         {/* Avatar Tooltip */}
-        {avatarTooltip.avatar && (
-          <AvatarTooltip
-            isOpen={avatarTooltip.isOpen}
-            position={avatarTooltip.position}
-            avatar={avatarTooltip.avatar}
-            onClose={handleCloseTooltip}
-            onStartCall={handleStartCall}
-          />
-        )}
+        {avatarTooltip.avatar && (() => {
+          // Get fresh avatar data from store to include updated call status
+          const freshAvatar = avatarStore.getState().getAvatarBySessionId(avatarTooltip.avatar.sessionId);
+          const avatarData = freshAvatar || avatarTooltip.avatar;
+          
+          return (
+            <AvatarTooltip
+              isOpen={avatarTooltip.isOpen}
+              position={avatarTooltip.position}
+              avatar={avatarData}
+              onClose={handleCloseTooltip}
+              onStartCall={handleStartCall}
+            />
+          );
+        })()}
 
         {/* Notifications */}
         <NotificationCenter />

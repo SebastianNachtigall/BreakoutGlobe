@@ -355,6 +355,9 @@ export class WebSocketClient {
       case 'ice_candidate':
         this.handleICECandidate(message.data);
         break;
+      case 'user_call_status':
+        this.handleUserCallStatus(message.data);
+        break;
       default:
         console.log('❓ WebSocket: Unknown message type', message.type);
         break;
@@ -802,18 +805,23 @@ export class WebSocketClient {
   private handleCallRequest(data: any): void {
     console.log('📞 WebSocket: Received call request', data);
 
-    // Import videoCallStore dynamically to avoid circular dependencies
+    // Import stores dynamically to avoid circular dependencies
     import('../stores/videoCallStore').then(({ videoCallStore }) => {
-      const { callId, callerInfo } = data;
+      import('../stores/avatarStore').then(({ avatarStore }) => {
+        const { callId, callerInfo } = data;
 
-      if (callerInfo && callId) {
-        videoCallStore.getState().receiveCall(
-          callId,
-          callerInfo.userId,
-          callerInfo.displayName || callerInfo.sessionId,
-          callerInfo.avatarURL
-        );
-      }
+        if (callerInfo && callId) {
+          // Mark caller as in call
+          avatarStore.getState().updateAvatarCallStatus(callerInfo.userId, true);
+
+          videoCallStore.getState().receiveCall(
+            callId,
+            callerInfo.userId,
+            callerInfo.displayName || callerInfo.sessionId,
+            callerInfo.avatarURL
+          );
+        }
+      });
     });
   }
 
@@ -850,20 +858,25 @@ export class WebSocketClient {
     console.log('❌ WebSocket: Received call reject', data);
 
     import('../stores/videoCallStore').then(({ videoCallStore }) => {
-      const { callId } = data;
-      const state = videoCallStore.getState();
+      import('../stores/avatarStore').then(({ avatarStore }) => {
+        const { callId } = data;
+        const state = videoCallStore.getState();
 
-      // Only process if this is our current call
-      if (state.currentCall?.callId === callId) {
-        // Don't call rejectCall() as it would send another message
-        // Just update the state to ended and clear
-        state.setCallState('ended');
+        // Only process if this is our current call
+        if (state.currentCall?.callId === callId && state.currentCall) {
+          // Mark target user as no longer in call
+          avatarStore.getState().updateAvatarCallStatus(state.currentCall.targetUserId, false);
 
-        // Auto-clear after showing "ended" state briefly
-        setTimeout(() => {
-          state.clearCall();
-        }, 2000);
-      }
+          // Don't call rejectCall() as it would send another message
+          // Just update the state to ended and clear
+          state.setCallState('ended');
+
+          // Auto-clear after showing "ended" state briefly
+          setTimeout(() => {
+            state.clearCall();
+          }, 2000);
+        }
+      });
     });
   }
 
@@ -871,20 +884,25 @@ export class WebSocketClient {
     console.log('📵 WebSocket: Received call end', data);
 
     import('../stores/videoCallStore').then(({ videoCallStore }) => {
-      const { callId } = data;
-      const state = videoCallStore.getState();
+      import('../stores/avatarStore').then(({ avatarStore }) => {
+        const { callId } = data;
+        const state = videoCallStore.getState();
 
-      // Only process if this is our current call
-      if (state.currentCall?.callId === callId) {
-        // Don't call endCall() as it would send another message
-        // Just update the state to ended and clear
-        state.setCallState('ended');
+        // Only process if this is our current call
+        if (state.currentCall?.callId === callId && state.currentCall) {
+          // Mark target user as no longer in call
+          avatarStore.getState().updateAvatarCallStatus(state.currentCall.targetUserId, false);
 
-        // Auto-clear after showing "ended" state briefly
-        setTimeout(() => {
-          state.clearCall();
-        }, 2000);
-      }
+          // Don't call endCall() as it would send another message
+          // Just update the state to ended and clear
+          state.setCallState('ended');
+
+          // Auto-clear after showing "ended" state briefly
+          setTimeout(() => {
+            state.clearCall();
+          }, 2000);
+        }
+      });
     });
   }
 
@@ -956,6 +974,20 @@ export class WebSocketClient {
         state.webrtcService.addIceCandidate(candidate).catch((error) => {
           console.error('❌ Failed to handle ICE candidate:', error);
         });
+      }
+    });
+  }
+
+  // User Call Status Handler
+  private handleUserCallStatus(data: any): void {
+    console.log('📞 WebSocket: Received user call status', data);
+
+    import('../stores/avatarStore').then(({ avatarStore }) => {
+      const { userId, isInCall } = data;
+
+      if (userId) {
+        avatarStore.getState().updateAvatarCallStatus(userId, isInCall);
+        console.log(`📞 Updated call status for user ${userId}: ${isInCall ? 'in call' : 'available'}`);
       }
     });
   }

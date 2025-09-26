@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { WebRTCService, MediaConstraints } from '../services/webrtc-service';
+import { avatarStore } from './avatarStore';
 
 // Get WebSocket client instance (will be set by App.tsx)
 let wsClient: any = null;
@@ -85,6 +86,9 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         createdAt: new Date()
       }
     });
+    
+    // Mark target user as in call
+    avatarStore.getState().updateAvatarCallStatus(targetUserId, true);
     
     // Initialize WebRTC for outgoing call (caller)
     try {
@@ -176,6 +180,9 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         createdAt: new Date()
       }
     });
+    
+    // Mark caller as in call
+    avatarStore.getState().updateAvatarCallStatus(fromUserId, true);
   },
   
   acceptCall: async () => {
@@ -258,6 +265,9 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     
     console.log('❌ Call rejected');
     
+    // Mark target user as no longer in call
+    avatarStore.getState().updateAvatarCallStatus(currentCall.targetUserId, false);
+    
     // Send call reject via WebSocket
     if (wsClient && wsClient.isConnected()) {
       wsClient.sendCallReject(currentCall.callId, currentCall.targetUserId);
@@ -314,7 +324,12 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   
   clearCall: () => {
     console.log('🧹 Clearing call state');
-    const { webrtcService } = get();
+    const { webrtcService, currentCall } = get();
+    
+    // Mark target user as no longer in call
+    if (currentCall) {
+      avatarStore.getState().updateAvatarCallStatus(currentCall.targetUserId, false);
+    }
     
     // Ensure WebRTC service is properly cleaned up
     if (webrtcService) {

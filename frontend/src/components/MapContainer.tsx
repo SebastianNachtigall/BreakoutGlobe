@@ -16,6 +16,7 @@ export interface AvatarData {
   };
   isCurrentUser: boolean;
   isMoving?: boolean;
+  isInCall?: boolean;
   role?: 'user' | 'admin' | 'superadmin';
 }
 

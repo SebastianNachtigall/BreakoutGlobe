@@ -10,6 +10,7 @@ interface AvatarState {
   addOrUpdateAvatar: (avatar: AvatarData) => void;
   removeAvatar: (sessionId: string) => void;
   updateAvatarPosition: (sessionId: string, position: { lat: number; lng: number }, isMoving: boolean) => void;
+  updateAvatarCallStatus: (userId: string, isInCall: boolean) => void;
   loadInitialUsers: (users: AvatarData[]) => void;
   setCurrentMap: (mapId: string | null) => void;
   clearAllAvatars: () => void;
@@ -65,6 +66,28 @@ export const avatarStore = create<AvatarState>((set, get) => ({
       
       newAvatars.set(sessionId, updatedAvatar);
       return { avatars: newAvatars };
+    });
+  },
+  
+  updateAvatarCallStatus: (userId: string, isInCall: boolean) => {
+    set((state) => {
+      const newAvatars = new Map(state.avatars);
+      let updated = false;
+      
+      // Find avatar by userId and update call status
+      for (const [sessionId, avatar] of state.avatars) {
+        if (avatar.userId === userId) {
+          const updatedAvatar: AvatarData = {
+            ...avatar,
+            isInCall
+          };
+          newAvatars.set(sessionId, updatedAvatar);
+          updated = true;
+          break;
+        }
+      }
+      
+      return updated ? { avatars: newAvatars } : state;
     });
   },
   

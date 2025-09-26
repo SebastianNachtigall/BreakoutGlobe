@@ -5,10 +5,11 @@ interface AvatarTooltipProps {
   position: { x: number; y: number };
   avatar: {
     sessionId: string;
-    userId: string;
-    displayName: string;
+    userId?: string;
+    displayName?: string;
     avatarURL?: string;
     aboutMe?: string;
+    isInCall?: boolean;
   };
   onClose: () => void;
   onStartCall: () => void;
@@ -35,7 +36,7 @@ export const AvatarTooltip: React.FC<AvatarTooltipProps> = ({
     } else {
       return (
         <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
-          {avatar.displayName.charAt(0).toUpperCase()}
+          {(avatar.displayName || 'U').charAt(0).toUpperCase()}
         </div>
       );
     }
@@ -63,7 +64,7 @@ export const AvatarTooltip: React.FC<AvatarTooltipProps> = ({
           {renderAvatar()}
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {avatar.displayName}
+              {avatar.displayName || 'Unknown User'}
             </h3>
             <p className="text-sm text-gray-500 truncate">
               {avatar.userId}
@@ -77,11 +78,17 @@ export const AvatarTooltip: React.FC<AvatarTooltipProps> = ({
         {/* Action Buttons */}
         <div className="flex space-x-2">
           <button
-            onClick={onStartCall}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+            onClick={avatar.isInCall ? undefined : onStartCall}
+            disabled={avatar.isInCall}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2 ${
+              avatar.isInCall 
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+            title={avatar.isInCall ? 'User is currently in a call' : 'Start video call'}
           >
             <span>📹</span>
-            <span>Start Video Call</span>
+            <span>{avatar.isInCall ? 'In Call' : 'Start Video Call'}</span>
           </button>
           <button
             onClick={onClose}

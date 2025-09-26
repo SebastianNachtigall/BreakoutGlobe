@@ -1041,6 +1041,29 @@ func (h *Handler) handleCallAccept(ctx context.Context, client *Client, msg Mess
 	// Send accept message to caller
 	h.manager.BroadcastToUser(callerUserId, callAcceptMsg, client.SessionID)
 	
+	// Broadcast call status update to all users on the map (both users are now in call)
+	callStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   client.UserID,
+			"isInCall": true,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, callStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", client.UserID, "isInCall", true, "mapId", client.MapID)
+	
+	callerStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   callerUserId,
+			"isInCall": true,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, callerStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", callerUserId, "isInCall", true, "mapId", client.MapID)
+	
 	h.logger.Info("✅ Call accept sent to caller", 
 		"callId", callId,
 		"accepter", client.UserID,
@@ -1084,6 +1107,29 @@ func (h *Handler) handleCallReject(ctx context.Context, client *Client, msg Mess
 	// Send reject message to caller
 	h.manager.BroadcastToUser(callerUserId, callRejectMsg, client.SessionID)
 	
+	// Broadcast call status update to all users on the map (both users are no longer in call)
+	callStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   client.UserID,
+			"isInCall": false,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, callStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", client.UserID, "isInCall", false, "mapId", client.MapID)
+	
+	callerStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   callerUserId,
+			"isInCall": false,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, callerStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", callerUserId, "isInCall", false, "mapId", client.MapID)
+	
 	h.logger.Info("❌ Call reject sent to caller", 
 		"callId", callId,
 		"rejecter", client.UserID,
@@ -1126,6 +1172,29 @@ func (h *Handler) handleCallEnd(ctx context.Context, client *Client, msg Message
 	
 	// Send end message to other user
 	h.manager.BroadcastToUser(otherUserId, callEndMsg, client.SessionID)
+	
+	// Broadcast call status update to all users on the map (both users are no longer in call)
+	callStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   client.UserID,
+			"isInCall": false,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, callStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", client.UserID, "isInCall", false, "mapId", client.MapID)
+	
+	otherStatusMsg := Message{
+		Type: "user_call_status",
+		Data: map[string]interface{}{
+			"userId":   otherUserId,
+			"isInCall": false,
+		},
+		Timestamp: time.Now(),
+	}
+	h.manager.BroadcastToMap(client.MapID, otherStatusMsg)
+	h.logger.Info("📡 Broadcasting call status", "userId", otherUserId, "isInCall", false, "mapId", client.MapID)
 	
 	h.logger.Info("📵 Call end sent to other user", 
 		"callId", callId,
