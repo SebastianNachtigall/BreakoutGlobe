@@ -5,12 +5,14 @@ import { NotificationCenter } from './components/NotificationCenter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
+import { VideoCallModal } from './components/VideoCallModal'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
+import { videoCallStore } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { getCurrentUserProfile } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
@@ -29,6 +31,7 @@ function App() {
   const poiState = poiStore()
   // const errorState = errorStore() // Not used in current implementation
   const avatarState = avatarStore()
+  const videoCallState = videoCallStore()
   
   // Force re-render when avatar store changes by subscribing to the entire store
   const [avatarStoreVersion, setAvatarStoreVersion] = useState(0)
@@ -166,15 +169,25 @@ function App() {
           }
         })
         
-        // Connect WebSocket
-        await client.connect()
-        setWsClient(client)
-        
-        // Request initial users after connection
-        client.requestInitialUsers()
+        // Connect WebSocket (non-blocking for POC)
+        try {
+          await client.connect()
+          setWsClient(client)
+          
+          // Request initial users after connection
+          client.requestInitialUsers()
+          console.log('✅ WebSocket connected successfully')
+        } catch (wsError) {
+          console.warn('⚠️ WebSocket connection failed, continuing without real-time features:', wsError)
+          // Continue without WebSocket for POC testing
+        }
         
         // Load initial POIs
-        await loadPOIs()
+        try {
+          await loadPOIs()
+        } catch (poiError) {
+          console.warn('⚠️ Failed to load POIs, continuing with empty POI list:', poiError)
+        }
         
         setIsInitialized(true)
         
@@ -346,6 +359,8 @@ function App() {
     wsClient.leavePOI(poiId)
   }, [wsClient])
 
+
+
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
     console.info('🎉 Profile created successfully:', profile.displayName)
@@ -441,6 +456,27 @@ function App() {
     setShowProfileCreation(false)
   }, [])
 
+  // Video call handlers
+  const handleAcceptCall = useCallback(() => {
+    videoCallStore.getState().acceptCall();
+  }, [])
+
+  const handleRejectCall = useCallback(() => {
+    videoCallStore.getState().rejectCall();
+  }, [])
+
+  const handleEndCall = useCallback(() => {
+    videoCallStore.getState().endCall();
+  }, [])
+
+  const handleCloseVideoCall = useCallback(() => {
+    if (videoCallState.callState === 'connected' || videoCallState.callState === 'calling') {
+      videoCallStore.getState().endCall();
+    } else {
+      videoCallStore.getState().clearCall();
+    }
+  }, [videoCallState.callState])
+
   // Convert session state to avatar data for MapContainer
   // CRITICAL: Memoize avatars array to prevent unnecessary re-renders and marker recreation
   const avatars: AvatarData[] = useMemo(() => {
@@ -458,7 +494,38 @@ function App() {
     // Get other users' avatars from avatarStore
     const otherUsersAvatars = avatarState.getAvatarsForCurrentMap();
     
-    return [currentUserAvatar, ...otherUsersAvatars];
+    // Add mock avatars for POC testing (when no real users are connected)
+    const mockAvatars: AvatarData[] = otherUsersAvatars.length === 0 ? [
+      {
+        sessionId: 'mock-session-1',
+        userId: 'mock-user-1',
+        displayName: 'Alice Johnson',
+        avatarURL: undefined, // Will show initials
+        position: { lat: 40.7589, lng: -73.9851 }, // Near NYC
+        isCurrentUser: false,
+        role: 'user'
+      },
+      {
+        sessionId: 'mock-session-2', 
+        userId: 'mock-user-2',
+        displayName: 'Bob Smith',
+        avatarURL: undefined, // Will show initials
+        position: { lat: 51.5074, lng: -0.1278 }, // London
+        isCurrentUser: false,
+        role: 'user'
+      },
+      {
+        sessionId: 'mock-session-3',
+        userId: 'mock-user-3', 
+        displayName: 'Carol Davis',
+        avatarURL: undefined, // Will show initials
+        position: { lat: 48.8566, lng: 2.3522 }, // Paris
+        isCurrentUser: false,
+        role: 'admin'
+      }
+    ] : [];
+    
+    return [currentUserAvatar, ...otherUsersAvatars, ...mockAvatars];
   }, [
     sessionState.sessionId,
     userProfile?.id,
@@ -470,7 +537,30 @@ function App() {
     avatarStoreVersion // Use version to trigger re-renders when avatar store changes
   ])
 
-
+  // Handle avatar click for video calls (defined after avatars array)
+  const handleAvatarClick = useCallback((userId: string) => {
+    // Don't allow calling yourself
+    if (userId === userProfile?.id) {
+      console.log('Cannot call yourself');
+      return;
+    }
+    
+    // Find the avatar data for the clicked user from the complete avatars array
+    const targetAvatar = avatars.find(avatar => avatar.userId === userId);
+    if (!targetAvatar) {
+      console.warn('Target avatar not found for user:', userId);
+      return;
+    }
+    
+    console.log('📞 Avatar clicked, initiating call to:', targetAvatar.displayName);
+    
+    // Initiate video call
+    videoCallStore.getState().initiateCall(
+      userId,
+      targetAvatar.displayName || targetAvatar.sessionId,
+      targetAvatar.avatarURL
+    );
+  }, [userProfile?.id, avatars])
 
   // Show loading screen while checking for profile
   if (!profileCheckComplete) {
@@ -551,6 +641,7 @@ function App() {
             onAvatarMove={handleAvatarMove}
             onPOIClick={handlePOIClick}
             onPOICreate={handlePOICreate}
+            onAvatarClick={handleAvatarClick}
           />
           
           {/* POI Details Panel */}
@@ -570,12 +661,28 @@ function App() {
         <div className="bg-gray-800 text-white p-2 text-sm">
           <div className="flex justify-between items-center">
             <span>Connected Users: {avatars.length}</span>
-            <span>
-              {connectionStatus === WSConnectionStatus.CONNECTED 
-                ? 'Click to move • Right-click to create POI'
-                : 'Connecting...'
-              }
-            </span>
+            <div className="flex items-center space-x-4">
+              {/* Test buttons for video call POC */}
+              <button
+                onClick={() => {
+                  videoCallStore.getState().receiveCall(
+                    'test-call-123',
+                    'test-user-456',
+                    'Test User',
+                    undefined
+                  );
+                }}
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"
+              >
+                Test Incoming Call
+              </button>
+              <span>
+                {connectionStatus === WSConnectionStatus.CONNECTED 
+                  ? 'Click avatar for video call • Right-click to create POI'
+                  : 'Click avatar for video call (WebSocket connecting...)'
+                }
+              </span>
+            </div>
           </div>
         </div>
 
@@ -588,6 +695,23 @@ function App() {
               setShowPOICreation(false)
               setPOICreationPosition(null)
             }}
+          />
+        )}
+
+        {/* Video Call Modal */}
+        {videoCallState.callState !== 'idle' && videoCallState.currentCall && (
+          <VideoCallModal
+            isOpen={true}
+            onClose={handleCloseVideoCall}
+            callState={videoCallState.callState}
+            targetUser={{
+              id: videoCallState.currentCall.targetUserId,
+              displayName: videoCallState.currentCall.targetUserName,
+              avatarURL: videoCallState.currentCall.targetUserAvatar
+            }}
+            onAcceptCall={handleAcceptCall}
+            onRejectCall={handleRejectCall}
+            onEndCall={handleEndCall}
           />
         )}
 

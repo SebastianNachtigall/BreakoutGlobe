@@ -358,3 +358,40 @@ func (m *Manager) Shutdown() {
 	
 	m.logger.Info("WebSocket manager shutdown complete")
 }
+
+// BroadcastToUser sends a message to a specific user by their user ID
+func (m *Manager) BroadcastToUser(userID string, message Message, exceptSessionID string) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	
+	var targetClient *Client
+	
+	// Find the client with the matching user ID
+	for sessionID, client := range m.clients {
+		if client.UserID == userID && sessionID != exceptSessionID {
+			targetClient = client
+			break
+		}
+	}
+	
+	if targetClient == nil {
+		m.logger.Warn("🚫 Target user not found for message", 
+			"targetUserId", userID, 
+			"messageType", message.Type)
+		return
+	}
+	
+	// Send message to target user
+	select {
+	case targetClient.Send <- message:
+		m.logger.Info("📨 Message sent to user", 
+			"targetUserId", userID,
+			"targetSessionId", targetClient.SessionID,
+			"messageType", message.Type)
+	default:
+		m.logger.Warn("📨 Failed to send message to user (channel full)", 
+			"targetUserId", userID,
+			"targetSessionId", targetClient.SessionID,
+			"messageType", message.Type)
+	}
+}

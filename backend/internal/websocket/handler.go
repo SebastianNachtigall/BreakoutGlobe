@@ -81,16 +81,21 @@ func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterI
 
 // HandleWebSocket handles WebSocket connection upgrades
 func (h *Handler) HandleWebSocket(c *gin.Context) {
-	// Extract session ID from Authorization header
-	authHeader := c.GetHeader("Authorization")
-	sessionID, err := extractSessionID(authHeader)
-	h.logger.Info("WebSocket connection attempt", "sessionId", sessionID)
-	
-	if err != nil {
-		h.logger.Warn("WebSocket connection failed: missing sessionId")
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization header"})
-		return
+	// Extract session ID from query parameter (preferred for WebSocket) or Authorization header
+	sessionID := c.Query("sessionId")
+	if sessionID == "" {
+		// Fallback to Authorization header
+		authHeader := c.GetHeader("Authorization")
+		var err error
+		sessionID, err = extractSessionID(authHeader)
+		if err != nil {
+			h.logger.Warn("WebSocket connection failed: missing sessionId")
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing sessionId query parameter or Authorization header"})
+			return
+		}
 	}
+	
+	h.logger.Info("WebSocket connection attempt", "sessionId", sessionID)
 	
 	// Validate session
 	session, err := h.sessionService.GetSession(c.Request.Context(), sessionID)
@@ -320,6 +325,14 @@ func (h *Handler) handleMessage(client *Client, msg Message) {
 		h.handlePOIJoin(ctx, client, msg)
 	case "poi_leave":
 		h.handlePOILeave(ctx, client, msg)
+	case "call_request":
+		h.handleCallRequest(ctx, client, msg)
+	case "call_accept":
+		h.handleCallAccept(ctx, client, msg)
+	case "call_reject":
+		h.handleCallReject(ctx, client, msg)
+	case "call_end":
+		h.handleCallEnd(ctx, client, msg)
 	default:
 		errorMsg := Message{
 			Type: "error",
@@ -592,6 +605,57 @@ func validateMessage(msg Message) error {
 		
 		return nil
 		
+	case "call_request":
+		// Validate call request message
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["targetUserId"].(string); !ok {
+			return errors.New("targetUserId is required for call_request")
+		}
+		
+		if _, ok := data["callId"].(string); !ok {
+			return errors.New("callId is required for call_request")
+		}
+		
+		return nil
+		
+	case "call_accept", "call_reject":
+		// Validate call accept/reject messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["callId"].(string); !ok {
+			return errors.New("callId is required")
+		}
+		
+		if _, ok := data["callerUserId"].(string); !ok {
+			return errors.New("callerUserId is required")
+		}
+		
+		return nil
+		
+	case "call_end":
+		// Validate call end message
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["callId"].(string); !ok {
+			return errors.New("callId is required for call_end")
+		}
+		
+		if _, ok := data["otherUserId"].(string); !ok {
+			return errors.New("otherUserId is required for call_end")
+		}
+		
+		return nil
+		
 	default:
 		return fmt.Errorf("unknown message type: %s", msg.Type)
 	}
@@ -833,3 +897,206 @@ func (h *Handler) handleRequestInitialUsers(ctx context.Context, client *Client,
 		h.logger.Warn("Failed to send initial users to client", 
 			"sessionId", client.SessionID)
 	}}
+
+// Video Call Handlers
+
+// handleCallRequest processes incoming call requests
+func (h *Handler) handleCallRequest(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📞 Call request received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid call request data format")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for call request")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for call request")
+		return
+	}
+	
+	// Get caller info
+	callerInfo := map[string]interface{}{
+		"userId":      client.UserID,
+		"sessionId":   client.SessionID,
+		"displayName": data["callerName"], // Optional caller name
+	}
+	
+	// Create call request message for target user
+	callRequestMsg := Message{
+		Type: "call_request",
+		Data: map[string]interface{}{
+			"callId":     callId,
+			"callerInfo": callerInfo,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Find target user and send call request
+	h.manager.BroadcastToUser(targetUserId, callRequestMsg, client.SessionID)
+	
+	h.logger.Info("📞 Call request sent to target user", 
+		"callId", callId,
+		"caller", client.UserID,
+		"target", targetUserId)
+}
+
+// handleCallAccept processes call accept messages
+func (h *Handler) handleCallAccept(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("✅ Call accept received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid call accept data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for call accept")
+		return
+	}
+	
+	callerUserId, ok := data["callerUserId"].(string)
+	if !ok || callerUserId == "" {
+		h.sendErrorMessage(client, "Caller user ID is required for call accept")
+		return
+	}
+	
+	// Create call accept message for caller
+	callAcceptMsg := Message{
+		Type: "call_accept",
+		Data: map[string]interface{}{
+			"callId":   callId,
+			"accepter": client.UserID,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send accept message to caller
+	h.manager.BroadcastToUser(callerUserId, callAcceptMsg, client.SessionID)
+	
+	h.logger.Info("✅ Call accept sent to caller", 
+		"callId", callId,
+		"accepter", client.UserID,
+		"caller", callerUserId)
+}
+
+// handleCallReject processes call reject messages
+func (h *Handler) handleCallReject(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("❌ Call reject received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid call reject data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for call reject")
+		return
+	}
+	
+	callerUserId, ok := data["callerUserId"].(string)
+	if !ok || callerUserId == "" {
+		h.sendErrorMessage(client, "Caller user ID is required for call reject")
+		return
+	}
+	
+	// Create call reject message for caller
+	callRejectMsg := Message{
+		Type: "call_reject",
+		Data: map[string]interface{}{
+			"callId":   callId,
+			"rejecter": client.UserID,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send reject message to caller
+	h.manager.BroadcastToUser(callerUserId, callRejectMsg, client.SessionID)
+	
+	h.logger.Info("❌ Call reject sent to caller", 
+		"callId", callId,
+		"rejecter", client.UserID,
+		"caller", callerUserId)
+}
+
+// handleCallEnd processes call end messages
+func (h *Handler) handleCallEnd(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📵 Call end received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid call end data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for call end")
+		return
+	}
+	
+	otherUserId, ok := data["otherUserId"].(string)
+	if !ok || otherUserId == "" {
+		h.sendErrorMessage(client, "Other user ID is required for call end")
+		return
+	}
+	
+	// Create call end message for other user
+	callEndMsg := Message{
+		Type: "call_end",
+		Data: map[string]interface{}{
+			"callId": callId,
+			"ender":  client.UserID,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send end message to other user
+	h.manager.BroadcastToUser(otherUserId, callEndMsg, client.SessionID)
+	
+	h.logger.Info("📵 Call end sent to other user", 
+		"callId", callId,
+		"ender", client.UserID,
+		"other", otherUserId)
+}
+
+// sendErrorMessage sends an error message to a client
+func (h *Handler) sendErrorMessage(client *Client, message string) {
+	errorMsg := Message{
+		Type: "error",
+		Data: map[string]interface{}{
+			"message": message,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	select {
+	case client.Send <- errorMsg:
+		h.logger.Warn("Error message sent to client", 
+			"sessionId", client.SessionID, 
+			"message", message)
+	default:
+		h.logger.Error("Failed to send error message to client", 
+			"sessionId", client.SessionID, 
+			"message", message)
+	}
+}
