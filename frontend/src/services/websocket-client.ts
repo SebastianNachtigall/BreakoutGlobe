@@ -346,6 +346,15 @@ export class WebSocketClient {
       case 'call_end':
         this.handleCallEnd(message.data);
         break;
+      case 'webrtc_offer':
+        this.handleWebRTCOffer(message.data);
+        break;
+      case 'webrtc_answer':
+        this.handleWebRTCAnswer(message.data);
+        break;
+      case 'ice_candidate':
+        this.handleICECandidate(message.data);
+        break;
       default:
         console.log('❓ WebSocket: Unknown message type', message.type);
         break;
@@ -743,6 +752,50 @@ export class WebSocketClient {
     });
   }
 
+  // WebRTC Signaling Methods
+  sendWebRTCOffer(callId: string, targetUserId: string, sdp: RTCSessionDescriptionInit): void {
+    console.log('📝 WebSocket: Sending WebRTC offer', { callId, targetUserId });
+    this.send({
+      type: 'webrtc_offer',
+      data: {
+        callId,
+        targetUserId,
+        sdp
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendWebRTCAnswer(callId: string, targetUserId: string, sdp: RTCSessionDescriptionInit): void {
+    console.log('📋 WebSocket: Sending WebRTC answer', { callId, targetUserId });
+    this.send({
+      type: 'webrtc_answer',
+      data: {
+        callId,
+        targetUserId,
+        sdp
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendICECandidate(callId: string, targetUserId: string, candidate: RTCIceCandidate): void {
+    console.log('🧊 WebSocket: Sending ICE candidate', { callId, targetUserId });
+    this.send({
+      type: 'ice_candidate',
+      data: {
+        callId,
+        targetUserId,
+        candidate: {
+          candidate: candidate.candidate,
+          sdpMLineIndex: candidate.sdpMLineIndex,
+          sdpMid: candidate.sdpMid
+        }
+      },
+      timestamp: new Date()
+    });
+  }
+
   // Video Call Message Handlers
   private handleCallRequest(data: any): void {
     console.log('📞 WebSocket: Received call request', data);
@@ -769,20 +822,24 @@ export class WebSocketClient {
       const { callId } = data;
       const state = videoCallStore.getState();
 
-      // Only process if this is our current call
-      if (state.currentCall?.callId === callId) {
-        // Don't call acceptCall() as it would send another message
-        // Just update the state to connecting/connected
+      // Only process if this is our current call and we're the caller
+      if (state.currentCall?.callId === callId && state.currentCall && !state.currentCall.isIncoming) {
+        console.log('📝 Call accepted - creating WebRTC offer as caller');
         state.setCallState('connecting');
 
-        // Simulate connection process
-        setTimeout(() => {
-          const currentState = videoCallStore.getState();
-          if (currentState.callState === 'connecting') {
-            currentState.setCallState('connected');
-            console.log('🎥 Call connected');
-          }
-        }, 2000);
+        // Create and send WebRTC offer
+        if (state.webrtcService) {
+          state.webrtcService.createOffer().then((offer) => {
+            console.log('📝 WebRTC offer created, sending to callee');
+            const wsClient = (window as any).wsClient;
+            if (wsClient && wsClient.isConnected() && state.currentCall) {
+              wsClient.sendWebRTCOffer(state.currentCall.callId, state.currentCall.targetUserId, offer);
+            }
+          }).catch((error) => {
+            console.error('❌ Failed to create WebRTC offer:', error);
+            state.endCall();
+          });
+        }
       }
     });
   }
@@ -829,4 +886,75 @@ export class WebSocketClient {
     });
   }
 
+  // WebRTC Signaling Message Handlers
+  private handleWebRTCOffer(data: any): void {
+    console.log('📝 WebSocket: Received WebRTC offer', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId, fromUserId, sdp } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentCall?.callId === callId && state.webrtcService) {
+        console.log('📝 Processing WebRTC offer for current call');
+
+        state.webrtcService.setRemoteDescription(sdp).then(() => {
+          console.log('✅ Remote description set, creating answer...');
+          return state.webrtcService!.createAnswer();
+        }).then((answer) => {
+          console.log('✅ Answer created, sending to caller...');
+          const wsClient = (window as any).wsClient;
+          if (wsClient && wsClient.isConnected()) {
+            wsClient.sendWebRTCAnswer(callId, fromUserId, answer);
+            console.log('📤 WebRTC answer sent');
+          } else {
+            console.error('❌ WebSocket not connected, cannot send answer');
+          }
+        }).catch((error) => {
+          console.error('❌ Failed to handle WebRTC offer:', error);
+          state.endCall();
+        });
+      } else {
+        console.warn('⚠️ Received WebRTC offer but no matching call or WebRTC service');
+      }
+    });
+  }
+
+  private handleWebRTCAnswer(data: any): void {
+    console.log('📋 WebSocket: Received WebRTC answer', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId, sdp } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentCall?.callId === callId && state.webrtcService) {
+        console.log('📋 Processing WebRTC answer for current call');
+
+        state.webrtcService.setRemoteDescription(sdp).then(() => {
+          console.log('✅ Remote description (answer) set successfully');
+        }).catch((error) => {
+          console.error('❌ Failed to handle WebRTC answer:', error);
+          state.endCall();
+        });
+      } else {
+        console.warn('⚠️ Received WebRTC answer but no matching call or WebRTC service');
+      }
+    });
+  }
+
+  private handleICECandidate(data: any): void {
+    console.log('🧊 WebSocket: Received ICE candidate', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { callId, candidate } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentCall?.callId === callId && state.webrtcService) {
+        console.log('🧊 Processing ICE candidate for current call');
+
+        state.webrtcService.addIceCandidate(candidate).catch((error) => {
+          console.error('❌ Failed to handle ICE candidate:', error);
+        });
+      }
+    });
+  }
 }

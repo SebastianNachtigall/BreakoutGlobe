@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connecting' | 'connected' | 'ended';
 
@@ -11,9 +11,15 @@ interface VideoCallModalProps {
     displayName: string;
     avatarURL?: string;
   };
+  localStream?: MediaStream | null;
+  remoteStream?: MediaStream | null;
+  isAudioEnabled?: boolean;
+  isVideoEnabled?: boolean;
   onAcceptCall?: () => void;
   onRejectCall?: () => void;
   onEndCall?: () => void;
+  onToggleAudio?: () => void;
+  onToggleVideo?: () => void;
 }
 
 export const VideoCallModal: React.FC<VideoCallModalProps> = ({
@@ -21,10 +27,32 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
   onClose,
   callState,
   targetUser,
+  localStream,
+  remoteStream,
+  isAudioEnabled = true,
+  isVideoEnabled = true,
   onAcceptCall,
   onRejectCall,
-  onEndCall
+  onEndCall,
+  onToggleAudio,
+  onToggleVideo
 }) => {
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+  // Set up video streams
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
   if (!isOpen) return null;
 
   const getCallStateText = () => {
@@ -88,16 +116,26 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
       return (
         <div className="flex justify-center space-x-4">
           <button
-            className="bg-gray-300 hover:bg-gray-400 text-gray-700 p-3 rounded-full text-xl transition-colors"
-            title="Mute/Unmute"
+            onClick={onToggleAudio}
+            className={`p-3 rounded-full text-xl transition-colors ${
+              isAudioEnabled 
+                ? 'bg-gray-300 hover:bg-gray-400 text-gray-700' 
+                : 'bg-red-500 hover:bg-red-600 text-white'
+            }`}
+            title={isAudioEnabled ? 'Mute' : 'Unmute'}
           >
-            🎤
+            {isAudioEnabled ? '🎤' : '🔇'}
           </button>
           <button
-            className="bg-gray-300 hover:bg-gray-400 text-gray-700 p-3 rounded-full text-xl transition-colors"
-            title="Camera on/off"
+            onClick={onToggleVideo}
+            className={`p-3 rounded-full text-xl transition-colors ${
+              isVideoEnabled 
+                ? 'bg-gray-300 hover:bg-gray-400 text-gray-700' 
+                : 'bg-red-500 hover:bg-red-600 text-white'
+            }`}
+            title={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
           >
-            🎥
+            {isVideoEnabled ? '🎥' : '📹'}
           </button>
           <button
             onClick={onEndCall}
@@ -142,18 +180,41 @@ export const VideoCallModal: React.FC<VideoCallModalProps> = ({
     if (callState === 'connected') {
       return (
         <div className="relative bg-gray-900 h-80 rounded-lg overflow-hidden mb-6">
-          {/* Placeholder for remote video */}
-          <div className="w-full h-full flex items-center justify-center text-white">
-            <div className="text-center">
-              {renderUserAvatar()}
-              <p className="text-lg">{targetUser.displayName}</p>
-              <p className="text-sm text-gray-300">Video will appear here</p>
+          {/* Remote video */}
+          {remoteStream ? (
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white">
+              <div className="text-center">
+                {renderUserAvatar()}
+                <p className="text-lg">{targetUser.displayName}</p>
+                <p className="text-sm text-gray-300">Waiting for video...</p>
+              </div>
             </div>
-          </div>
+          )}
           
-          {/* Placeholder for local video (picture-in-picture) */}
-          <div className="absolute top-4 right-4 w-32 h-24 bg-gray-800 rounded-lg border-2 border-white flex items-center justify-center">
-            <span className="text-white text-xs">Your video</span>
+          {/* Local video (picture-in-picture) */}
+          <div className="absolute top-4 right-4 w-32 h-24 bg-gray-800 rounded-lg border-2 border-white overflow-hidden">
+            {localStream && isVideoEnabled ? (
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <span className="text-white text-xs">
+                  {!isVideoEnabled ? 'Camera off' : 'No video'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       );

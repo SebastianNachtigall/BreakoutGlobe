@@ -66,6 +66,7 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 	// Create repositories
 	poiRepo := repository.NewPOIRepository(testDB.DB)
 	sessionRepo := repository.NewSessionRepository(testDB.DB)
+	userRepo := repository.NewUserRepository(testDB.DB)
 
 	// Create Redis components
 	poiParticipants := redis.NewPOIParticipants(testRedis.Client())
@@ -78,13 +79,14 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 	// Create services
 	poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub)
 	sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
+	userService := services.NewUserService(userRepo)
 
 	// Create handlers
 	poiHandler := handlers.NewPOIHandler(poiService, rateLimiter)
 	sessionHandler := handlers.NewSessionHandler(sessionService, rateLimiter)
 
 	// Create WebSocket handler
-	wsHandler := websocket.NewHandler(sessionService, rateLimiter)
+	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService)
 
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)

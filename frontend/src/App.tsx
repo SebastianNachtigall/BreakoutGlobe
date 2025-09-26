@@ -32,17 +32,17 @@ function App() {
   // const errorState = errorStore() // Not used in current implementation
   const avatarState = avatarStore()
   const videoCallState = videoCallStore()
-  
+
   // Force re-render when avatar store changes by subscribing to the entire store
   const [avatarStoreVersion, setAvatarStoreVersion] = useState(0)
-  
+
   useEffect(() => {
     const unsubscribe = avatarStore.subscribe(() => {
       setAvatarStoreVersion(prev => prev + 1)
     })
     return unsubscribe
   }, [])
-  
+
   // Local component state
   const [wsClient, setWsClient] = useState<WebSocketClient | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<WSConnectionStatus>(WSConnectionStatus.DISCONNECTED)
@@ -50,12 +50,12 @@ function App() {
   const [selectedPOI, setSelectedPOI] = useState<POIData | null>(null)
   const [showPOICreation, setShowPOICreation] = useState(false)
   const [poiCreationPosition, setPOICreationPosition] = useState<{ lat: number; lng: number } | null>(null)
-  
+
   // Profile system state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
-  
+
   const initializationRef = useRef(false)
 
   // Initialize session and WebSocket connection
@@ -67,12 +67,12 @@ function App() {
       try {
         // Check if user has a profile first - try localStorage first, then backend
         let profile = userProfileStore.getState().getProfileOffline()
-        
+
         if (profile) {
           console.info('✅ User profile loaded from localStorage:', profile.displayName)
           setUserProfile(profile)
           setProfileCheckComplete(true)
-          
+
           // Try to sync with backend in the background (don't block UI)
           try {
             const backendProfile = await getCurrentUserProfile(profile.id)
@@ -116,7 +116,7 @@ function App() {
 
         // Create or restore session
         let sessionId = sessionState.sessionId
-        
+
         if (!sessionId) {
           // Create new session via API
           const response = await fetch('http://localhost:8080/api/sessions', {
@@ -130,27 +130,32 @@ function App() {
               avatarPosition: mockSession.position
             }),
           })
-          
+
           if (!response.ok) {
             throw new Error('Failed to create session')
           }
-          
+
           const sessionData = await response.json()
           sessionId = sessionData.sessionId || sessionData.id
-          
+
           // Update session store
           sessionStore.getState().createSession(sessionId!, sessionData.position || mockSession.position)
         }
 
         // Initialize WebSocket connection
-        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`
-        const client = new WebSocketClient(wsUrl, sessionId!)
-        
+        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`;
+
+        // Initialize WebSocket connection
+        const client = new WebSocketClient(wsUrl, sessionId!);
+
+        // Make WebSocket client globally accessible for WebRTC signaling
+        (window as any).wsClient = client;
+
         // Set up WebSocket event handlers
         client.onStatusChange((status) => {
           setConnectionStatus(status)
         })
-        
+
         client.onError((error) => {
           errorStore.getState().addError({
             id: Date.now().toString(),
@@ -160,7 +165,7 @@ function App() {
             timestamp: error.timestamp
           })
         })
-        
+
         // Set up multi-user avatar event handlers
         client.onStateSync((data) => {
           if (data.type === 'avatar') {
@@ -168,15 +173,15 @@ function App() {
             console.log('Avatar state sync:', data);
           }
         })
-        
+
         // Connect WebSocket (non-blocking for POC)
         try {
           await client.connect()
           setWsClient(client)
-          
+
           // Set WebSocket client for video call store
           setWebSocketClient(client)
-          
+
           // Request initial users after connection
           client.requestInitialUsers()
           console.log('✅ WebSocket connected successfully')
@@ -184,16 +189,16 @@ function App() {
           console.warn('⚠️ WebSocket connection failed, continuing without real-time features:', wsError)
           // Continue without WebSocket for POC testing
         }
-        
+
         // Load initial POIs
         try {
           await loadPOIs()
         } catch (poiError) {
           console.warn('⚠️ Failed to load POIs, continuing with empty POI list:', poiError)
         }
-        
+
         setIsInitialized(true)
-        
+
       } catch (error) {
         console.error('Failed to initialize app:', error)
         errorStore.getState().addError({
@@ -207,7 +212,7 @@ function App() {
     }
 
     initializeApp()
-    
+
     // Cleanup on unmount
     return () => {
       if (wsClient) {
@@ -220,15 +225,15 @@ function App() {
   const loadPOIs = async () => {
     try {
       poiStore.getState().setLoading(true)
-      
+
       const response = await fetch('http://localhost:8080/api/pois?mapId=default-map')
       if (!response.ok) {
         throw new Error('Failed to load POIs')
       }
-      
+
       const data = await response.json()
       poiStore.getState().setPOIs(data.pois || [])
-      
+
     } catch (error) {
       console.error('Failed to load POIs:', error)
       poiStore.getState().setError(error instanceof Error ? error.message : 'Failed to load POIs')
@@ -258,7 +263,7 @@ function App() {
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
     // Move avatar to clicked location
     handleAvatarMove({ lat: event.lngLat.lat, lng: event.lngLat.lng })
-    
+
     // Auto-leave current POI and close details panel
     if (wsClient) {
       wsClient.leaveCurrentPOI()
@@ -288,10 +293,10 @@ function App() {
     try {
       // Use WebSocket client for optimistic updates
       wsClient.createPOI(newPOI)
-      
+
       setShowPOICreation(false)
       setPOICreationPosition(null)
-      
+
     } catch (error) {
       console.error('Failed to create POI:', error)
       errorStore.getState().addError({
@@ -325,7 +330,7 @@ function App() {
   // Handle POI join/leave with auto-leave functionality
   const handleJoinPOI = useCallback(async (poiId: string) => {
     if (!wsClient) return
-    
+
     // Find the POI to get its position
     const poi = poiState.pois.find(p => p.id === poiId)
     if (poi) {
@@ -336,7 +341,7 @@ function App() {
       }
       handleAvatarMove(offsetPosition)
     }
-    
+
     // Join the POI via HTTP API (since WebSocket doesn't work with mock backend)
     try {
       const response = await fetch(`http://localhost:8080/api/pois/${poiId}/join`, {
@@ -344,11 +349,11 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionState.sessionId })
       })
-      
+
       if (response.ok) {
         // Update local state
         poiState.joinPOIWithAutoLeave(poiId, sessionState.sessionId || '')
-        
+
         // Refresh POI data to get updated participant list
         await loadPOIs()
       }
@@ -367,12 +372,12 @@ function App() {
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
     console.info('🎉 Profile created successfully:', profile.displayName)
-    
+
     // Save to localStorage and update state
     userProfileStore.getState().setProfile(profile)
     setUserProfile(profile)
     setShowProfileCreation(false)
-    
+
     // Now initialize the app with the new profile
     const initializeWithProfile = async () => {
       try {
@@ -388,26 +393,29 @@ function App() {
             avatarPosition: mockSession.position
           }),
         })
-        
+
         if (!response.ok) {
           throw new Error('Failed to create session')
         }
-        
+
         const sessionData = await response.json()
         const sessionId = sessionData.sessionId || sessionData.id
-        
+
         // Update session store
         sessionStore.getState().createSession(sessionId, sessionData.position || mockSession.position)
 
         // Initialize WebSocket connection
-        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`
-        const client = new WebSocketClient(wsUrl, sessionId)
-        
+        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`;
+        const client = new WebSocketClient(wsUrl, sessionId);
+
+        // Make WebSocket client globally accessible for WebRTC signaling
+        (window as any).wsClient = client;
+
         // Set up WebSocket event handlers
         client.onStatusChange((status) => {
           setConnectionStatus(status)
         })
-        
+
         client.onError((error) => {
           errorStore.getState().addError({
             id: Date.now().toString(),
@@ -417,7 +425,7 @@ function App() {
             timestamp: error.timestamp
           })
         })
-        
+
         // Set up multi-user avatar event handlers
         client.onStateSync((data) => {
           if (data.type === 'avatar') {
@@ -425,22 +433,22 @@ function App() {
             console.log('Avatar state sync:', data);
           }
         })
-        
+
         // Connect WebSocket
         await client.connect()
         setWsClient(client)
-        
+
         // Set WebSocket client for video call store
         setWebSocketClient(client)
-        
+
         // Request initial users after connection
         client.requestInitialUsers()
-        
+
         // Load initial POIs
         await loadPOIs()
-        
+
         setIsInitialized(true)
-        
+
       } catch (error) {
         console.error('Failed to initialize app after profile creation:', error)
         errorStore.getState().addError({
@@ -475,6 +483,14 @@ function App() {
     videoCallStore.getState().endCall();
   }, [])
 
+  const handleToggleAudio = useCallback(() => {
+    videoCallStore.getState().toggleAudio();
+  }, [])
+
+  const handleToggleVideo = useCallback(() => {
+    videoCallStore.getState().toggleVideo();
+  }, [])
+
   const handleCloseVideoCall = useCallback(() => {
     if (videoCallState.callState === 'connected' || videoCallState.callState === 'calling') {
       videoCallStore.getState().endCall();
@@ -496,10 +512,10 @@ function App() {
       isMoving: sessionState.isMoving,
       role: userProfile?.role
     };
-    
+
     // Get other users' avatars from avatarStore
     const otherUsersAvatars = avatarState.getAvatarsForCurrentMap();
-    
+
     // Add mock avatars for POC testing (when no real users are connected)
     const mockAvatars: AvatarData[] = otherUsersAvatars.length === 0 ? [
       {
@@ -512,7 +528,7 @@ function App() {
         role: 'user'
       },
       {
-        sessionId: 'mock-session-2', 
+        sessionId: 'mock-session-2',
         userId: 'mock-user-2',
         displayName: 'Bob Smith',
         avatarURL: undefined, // Will show initials
@@ -522,7 +538,7 @@ function App() {
       },
       {
         sessionId: 'mock-session-3',
-        userId: 'mock-user-3', 
+        userId: 'mock-user-3',
         displayName: 'Carol Davis',
         avatarURL: undefined, // Will show initials
         position: { lat: 48.8566, lng: 2.3522 }, // Paris
@@ -530,7 +546,7 @@ function App() {
         role: 'admin'
       }
     ] : [];
-    
+
     return [currentUserAvatar, ...otherUsersAvatars, ...mockAvatars];
   }, [
     sessionState.sessionId,
@@ -550,16 +566,16 @@ function App() {
       console.log('Cannot call yourself');
       return;
     }
-    
+
     // Find the avatar data for the clicked user from the complete avatars array
     const targetAvatar = avatars.find(avatar => avatar.userId === userId);
     if (!targetAvatar) {
       console.warn('Target avatar not found for user:', userId);
       return;
     }
-    
+
     console.log('📞 Avatar clicked, initiating call to:', targetAvatar.displayName);
-    
+
     // Initiate video call
     videoCallStore.getState().initiateCall(
       userId,
@@ -625,7 +641,7 @@ function App() {
               <p className="text-blue-100">Interactive Workshop Platform</p>
             </div>
             <div className="flex items-center space-x-4">
-              <ConnectionStatus 
+              <ConnectionStatus
                 status={connectionStatus}
                 sessionId={sessionState.sessionId}
               />
@@ -649,7 +665,7 @@ function App() {
             onPOICreate={handlePOICreate}
             onAvatarClick={handleAvatarClick}
           />
-          
+
           {/* POI Details Panel */}
           {selectedPOI && (
             <POIDetailsPanel
@@ -683,7 +699,7 @@ function App() {
                 Test Incoming Call
               </button>
               <span>
-                {connectionStatus === WSConnectionStatus.CONNECTED 
+                {connectionStatus === WSConnectionStatus.CONNECTED
                   ? 'Click avatar for video call • Right-click to create POI'
                   : 'Click avatar for video call (WebSocket connecting...)'
                 }
@@ -715,9 +731,15 @@ function App() {
               displayName: videoCallState.currentCall.targetUserName,
               avatarURL: videoCallState.currentCall.targetUserAvatar
             }}
+            localStream={videoCallState.localStream}
+            remoteStream={videoCallState.remoteStream}
+            isAudioEnabled={videoCallState.isAudioEnabled}
+            isVideoEnabled={videoCallState.isVideoEnabled}
             onAcceptCall={handleAcceptCall}
             onRejectCall={handleRejectCall}
             onEndCall={handleEndCall}
+            onToggleAudio={handleToggleAudio}
+            onToggleVideo={handleToggleVideo}
           />
         )}
 

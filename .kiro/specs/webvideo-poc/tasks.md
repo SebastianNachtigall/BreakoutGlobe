@@ -62,28 +62,28 @@
 
 ## Phase 3: WebRTC Integration
 
-- [ ] 9. Create WebRTCService for peer connection management
+- [x] 9. Create WebRTCService for peer connection management
   - Implement WebRTC peer connection setup
   - Add local media stream initialization (getUserMedia)
   - Create SDP offer/answer generation methods
   - Implement ICE candidate handling
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 6.1, 6.2_
 
-- [ ] 10. Add WebRTC signaling message types
+- [x] 10. Add WebRTC signaling message types
   - Extend backend with webrtc_offer, webrtc_answer, ice_candidate messages
   - Add SDP and ICE candidate message routing
   - Implement WebRTC message validation
   - Connect WebRTCService to WebSocket signaling
   - _Requirements: 3.1, 6.2, 6.3_
 
-- [ ] 11. Implement video stream display
+- [x] 11. Implement video stream display
   - Add local video element to VideoCallModal
   - Add remote video element with proper sizing
   - Connect WebRTC streams to video elements
   - Implement picture-in-picture layout for local video
   - _Requirements: 3.2, 3.3, 7.1_
 
-- [ ] 12. Test end-to-end WebRTC connection
+- [x] 12. Test end-to-end WebRTC connection
   - Test complete call flow from click to video connection
   - Verify both local and remote video streams work
   - Test audio transmission between browsers
@@ -92,7 +92,7 @@
 
 ## Phase 4: Call Controls and Polish
 
-- [ ] 13. Implement call controls
+- [x] 13. Implement call controls
   - Add mute/unmute microphone functionality
   - Add camera on/off toggle
   - Implement visual indicators for muted/camera-off states

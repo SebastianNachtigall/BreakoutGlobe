@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { WebRTCService, MediaConstraints } from '../services/webrtc-service';
 
 // Get WebSocket client instance (will be set by App.tsx)
 let wsClient: any = null;
@@ -23,6 +24,13 @@ interface VideoCallState {
   callState: CallState;
   currentCall: CallInfo | null;
   
+  // WebRTC state
+  webrtcService: WebRTCService | null;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  isAudioEnabled: boolean;
+  isVideoEnabled: boolean;
+  
   // Actions
   initiateCall: (targetUserId: string, targetUserName: string, targetUserAvatar?: string) => void;
   receiveCall: (callId: string, fromUserId: string, fromUserName: string, fromUserAvatar?: string) => void;
@@ -31,6 +39,12 @@ interface VideoCallState {
   endCall: () => void;
   setCallState: (state: CallState) => void;
   clearCall: () => void;
+  
+  // WebRTC actions
+  toggleAudio: () => void;
+  toggleVideo: () => void;
+  setLocalStream: (stream: MediaStream | null) => void;
+  setRemoteStream: (stream: MediaStream | null) => void;
 }
 
 export const videoCallStore = create<VideoCallState>((set, get) => ({
@@ -38,8 +52,15 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   callState: 'idle',
   currentCall: null,
   
+  // WebRTC initial state
+  webrtcService: null,
+  localStream: null,
+  remoteStream: null,
+  isAudioEnabled: true,
+  isVideoEnabled: true,
+  
   // Actions
-  initiateCall: (targetUserId, targetUserName, targetUserAvatar) => {
+  initiateCall: async (targetUserId, targetUserName, targetUserAvatar) => {
     const callId = `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     console.log('📞 Initiating call to:', targetUserName);
@@ -55,6 +76,52 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         createdAt: new Date()
       }
     });
+    
+    // Initialize WebRTC for outgoing call (caller)
+    try {
+      const webrtcService = new WebRTCService();
+      
+      webrtcService.setCallbacks({
+        onLocalStream: (stream) => {
+          console.log('📹 Local stream received');
+          get().setLocalStream(stream);
+        },
+        onRemoteStream: (stream) => {
+          console.log('📺 Remote stream received');
+          get().setRemoteStream(stream);
+          set({ callState: 'connected' });
+        },
+        onIceCandidate: (candidate) => {
+          console.log('🧊 ICE candidate generated for outgoing call:', candidate);
+          const currentCall = get().currentCall;
+          if (currentCall && wsClient && wsClient.isConnected()) {
+            wsClient.sendICECandidate(currentCall.callId, currentCall.targetUserId, candidate);
+          }
+        },
+        onConnectionStateChange: (state) => {
+          console.log('🔄 Connection state:', state);
+          if (state === 'failed' || state === 'disconnected') {
+            get().endCall();
+          }
+        },
+        onError: (error) => {
+          console.error('❌ WebRTC error:', error);
+          get().endCall();
+        }
+      });
+      
+      // Get local media
+      await webrtcService.initializeLocalMedia({ video: true, audio: true });
+      
+      set({ webrtcService });
+      
+      console.log('🎥 WebRTC initialized for outgoing call');
+    } catch (error) {
+      console.error('❌ Failed to initialize WebRTC:', error);
+      set({ callState: 'ended' });
+      setTimeout(() => get().clearCall(), 2000);
+      return;
+    }
     
     // Send call request via WebSocket
     if (wsClient && wsClient.isConnected()) {
@@ -88,31 +155,68 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     });
   },
   
-  acceptCall: () => {
+  acceptCall: async () => {
     const { currentCall } = get();
     if (!currentCall) {
       console.warn('No current call to accept');
       return;
     }
     
-    console.log('✅ Call accepted');
+    console.log('✅ Call accepted - initializing WebRTC first');
     set({ callState: 'connecting' });
     
-    // Send call accept via WebSocket
-    if (wsClient && wsClient.isConnected()) {
-      wsClient.sendCallAccept(currentCall.callId, currentCall.targetUserId);
-    }
-    
-    // Simulate connection process
-    setTimeout(() => {
-      const { callState } = get();
-      if (callState === 'connecting') {
-        set({ callState: 'connected' });
-        console.log('🎥 Call connected');
+    // Initialize WebRTC for incoming call (answerer) BEFORE sending accept
+    try {
+      const webrtcService = new WebRTCService();
+      
+      webrtcService.setCallbacks({
+        onLocalStream: (stream) => {
+          console.log('📹 Local stream received');
+          get().setLocalStream(stream);
+        },
+        onRemoteStream: (stream) => {
+          console.log('📺 Remote stream received');
+          get().setRemoteStream(stream);
+          set({ callState: 'connected' });
+        },
+        onIceCandidate: (candidate) => {
+          console.log('🧊 ICE candidate generated for incoming call:', candidate);
+          const currentCall = get().currentCall;
+          if (currentCall && wsClient && wsClient.isConnected()) {
+            wsClient.sendICECandidate(currentCall.callId, currentCall.targetUserId, candidate);
+          }
+        },
+        onConnectionStateChange: (state) => {
+          console.log('🔄 Connection state:', state);
+          if (state === 'failed' || state === 'disconnected') {
+            get().endCall();
+          }
+        },
+        onError: (error) => {
+          console.error('❌ WebRTC error:', error);
+          get().endCall();
+        }
+      });
+      
+      // Get local media
+      await webrtcService.initializeLocalMedia({ video: true, audio: true });
+      
+      set({ webrtcService });
+      
+      console.log('🎥 WebRTC initialized for incoming call');
+      
+      // NOW send call accept via WebSocket after WebRTC is ready
+      if (wsClient && wsClient.isConnected()) {
+        console.log('📤 Sending call accept after WebRTC initialization');
+        wsClient.sendCallAccept(currentCall.callId, currentCall.targetUserId);
       }
-    }, 2000);
-    
-    // TODO: Initialize WebRTC connection in Phase 3
+      
+      // The caller will send an offer after receiving our accept
+    } catch (error) {
+      console.error('❌ Failed to initialize WebRTC:', error);
+      set({ callState: 'ended' });
+      setTimeout(() => get().clearCall(), 2000);
+    }
   },
   
   rejectCall: () => {
@@ -140,7 +244,7 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   },
   
   endCall: () => {
-    const { currentCall } = get();
+    const { currentCall, webrtcService } = get();
     if (!currentCall) {
       console.warn('No current call to end');
       return;
@@ -153,14 +257,24 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       wsClient.sendCallEnd(currentCall.callId, currentCall.targetUserId);
     }
     
-    set({ callState: 'ended' });
+    // Clean up WebRTC resources
+    if (webrtcService) {
+      webrtcService.cleanup();
+    }
+    
+    set({ 
+      callState: 'ended',
+      webrtcService: null,
+      localStream: null,
+      remoteStream: null,
+      isAudioEnabled: true,
+      isVideoEnabled: true
+    });
     
     // Auto-clear after showing "ended" state briefly
     setTimeout(() => {
       get().clearCall();
     }, 2000);
-    
-    // TODO: Clean up WebRTC resources in Phase 3
   },
   
   setCallState: (state) => {
@@ -172,7 +286,37 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     console.log('🧹 Clearing call state');
     set({
       callState: 'idle',
-      currentCall: null
+      currentCall: null,
+      webrtcService: null,
+      localStream: null,
+      remoteStream: null,
+      isAudioEnabled: true,
+      isVideoEnabled: true
     });
+  },
+  
+  // WebRTC actions
+  toggleAudio: () => {
+    const { webrtcService, isAudioEnabled } = get();
+    if (webrtcService) {
+      const newState = webrtcService.toggleAudio();
+      set({ isAudioEnabled: newState });
+    }
+  },
+  
+  toggleVideo: () => {
+    const { webrtcService, isVideoEnabled } = get();
+    if (webrtcService) {
+      const newState = webrtcService.toggleVideo();
+      set({ isVideoEnabled: newState });
+    }
+  },
+  
+  setLocalStream: (stream: MediaStream | null) => {
+    set({ localStream: stream });
+  },
+  
+  setRemoteStream: (stream: MediaStream | null) => {
+    set({ remoteStream: stream });
   }
 }));

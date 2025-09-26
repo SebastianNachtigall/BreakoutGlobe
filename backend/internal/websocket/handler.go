@@ -333,6 +333,12 @@ func (h *Handler) handleMessage(client *Client, msg Message) {
 		h.handleCallReject(ctx, client, msg)
 	case "call_end":
 		h.handleCallEnd(ctx, client, msg)
+	case "webrtc_offer":
+		h.handleWebRTCOffer(ctx, client, msg)
+	case "webrtc_answer":
+		h.handleWebRTCAnswer(ctx, client, msg)
+	case "ice_candidate":
+		h.handleICECandidate(ctx, client, msg)
 	default:
 		errorMsg := Message{
 			Type: "error",
@@ -652,6 +658,48 @@ func validateMessage(msg Message) error {
 		
 		if _, ok := data["otherUserId"].(string); !ok {
 			return errors.New("otherUserId is required for call_end")
+		}
+		
+		return nil
+		
+	case "webrtc_offer", "webrtc_answer":
+		// Validate WebRTC offer/answer messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["callId"].(string); !ok {
+			return errors.New("callId is required for WebRTC offer/answer")
+		}
+		
+		if _, ok := data["targetUserId"].(string); !ok {
+			return errors.New("targetUserId is required for WebRTC offer/answer")
+		}
+		
+		if _, ok := data["sdp"]; !ok {
+			return errors.New("sdp is required for WebRTC offer/answer")
+		}
+		
+		return nil
+		
+	case "ice_candidate":
+		// Validate ICE candidate messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["callId"].(string); !ok {
+			return errors.New("callId is required for ICE candidate")
+		}
+		
+		if _, ok := data["targetUserId"].(string); !ok {
+			return errors.New("targetUserId is required for ICE candidate")
+		}
+		
+		if _, ok := data["candidate"]; !ok {
+			return errors.New("candidate is required for ICE candidate")
 		}
 		
 		return nil
@@ -1099,4 +1147,156 @@ func (h *Handler) sendErrorMessage(client *Client, message string) {
 			"sessionId", client.SessionID, 
 			"message", message)
 	}
+}
+
+// WebRTC Signaling Handlers
+
+// handleWebRTCOffer processes WebRTC offer messages
+func (h *Handler) handleWebRTCOffer(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📝 WebRTC offer received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid WebRTC offer data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for WebRTC offer")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for WebRTC offer")
+		return
+	}
+	
+	sdp := data["sdp"]
+	if sdp == nil {
+		h.sendErrorMessage(client, "SDP is required for WebRTC offer")
+		return
+	}
+	
+	// Create WebRTC offer message for target user
+	offerMsg := Message{
+		Type: "webrtc_offer",
+		Data: map[string]interface{}{
+			"callId":     callId,
+			"fromUserId": client.UserID,
+			"sdp":        sdp,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send offer to target user
+	h.manager.BroadcastToUser(targetUserId, offerMsg, client.SessionID)
+	
+	h.logger.Info("📝 WebRTC offer sent to target user", 
+		"callId", callId,
+		"from", client.UserID,
+		"to", targetUserId)
+}
+
+// handleWebRTCAnswer processes WebRTC answer messages
+func (h *Handler) handleWebRTCAnswer(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📋 WebRTC answer received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid WebRTC answer data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for WebRTC answer")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for WebRTC answer")
+		return
+	}
+	
+	sdp := data["sdp"]
+	if sdp == nil {
+		h.sendErrorMessage(client, "SDP is required for WebRTC answer")
+		return
+	}
+	
+	// Create WebRTC answer message for target user
+	answerMsg := Message{
+		Type: "webrtc_answer",
+		Data: map[string]interface{}{
+			"callId":     callId,
+			"fromUserId": client.UserID,
+			"sdp":        sdp,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send answer to target user
+	h.manager.BroadcastToUser(targetUserId, answerMsg, client.SessionID)
+	
+	h.logger.Info("📋 WebRTC answer sent to target user", 
+		"callId", callId,
+		"from", client.UserID,
+		"to", targetUserId)
+}
+
+// handleICECandidate processes ICE candidate messages
+func (h *Handler) handleICECandidate(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("🧊 ICE candidate received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid ICE candidate data format")
+		return
+	}
+	
+	callId, ok := data["callId"].(string)
+	if !ok || callId == "" {
+		h.sendErrorMessage(client, "Call ID is required for ICE candidate")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for ICE candidate")
+		return
+	}
+	
+	candidate := data["candidate"]
+	if candidate == nil {
+		h.sendErrorMessage(client, "Candidate is required for ICE candidate")
+		return
+	}
+	
+	// Create ICE candidate message for target user
+	candidateMsg := Message{
+		Type: "ice_candidate",
+		Data: map[string]interface{}{
+			"callId":     callId,
+			"fromUserId": client.UserID,
+			"candidate":  candidate,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send candidate to target user
+	h.manager.BroadcastToUser(targetUserId, candidateMsg, client.SessionID)
+	
+	h.logger.Info("🧊 ICE candidate sent to target user", 
+		"callId", callId,
+		"from", client.UserID,
+		"to", targetUserId)
 }
