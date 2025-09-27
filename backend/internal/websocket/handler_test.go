@@ -88,6 +88,21 @@ func (m *MockRateLimiter) GetRateLimitHeaders(ctx context.Context, userID string
 	return args.Get(0).(map[string]string), args.Error(1)
 }
 
+// MockPOIService for testing
+type MockPOIService struct {
+	mock.Mock
+}
+
+func (m *MockPOIService) JoinPOI(ctx context.Context, poiID, userID string) error {
+	args := m.Called(ctx, poiID, userID)
+	return args.Error(0)
+}
+
+func (m *MockPOIService) LeavePOI(ctx context.Context, poiID, userID string) error {
+	args := m.Called(ctx, poiID, userID)
+	return args.Error(0)
+}
+
 // WebSocketHandlerTestSuite contains the test suite for WebSocket handler
 type WebSocketHandlerTestSuite struct {
 	suite.Suite
@@ -104,8 +119,9 @@ func (suite *WebSocketHandlerTestSuite) SetupTest() {
 	suite.mockSessionService = new(MockSessionService)
 	suite.mockRateLimiter = new(MockRateLimiter)
 	
-	// Create handler
-	suite.handler = NewHandler(suite.mockSessionService, suite.mockRateLimiter, nil)
+	// Create handler with mock POI service
+	mockPOIService := &MockPOIService{}
+	suite.handler = NewHandler(suite.mockSessionService, suite.mockRateLimiter, nil, mockPOIService)
 	
 	// Setup test server
 	router := gin.New()

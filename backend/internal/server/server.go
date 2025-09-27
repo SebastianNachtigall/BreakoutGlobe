@@ -34,6 +34,8 @@ type Server struct {
 	redis  *redislib.Client
 	// Simple in-memory storage for POI participants (for testing)
 	poiParticipants map[string]map[string]string // poiId -> sessionId -> username
+	// POI service for WebSocket handler
+	poiService *services.POIService
 }
 
 func New(cfg *config.Config) *Server {
@@ -160,7 +162,7 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		userHandler.RegisterRoutes(s.router)
 		
 		// Setup WebSocket handler for multi-user functionality
-		s.setupWebSocketHandler(userService, rateLimiter)
+		s.setupWebSocketHandler(userService, rateLimiter, s.poiService)
 	} else {
 		log.Println("⚠️ Database not available, skipping user routes and WebSocket handler setup")
 	}
@@ -188,13 +190,13 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		imageUploader := uploads.NewImageUploader(uploadDir, baseURL)
 		
 		// Create POI service with image uploader
-		poiService := services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader)
+		s.poiService = services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader)
 		
 		// Create rate limiter (simple in-memory for now)
 		rateLimiter := &SimpleRateLimiter{}
 		
 		// Create POI handler with user service for participant names
-		poiHandler := handlers.NewPOIHandler(poiService, userService, rateLimiter)
+		poiHandler := handlers.NewPOIHandler(s.poiService, userService, rateLimiter)
 		
 		// Register POI routes
 		poiHandler.RegisterRoutes(s.router)
@@ -211,7 +213,7 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 	}
 }
 
-func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLimiter services.RateLimiterInterface) {
+func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLimiter services.RateLimiterInterface, poiService *services.POIService) {
 	log.Println("🔧 Setting up WebSocket handler...")
 	
 	// Create a simple session service adapter for the WebSocket handler
@@ -221,7 +223,7 @@ func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLi
 	}
 	
 	// Create WebSocket handler
-	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService)
+	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService, poiService)
 	
 	// Set up PubSub integration if Redis is available
 	if s.redis != nil {

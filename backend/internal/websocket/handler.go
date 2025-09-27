@@ -50,6 +50,12 @@ type UserServiceInterface interface {
 	GetUser(ctx context.Context, userID string) (*models.User, error)
 }
 
+// POIServiceInterface defines the interface for POI operations
+type POIServiceInterface interface {
+	JoinPOI(ctx context.Context, poiID, userID string) error
+	LeavePOI(ctx context.Context, poiID, userID string) error
+}
+
 // PubSubInterface defines the interface for PubSub operations
 type PubSubInterface interface {
 	SubscribePOIEvents(ctx context.Context, callback func(eventType string, data interface{})) error
@@ -60,6 +66,7 @@ type Handler struct {
 	sessionService SessionServiceInterface
 	rateLimiter    RateLimiterInterface
 	userService    UserServiceInterface
+	poiService     POIServiceInterface
 	pubsub         PubSubInterface
 	manager        *Manager
 	upgrader       ws.Upgrader
@@ -67,11 +74,12 @@ type Handler struct {
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterInterface, userService UserServiceInterface) *Handler {
+func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterInterface, userService UserServiceInterface, poiService POIServiceInterface) *Handler {
 	return &Handler{
 		sessionService: sessionService,
 		rateLimiter:    rateLimiter,
 		userService:    userService,
+		poiService:     poiService,
 		pubsub:         nil, // Will be set via SetPubSub if needed
 		manager:        NewManager(),
 		upgrader: ws.Upgrader{
@@ -745,7 +753,7 @@ func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message
 	}
 	
 	// Check rate limit
-	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionUpdateAvatar); err != nil {
+	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionJoinPOI); err != nil {
 		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
 			errorMsg := Message{
 				Type: "error",
@@ -757,6 +765,24 @@ func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message
 			client.Send <- errorMsg
 		}
 		h.logger.Warn("POI join rate limited", "sessionId", client.SessionID, "userId", client.UserID)
+		return
+	}
+	
+	// Call POI service to join the POI
+	if err := h.poiService.JoinPOI(ctx, poiID, client.UserID); err != nil {
+		h.logger.Error("Failed to join POI", "sessionId", client.SessionID, "userId", client.UserID, "poiId", poiID, "error", err)
+		errorMsg := Message{
+			Type: "error",
+			Data: map[string]interface{}{
+				"message": "Failed to join POI: " + err.Error(),
+			},
+			Timestamp: time.Now(),
+		}
+		select {
+		case client.Send <- errorMsg:
+		default:
+			h.logger.Warn("Failed to send POI join error", "sessionId", client.SessionID)
+		}
 		return
 	}
 	
@@ -809,7 +835,7 @@ func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Messag
 	}
 	
 	// Check rate limit
-	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionUpdateAvatar); err != nil {
+	if err := h.rateLimiter.CheckRateLimit(ctx, client.UserID, services.ActionLeavePOI); err != nil {
 		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
 			errorMsg := Message{
 				Type: "error",
@@ -821,6 +847,24 @@ func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Messag
 			client.Send <- errorMsg
 		}
 		h.logger.Warn("POI leave rate limited", "sessionId", client.SessionID, "userId", client.UserID)
+		return
+	}
+	
+	// Call POI service to leave the POI
+	if err := h.poiService.LeavePOI(ctx, poiID, client.UserID); err != nil {
+		h.logger.Error("Failed to leave POI", "sessionId", client.SessionID, "userId", client.UserID, "poiId", poiID, "error", err)
+		errorMsg := Message{
+			Type: "error",
+			Data: map[string]interface{}{
+				"message": "Failed to leave POI: " + err.Error(),
+			},
+			Timestamp: time.Now(),
+		}
+		select {
+		case client.Send <- errorMsg:
+		default:
+			h.logger.Warn("Failed to send POI leave error", "sessionId", client.SessionID)
+		}
 		return
 	}
 	
