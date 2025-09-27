@@ -66,7 +66,7 @@ describe('POIMarker', () => {
       expect(marker).toHaveClass('bg-red-500'); // Full indicator
     });
 
-    it('should render POI marker with image when imageUrl is provided', () => {
+    it('should render POI marker with circular image and name underneath', () => {
       const poiWithImage = { ...mockPOI, imageUrl: 'https://example.com/test-image.jpg' };
       const onPOIClick = vi.fn();
       
@@ -80,8 +80,46 @@ describe('POIMarker', () => {
       const image = screen.getByAltText('Test Meeting Room');
       expect(image).toBeInTheDocument();
       expect(image).toHaveAttribute('src', 'https://example.com/test-image.jpg');
-      expect(screen.getByText('Test Meeting Room')).toBeInTheDocument();
-      expect(screen.getByText('3/10')).toBeInTheDocument();
+      expect(image).toHaveClass('rounded-full'); // Circular image
+      
+      const nameElement = screen.getByText('Test Meeting Room');
+      expect(nameElement).toBeInTheDocument();
+      
+      // Check that the structure has image above and name below
+      const marker = screen.getByTestId('poi-marker');
+      expect(marker).toHaveClass('flex-col'); // Vertical layout
+    });
+
+    it('should display red badge with participant count', () => {
+      const poiWithImage = { ...mockPOI, imageUrl: 'https://example.com/test-image.jpg' };
+      const onPOIClick = vi.fn();
+      
+      render(
+        <POIMarker 
+          poi={poiWithImage} 
+          onPOIClick={onPOIClick}
+        />
+      );
+      
+      const badge = screen.getByTestId('participant-badge');
+      expect(badge).toBeInTheDocument();
+      expect(badge).toHaveClass('bg-red-500'); // Red badge
+      expect(badge).toHaveTextContent('3'); // Participant count
+    });
+
+    it('should position badge in top-right corner of circular image', () => {
+      const poiWithImage = { ...mockPOI, imageUrl: 'https://example.com/test-image.jpg' };
+      const onPOIClick = vi.fn();
+      
+      render(
+        <POIMarker 
+          poi={poiWithImage} 
+          onPOIClick={onPOIClick}
+        />
+      );
+      
+      const badge = screen.getByTestId('participant-badge');
+      expect(badge).toHaveClass('absolute', 'top-0', 'right-0'); // Positioned in top-right corner
     });
   });
 

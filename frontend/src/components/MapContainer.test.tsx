@@ -360,6 +360,58 @@ describe('MapContainer', () => {
       expect(onPOIClick).toHaveBeenCalledWith('poi-1');
     });
 
+    it('should update POI markers when participant count changes while preserving design', async () => {
+      const initialPois = [
+        {
+          id: 'poi-1',
+          name: 'Coffee Shop',
+          position: { lat: 40.7128, lng: -74.0060 },
+          participantCount: 2,
+          maxParticipants: 10,
+          imageUrl: 'https://example.com/coffee.jpg',
+          createdBy: 'user-123',
+          createdAt: new Date()
+        }
+      ];
+
+      const { rerender } = render(<MapContainer pois={initialPois} />);
+      
+      // Get the initial marker element
+      const { Marker } = vi.mocked(await import('maplibre-gl'));
+      const initialMarkerCalls = Marker.mock.calls;
+      const poiMarkerCall = initialMarkerCalls.find(call => {
+        const element = call[0].element;
+        return element && element.getAttribute('data-testid') === 'poi-marker';
+      });
+      
+      expect(poiMarkerCall).toBeDefined();
+      const markerElement = poiMarkerCall[0].element;
+      
+      // Verify initial circular design
+      expect(markerElement.innerHTML).toContain('rounded-full');
+      expect(markerElement.innerHTML).toContain('Coffee Shop');
+      expect(markerElement.innerHTML).toContain('2'); // participant count in badge
+      
+      // Update POI with new participant count
+      const updatedPois = [
+        {
+          ...initialPois[0],
+          participantCount: 5
+        }
+      ];
+      
+      rerender(<MapContainer pois={updatedPois} />);
+      
+      // Verify the marker was updated (not recreated) and maintains circular design
+      expect(markerElement.innerHTML).toContain('rounded-full');
+      expect(markerElement.innerHTML).toContain('Coffee Shop');
+      expect(markerElement.innerHTML).toContain('5'); // updated participant count
+      
+      // Verify no new markers were created (existing one was updated)
+      const finalMarkerCalls = Marker.mock.calls;
+      expect(finalMarkerCalls.length).toBe(initialMarkerCalls.length);
+    });
+
     it('should show context menu on right-click', () => {
       const onPOICreate = vi.fn();
       

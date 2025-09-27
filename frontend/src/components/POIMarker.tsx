@@ -16,46 +16,42 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
     }
   };
 
-  // If POI has an image, render it with overlay text
+  // If POI has an image, render it as circular image with name underneath and red badge
   if (poi.imageUrl) {
     return (
       <div
         data-testid="poi-marker"
-        className={`
-          w-24 h-16 rounded-lg border-2 cursor-pointer relative overflow-hidden
-          shadow-lg hover:scale-105 transition-transform duration-200
-          ${isFull
-            ? 'border-red-600 cursor-not-allowed'
-            : 'border-green-600'
-          }
-        `}
+        className="flex flex-col items-center cursor-pointer hover:scale-105 transition-transform duration-200"
         onClick={handleClick}
         title={`${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`}
       >
-        <img
-          src={poi.imageUrl}
-          alt={poi.name}
-          className="w-full h-full object-cover"
-          onError={(e) => {
-            // Fallback to default marker if image fails to load
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            console.error(`❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}`);
-          }}
-          onLoad={() => {
-            console.log(`✅ Image loaded successfully for POI ${poi.name}`);
-          }}
-        />
-        <div className={`
-          absolute bottom-0 left-0 right-0 
-          ${isFull ? 'bg-red-500/90' : 'bg-green-500/90'}
-          text-white text-xs font-bold px-1 py-0.5
-        `}>
-          <div className="text-center leading-tight">
-            <div className="truncate">{poi.name}</div>
-            <div className="text-xs opacity-90">
-              {poi.participantCount}/{poi.maxParticipants}
-            </div>
+        <div className="relative p-1">
+          <img
+            src={poi.imageUrl}
+            alt={poi.name}
+            className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
+            onError={(e) => {
+              // Fallback to default marker if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              console.error(`❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}`);
+            }}
+            onLoad={() => {
+              console.log(`✅ Image loaded successfully for POI ${poi.name}`);
+            }}
+          />
+          {/* Red badge with participant count */}
+          <div
+            data-testid="participant-badge"
+            className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-md"
+          >
+            {poi.participantCount}
+          </div>
+        </div>
+        {/* Name underneath */}
+        <div className="mt-1 text-center">
+          <div className="text-xs font-semibold text-gray-800 max-w-20 truncate">
+            {poi.name}
           </div>
         </div>
       </div>
@@ -95,31 +91,29 @@ export const createPOIMarkerElement = (poi: POIData, onPOIClick?: (poiId: string
   const markerElement = document.createElement('div');
   const isFull = poi.participantCount >= poi.maxParticipants;
 
-  // If POI has an image, create image-based marker
+  // If POI has an image, create circular image-based marker
   if (poi.imageUrl) {
     markerElement.className = `
-      w-24 h-16 rounded-lg border-2 cursor-pointer relative overflow-hidden
-      shadow-lg hover:scale-105 transition-transform duration-200
-      ${isFull
-        ? 'border-red-600 cursor-not-allowed'
-        : 'border-green-600'
-      }
+      flex flex-col items-center cursor-pointer hover:scale-105 transition-transform duration-200
+      ${isFull ? 'cursor-not-allowed' : ''}
     `;
 
     markerElement.innerHTML = `
-      <img 
-        src="${poi.imageUrl}" 
-        alt="${poi.name}"
-        class="w-full h-full object-cover"
-        onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
-        onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
-      />
-      <div class="absolute bottom-0 left-0 right-0 ${isFull ? 'bg-red-500/90' : 'bg-green-500/90'} text-white text-xs font-bold px-1 py-0.5">
-        <div class="text-center leading-tight">
-          <div class="truncate">${poi.name}</div>
-          <div class="text-xs opacity-90">
-            ${poi.participantCount}/${poi.maxParticipants}
-          </div>
+      <div class="relative p-1">
+        <img 
+          src="${poi.imageUrl}" 
+          alt="${poi.name}"
+          class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
+          onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
+          onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
+        />
+        <div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-md">
+          ${poi.participantCount}
+        </div>
+      </div>
+      <div class="mt-1 text-center">
+        <div class="text-xs font-semibold text-gray-800 max-w-20 truncate">
+          ${poi.name}
         </div>
       </div>
     `;
