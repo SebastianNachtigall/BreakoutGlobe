@@ -13,12 +13,14 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
+	redislib "github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"breakoutglobe/internal/config"
+	"breakoutglobe/internal/database"
 	"breakoutglobe/internal/handlers"
 	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
 	"breakoutglobe/internal/websocket"
@@ -28,6 +30,7 @@ type Server struct {
 	config *config.Config
 	router *gin.Engine
 	db     *gorm.DB
+	redis  *redislib.Client
 	// Simple in-memory storage for POI participants (for testing)
 	poiParticipants map[string]map[string]string // poiId -> sessionId -> username
 }
@@ -37,28 +40,37 @@ func New(cfg *config.Config) *Server {
 	gin.SetMode(cfg.GinMode)
 	
 	var db *gorm.DB
+	var redisClient *redislib.Client
 	
-	// Only connect to database if not in test mode
+	// Only connect to database and Redis if not in test mode
 	if cfg.GinMode != "test" {
 		log.Printf("🔗 Attempting to connect to database: %s", cfg.DatabaseURL)
 		
-		// Setup database connection
+		// Setup database connection and run migrations
 		var err error
-		db, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+		db, err = database.Initialize(cfg.DatabaseURL)
 		if err != nil {
-			log.Fatalf("❌ Failed to connect to database: %v", err)
+			log.Fatalf("❌ Failed to initialize database: %v", err)
 		}
 		
-		log.Println("✅ Database connection established")
+		log.Println("✅ Database connection established and migrations completed")
 		
-		// Auto-migrate models
-		if err := db.AutoMigrate(&models.User{}); err != nil {
-			log.Fatalf("❌ Failed to migrate database: %v", err)
+		// Setup Redis connection
+		log.Printf("🔗 Attempting to connect to Redis: %s", cfg.RedisURL)
+		redisConfig := redis.Config{
+			Addr:     strings.TrimPrefix(cfg.RedisURL, "redis://"),
+			Password: "",
+			DB:       0,
+		}
+		redisClient = redis.NewClient(redisConfig)
+		
+		if err := redis.TestConnection(redisClient); err != nil {
+			log.Fatalf("❌ Failed to connect to Redis: %v", err)
 		}
 		
-		log.Println("✅ Database migration completed")
+		log.Println("✅ Redis connection established")
 	} else {
-		log.Println("⚠️ Running in test mode, skipping database connection")
+		log.Println("⚠️ Running in test mode, skipping database and Redis connections")
 	}
 	
 	router := gin.Default()
@@ -75,6 +87,7 @@ func New(cfg *config.Config) *Server {
 		config: cfg,
 		router: router,
 		db:     db,
+		redis:  redisClient,
 		poiParticipants: make(map[string]map[string]string),
 	}
 	
@@ -108,11 +121,8 @@ func (s *Server) setupRoutes() {
 		api.GET("/sessions/:sessionId", s.getSession)
 		api.PUT("/sessions/:sessionId/avatar", s.updateAvatarPosition)
 		
-		// Simple POI endpoints for testing
-		api.GET("/pois", s.getPOIs)
-		api.POST("/pois", s.createPOI)
-		api.POST("/pois/:poiId/join", s.joinPOI)
-		api.POST("/pois/:poiId/leave", s.leavePOI)
+		// Setup POI routes with proper handlers
+		s.setupPOIRoutes(api)
 		
 		// User profile endpoints with proper handlers
 		log.Println("About to call setupUserRoutes")
@@ -149,6 +159,42 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		s.setupWebSocketHandler(userService, rateLimiter)
 	} else {
 		log.Println("⚠️ Database not available, skipping user routes and WebSocket handler setup")
+	}
+}
+
+func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
+	log.Printf("🔧 setupPOIRoutes called, db is nil: %v, redis is nil: %v", s.db == nil, s.redis == nil)
+	
+	// Only setup POI routes if database and Redis are available (not in test mode)
+	if s.db != nil && s.redis != nil {
+		log.Println("📊 Database and Redis available, setting up POI routes with proper handlers")
+		
+		// Setup dependencies
+		poiRepo := repository.NewPOIRepository(s.db)
+		poiParticipants := redis.NewPOIParticipants(s.redis)
+		pubsub := redis.NewPubSub(s.redis)
+		
+		// Create POI service
+		poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub)
+		
+		// Create rate limiter (simple in-memory for now)
+		rateLimiter := &SimpleRateLimiter{}
+		
+		// Create POI handler
+		poiHandler := handlers.NewPOIHandler(poiService, rateLimiter)
+		
+		// Register POI routes
+		poiHandler.RegisterRoutes(s.router)
+		
+		log.Println("✅ POI routes setup complete with database-backed handlers")
+	} else {
+		log.Println("⚠️ Database or Redis not available, using mock POI handlers")
+		
+		// Fallback to mock handlers for testing
+		api.GET("/pois", s.getPOIs)
+		api.POST("/pois", s.createPOI)
+		api.POST("/pois/:poiId/join", s.joinPOI)
+		api.POST("/pois/:poiId/leave", s.leavePOI)
 	}
 }
 

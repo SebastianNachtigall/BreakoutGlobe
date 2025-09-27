@@ -215,47 +215,63 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="poi-creation-form">
-                    <div className="form-group">
-                        <label htmlFor="poi-name">Name *</label>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div className="space-y-2">
+                        <label htmlFor="poi-name" className="block text-sm font-medium text-gray-700">
+                            Name *
+                        </label>
                         <input
                             id="poi-name"
                             type="text"
                             value={formData.name}
                             onChange={(e) => handleInputChange('name', e.target.value)}
                             onBlur={() => handleBlur('name')}
-                            className={errors.name && touched.name ? 'error' : ''}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                errors.name && touched.name 
+                                    ? 'border-red-500 bg-red-50' 
+                                    : 'border-gray-300'
+                            }`}
                             disabled={isLoading}
+                            placeholder="Enter POI name"
                         />
-                        <div className="field-info">
-                            <span className="char-count">{formData.name.length}/100</span>
+                        <div className="flex justify-end">
+                            <span className="text-xs text-gray-500">{formData.name.length}/100</span>
                         </div>
                         {errors.name && touched.name && (
-                            <div className="error-message">{errors.name}</div>
+                            <div className="text-sm text-red-600">{errors.name}</div>
                         )}
                     </div>
 
-                    <div className="form-group">
-                        <label htmlFor="poi-description">Description *</label>
+                    <div className="space-y-2">
+                        <label htmlFor="poi-description" className="block text-sm font-medium text-gray-700">
+                            Description *
+                        </label>
                         <textarea
                             id="poi-description"
                             value={formData.description}
                             onChange={(e) => handleInputChange('description', e.target.value)}
                             onBlur={() => handleBlur('description')}
-                            className={errors.description && touched.description ? 'error' : ''}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
+                                errors.description && touched.description 
+                                    ? 'border-red-500 bg-red-50' 
+                                    : 'border-gray-300'
+                            }`}
                             rows={3}
                             disabled={isLoading}
+                            placeholder="Describe what this POI is for"
                         />
-                        <div className="field-info">
-                            <span className="char-count">{formData.description.length}/500</span>
+                        <div className="flex justify-end">
+                            <span className="text-xs text-gray-500">{formData.description.length}/500</span>
                         </div>
                         {errors.description && touched.description && (
-                            <div className="error-message">{errors.description}</div>
+                            <div className="text-sm text-red-600">{errors.description}</div>
                         )}
                     </div>
 
-                    <div className="form-group">
-                        <label htmlFor="poi-max-participants">Max Participants *</label>
+                    <div className="space-y-2">
+                        <label htmlFor="poi-max-participants" className="block text-sm font-medium text-gray-700">
+                            Max Participants *
+                        </label>
                         <input
                             id="poi-max-participants"
                             type="number"
@@ -264,17 +280,23 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
                             value={formData.maxParticipants}
                             onChange={(e) => handleInputChange('maxParticipants', parseInt(e.target.value) || 0)}
                             onBlur={() => handleBlur('maxParticipants')}
-                            className={errors.maxParticipants && touched.maxParticipants ? 'error' : ''}
+                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                errors.maxParticipants && touched.maxParticipants 
+                                    ? 'border-red-500 bg-red-50' 
+                                    : 'border-gray-300'
+                            }`}
                             disabled={isLoading}
                         />
                         {errors.maxParticipants && touched.maxParticipants && (
-                            <div className="error-message">{errors.maxParticipants}</div>
+                            <div className="text-sm text-red-600">{errors.maxParticipants}</div>
                         )}
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="poi-latitude">Latitude</label>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label htmlFor="poi-latitude" className="block text-sm font-medium text-gray-700">
+                                Latitude
+                            </label>
                             <input
                                 id="poi-latitude"
                                 type="number"
@@ -282,16 +304,22 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
                                 value={formData.latitude}
                                 onChange={(e) => handleInputChange('latitude', parseFloat(e.target.value) || 0)}
                                 onBlur={() => handleBlur('latitude')}
-                                className={errors.latitude && touched.latitude ? 'error' : ''}
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                    errors.latitude && touched.latitude 
+                                        ? 'border-red-500 bg-red-50' 
+                                        : 'border-gray-300'
+                                }`}
                                 disabled={isLoading}
                             />
                             {errors.latitude && touched.latitude && (
-                                <div className="error-message">{errors.latitude}</div>
+                                <div className="text-sm text-red-600">{errors.latitude}</div>
                             )}
                         </div>
 
-                        <div className="form-group">
-                            <label htmlFor="poi-longitude">Longitude</label>
+                        <div className="space-y-2">
+                            <label htmlFor="poi-longitude" className="block text-sm font-medium text-gray-700">
+                                Longitude
+                            </label>
                             <input
                                 id="poi-longitude"
                                 type="number"
@@ -299,30 +327,44 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
                                 value={formData.longitude}
                                 onChange={(e) => handleInputChange('longitude', parseFloat(e.target.value) || 0)}
                                 onBlur={() => handleBlur('longitude')}
-                                className={errors.longitude && touched.longitude ? 'error' : ''}
+                                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                    errors.longitude && touched.longitude 
+                                        ? 'border-red-500 bg-red-50' 
+                                        : 'border-gray-300'
+                                }`}
                                 disabled={isLoading}
                             />
                             {errors.longitude && touched.longitude && (
-                                <div className="error-message">{errors.longitude}</div>
+                                <div className="text-sm text-red-600">{errors.longitude}</div>
                             )}
                         </div>
                     </div>
 
-                    <div className="modal-actions">
+                    <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
                         <button
                             type="button"
                             onClick={onCancel}
-                            className="cancel-button"
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={isLoading}
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="create-button"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!isFormValid() || isLoading}
                         >
-                            {isLoading ? 'Creating...' : 'Create POI'}
+                            {isLoading ? (
+                                <>
+                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Creating...
+                                </>
+                            ) : (
+                                'Create POI'
+                            )}
                         </button>
                     </div>
                 </form>

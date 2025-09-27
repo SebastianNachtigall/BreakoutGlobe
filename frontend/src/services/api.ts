@@ -2,6 +2,51 @@ import { UserProfile, UserProfileAPI, transformUserProfileFromAPI } from '../typ
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
+// POI API Types
+export interface CreatePOIRequest {
+  mapId: string;
+  name: string;
+  description: string;
+  position: { lat: number; lng: number };
+  createdBy: string;
+  maxParticipants: number;
+}
+
+export interface POIResponse {
+  id: string;
+  mapId: string;
+  name: string;
+  description: string;
+  position: { lat: number; lng: number };
+  createdBy: string;
+  maxParticipants: number;
+  participantCount?: number;
+  participants?: Array<{ id: string; name: string }>;
+  createdAt: string;
+}
+
+export interface POIListResponse {
+  mapId: string;
+  pois: POIResponse[];
+  count: number;
+}
+
+export interface UpdatePOIRequest {
+  name?: string;
+  description?: string;
+  maxParticipants?: number;
+}
+
+export interface JoinPOIRequest {
+  userId: string;
+}
+
+export interface POIParticipantsResponse {
+  poiId: string;
+  participants: string[];
+  count: number;
+}
+
 export interface CreateGuestProfileRequest {
   displayName: string;
   aboutMe?: string;
@@ -151,4 +196,184 @@ export async function uploadAvatar(avatarFile: File): Promise<UserProfile> {
 
   const apiProfile = await handleResponse<UserProfileAPI>(response);
   return transformUserProfileFromAPI(apiProfile);
+}
+
+// POI API Functions
+
+export async function createPOI(request: CreatePOIRequest): Promise<POIResponse> {
+  console.log('🌐 API: createPOI called with:', request);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  console.log('📨 API: POI creation response status:', response.status);
+
+  const poiResponse = await handleResponse<POIResponse>(response);
+  console.log('📦 API: POI created:', poiResponse);
+
+  return poiResponse;
+}
+
+export async function getPOIs(mapId: string): Promise<POIResponse[]> {
+  console.log('🌐 API: getPOIs called for mapId:', mapId);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois?mapId=${encodeURIComponent(mapId)}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const listResponse = await handleResponse<POIListResponse>(response);
+  console.log('📦 API: POIs loaded:', listResponse.count, 'POIs');
+
+  return listResponse.pois;
+}
+
+export async function getPOI(poiId: string): Promise<POIResponse> {
+  console.log('🌐 API: getPOI called for poiId:', poiId);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const poiResponse = await handleResponse<POIResponse>(response);
+  console.log('📦 API: POI loaded:', poiResponse);
+
+  return poiResponse;
+}
+
+export async function updatePOI(poiId: string, updates: UpdatePOIRequest): Promise<POIResponse> {
+  console.log('🌐 API: updatePOI called for poiId:', poiId, 'with updates:', updates);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+
+  const poiResponse = await handleResponse<POIResponse>(response);
+  console.log('📦 API: POI updated:', poiResponse);
+
+  return poiResponse;
+}
+
+export async function deletePOI(poiId: string): Promise<void> {
+  console.log('🌐 API: deletePOI called for poiId:', poiId);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  await handleResponse<{ success: boolean; message: string }>(response);
+  console.log('✅ API: POI deleted successfully');
+}
+
+export async function joinPOI(poiId: string, userId: string): Promise<void> {
+  console.log('🌐 API: joinPOI called for poiId:', poiId, 'userId:', userId);
+
+  const request: JoinPOIRequest = { userId };
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  await handleResponse<{ success: boolean; poiId: string; userId: string }>(response);
+  console.log('✅ API: Joined POI successfully');
+}
+
+export async function leavePOI(poiId: string, userId: string): Promise<void> {
+  console.log('🌐 API: leavePOI called for poiId:', poiId, 'userId:', userId);
+
+  const request = { userId };
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}/leave`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  await handleResponse<{ success: boolean; poiId: string; userId: string }>(response);
+  console.log('✅ API: Left POI successfully');
+}
+
+export async function getPOIParticipants(poiId: string): Promise<string[]> {
+  console.log('🌐 API: getPOIParticipants called for poiId:', poiId);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/${encodeURIComponent(poiId)}/participants`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const participantsResponse = await handleResponse<POIParticipantsResponse>(response);
+  console.log('📦 API: POI participants loaded:', participantsResponse.count, 'participants');
+
+  return participantsResponse.participants;
+}
+
+// Data Transformation Utilities
+
+export function transformToCreatePOIRequest(
+  formData: {
+    name: string;
+    description: string;
+    maxParticipants: number;
+    position: { lat: number; lng: number };
+  },
+  userId: string,
+  mapId: string = 'default-map'
+): CreatePOIRequest {
+  return {
+    mapId,
+    name: formData.name,
+    description: formData.description,
+    position: formData.position,
+    createdBy: userId,
+    maxParticipants: formData.maxParticipants
+  };
+}
+
+export function transformFromPOIResponse(apiResponse: POIResponse): {
+  id: string;
+  name: string;
+  description?: string;
+  position: { lat: number; lng: number };
+  participantCount: number;
+  maxParticipants: number;
+  participants?: Array<{ id: string; name: string }>;
+  createdBy: string;
+  createdAt: Date;
+} {
+  return {
+    id: apiResponse.id,
+    name: apiResponse.name,
+    description: apiResponse.description,
+    position: apiResponse.position,
+    participantCount: apiResponse.participantCount || 0,
+    maxParticipants: apiResponse.maxParticipants,
+    participants: apiResponse.participants,
+    createdBy: apiResponse.createdBy,
+    createdAt: new Date(apiResponse.createdAt)
+  };
 }

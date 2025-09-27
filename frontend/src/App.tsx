@@ -15,7 +15,7 @@ import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
-import { getCurrentUserProfile } from './services/api'
+import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, getPOIs } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
 import type { UserProfile } from './types/models'
 
@@ -237,18 +237,40 @@ function App() {
   const loadPOIs = async () => {
     try {
       poiStore.getState().setLoading(true)
+      poiStore.getState().setError(null)
 
-      const response = await fetch('http://localhost:8080/api/pois?mapId=default-map')
-      if (!response.ok) {
-        throw new Error('Failed to load POIs')
-      }
+      const apiPOIs = await getPOIs('default-map')
+      console.log('📦 Loaded POIs from API:', apiPOIs.length)
 
-      const data = await response.json()
-      poiStore.getState().setPOIs(data.pois || [])
+      // Transform API responses to frontend format
+      const transformedPOIs = apiPOIs.map(transformFromPOIResponse)
+      poiStore.getState().setPOIs(transformedPOIs)
 
     } catch (error) {
-      console.error('Failed to load POIs:', error)
-      poiStore.getState().setError(error instanceof Error ? error.message : 'Failed to load POIs')
+      console.error('❌ Failed to load POIs:', error)
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load POIs'
+      poiStore.getState().setError(errorMessage)
+
+      // Show error notification with retry option
+      const isNetworkError = error instanceof Error && (
+        error.message.includes('fetch') || 
+        error.message.includes('network') || 
+        error.message.includes('Failed to fetch')
+      );
+
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: isNetworkError 
+          ? 'Network error occurred while loading POIs. Please check your connection.'
+          : errorMessage,
+        type: isNetworkError ? 'network' : 'api',
+        severity: 'error',
+        timestamp: new Date(),
+        retryable: true,
+        retryAction: () => loadPOIs(),
+        autoRemoveAfter: 10000
+      })
     } finally {
       poiStore.getState().setLoading(false)
     }
@@ -290,36 +312,90 @@ function App() {
   }, [])
 
   // Handle POI creation submission
-  const handleCreatePOISubmit = useCallback(async (poiData: Omit<POIData, 'id' | 'participantCount'>) => {
-    if (!wsClient || !poiCreationPosition) return
-
-    const newPOI: POIData = {
-      ...poiData,
-      id: `temp-${Date.now()}`, // Temporary ID for optimistic update
-      position: poiCreationPosition,
-      participantCount: 0,
-      createdBy: sessionState.sessionId || 'anonymous',
-      createdAt: new Date()
-    }
+  const handleCreatePOISubmit = useCallback(async (poiData: {
+    name: string;
+    description: string;
+    maxParticipants: number;
+    position: { lat: number; lng: number };
+  }) => {
+    if (!poiCreationPosition || !userProfile) return
 
     try {
-      // Use WebSocket client for optimistic updates
-      wsClient.createPOI(newPOI)
+      // Set loading state
+      poiStore.getState().setLoading(true)
 
+      // Transform form data to API request format
+      const apiRequest = transformToCreatePOIRequest(
+        poiData,
+        userProfile.id,
+        'default-map'
+      )
+
+      console.log('🚀 Creating POI with data:', apiRequest)
+
+      // Create optimistic POI for immediate UI feedback
+      const optimisticPOI: POIData = {
+        id: `temp-${Date.now()}`,
+        name: poiData.name,
+        description: poiData.description,
+        position: poiData.position,
+        participantCount: 0,
+        maxParticipants: poiData.maxParticipants,
+        createdBy: userProfile.id,
+        createdAt: new Date()
+      }
+
+      // Add optimistic POI to store
+      poiStore.getState().createPOIOptimistic(optimisticPOI)
+
+      // Call API to create POI
+      const apiResponse = await createPOI(apiRequest)
+      console.log('✅ POI created successfully:', apiResponse)
+
+      // Transform API response to frontend format
+      const createdPOI = transformFromPOIResponse(apiResponse)
+
+      // Replace optimistic POI with real POI
+      poiStore.getState().removePOI(optimisticPOI.id)
+      poiStore.getState().addPOI(createdPOI)
+
+      // Close modal
       setShowPOICreation(false)
       setPOICreationPosition(null)
 
     } catch (error) {
-      console.error('Failed to create POI:', error)
+      console.error('❌ Failed to create POI:', error)
+      
+      // Remove optimistic POI on failure
+      poiStore.getState().rollbackPOICreation(optimisticPOI.id)
+
+      // Show error to user with retry option for network failures
+      const isNetworkError = error instanceof Error && (
+        error.message.includes('fetch') || 
+        error.message.includes('network') || 
+        error.message.includes('Failed to fetch')
+      );
+
       errorStore.getState().addError({
         id: Date.now().toString(),
-        message: error instanceof Error ? error.message : 'Failed to create POI',
-        type: 'api',
+        message: isNetworkError 
+          ? 'Network error occurred while creating POI. Please check your connection and try again.'
+          : error instanceof Error ? error.message : 'Failed to create POI',
+        type: isNetworkError ? 'network' : 'api',
         severity: 'error',
-        timestamp: new Date()
+        timestamp: new Date(),
+        retryable: isNetworkError,
+        retryAction: isNetworkError ? () => {
+          // Retry the POI creation
+          handleCreatePOISubmit(poiData);
+        } : undefined,
+        autoRemoveAfter: 10000 // Auto-remove after 10 seconds
       })
+    } finally {
+      // Clear loading state
+      poiStore.getState().setLoading(false)
     }
-  }, [wsClient, poiCreationPosition])
+  }, [poiCreationPosition, userProfile])
 
   // Handle POI selection
   const handlePOIClick = useCallback((poiId: string) => {
@@ -341,7 +417,7 @@ function App() {
 
   // Handle POI join/leave with auto-leave functionality
   const handleJoinPOI = useCallback(async (poiId: string) => {
-    if (!wsClient) return
+    if (!userProfile) return
 
     // Find the POI to get its position
     const poi = poiState.pois.find(p => p.id === poiId)
@@ -354,30 +430,95 @@ function App() {
       handleAvatarMove(offsetPosition)
     }
 
-    // Join the POI via HTTP API (since WebSocket doesn't work with mock backend)
     try {
-      const response = await fetch(`http://localhost:8080/api/pois/${poiId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionState.sessionId })
-      })
-
-      if (response.ok) {
-        // Update local state
-        poiState.joinPOIWithAutoLeave(poiId, sessionState.sessionId || '')
-
-        // Refresh POI data to get updated participant list
-        await loadPOIs()
+      // Optimistic update - join POI immediately for UI responsiveness
+      const success = poiState.joinPOIOptimisticWithAutoLeave(poiId, userProfile.id)
+      if (!success) {
+        // POI is full or doesn't exist
+        errorStore.getState().addError({
+          id: Date.now().toString(),
+          message: 'Cannot join POI - it may be full or no longer exist',
+          type: 'validation',
+          severity: 'warning',
+          timestamp: new Date(),
+          autoRemoveAfter: 5000
+        })
+        return
       }
-    } catch (error) {
-      console.error('Failed to join POI:', error)
-    }
-  }, [wsClient, poiState, handleAvatarMove, sessionState.sessionId])
 
-  const handleLeavePOI = useCallback((poiId: string) => {
-    if (!wsClient) return
-    wsClient.leavePOI(poiId)
-  }, [wsClient])
+      // Call API to join POI
+      await joinPOI(poiId, userProfile.id)
+      console.log('✅ Successfully joined POI:', poiId)
+
+      // Confirm the optimistic update
+      poiState.confirmJoinPOI(poiId, userProfile.id)
+
+      // Refresh POI data to get updated participant list
+      await loadPOIs()
+
+    } catch (error) {
+      console.error('❌ Failed to join POI:', error)
+      
+      // Rollback optimistic update
+      poiState.rollbackJoinPOI(poiId, userProfile.id)
+
+      // Show error with retry option
+      const isNetworkError = error instanceof Error && (
+        error.message.includes('fetch') || 
+        error.message.includes('network') || 
+        error.message.includes('Failed to fetch')
+      );
+
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: isNetworkError 
+          ? 'Network error occurred while joining POI. Please try again.'
+          : error instanceof Error ? error.message : 'Failed to join POI',
+        type: isNetworkError ? 'network' : 'api',
+        severity: 'error',
+        timestamp: new Date(),
+        retryable: isNetworkError,
+        retryAction: isNetworkError ? () => handleJoinPOI(poiId) : undefined,
+        autoRemoveAfter: 8000
+      })
+    }
+  }, [userProfile, poiState, handleAvatarMove])
+
+  const handleLeavePOI = useCallback(async (poiId: string) => {
+    if (!userProfile) return
+
+    try {
+      // Optimistic update - leave POI immediately for UI responsiveness
+      const success = poiState.leavePOI(poiId, userProfile.id)
+      if (!success) {
+        console.warn('User was not in POI:', poiId)
+        return
+      }
+
+      // Call API to leave POI
+      await leavePOI(poiId, userProfile.id)
+      console.log('✅ Successfully left POI:', poiId)
+
+      // Refresh POI data to get updated participant list
+      await loadPOIs()
+
+    } catch (error) {
+      console.error('❌ Failed to leave POI:', error)
+      
+      // Rollback optimistic update by rejoining
+      poiState.joinPOI(poiId, userProfile.id)
+
+      // Show error
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: error instanceof Error ? error.message : 'Failed to leave POI',
+        type: 'api',
+        severity: 'error',
+        timestamp: new Date(),
+        autoRemoveAfter: 5000
+      })
+    }
+  }, [userProfile, poiState])
 
 
 
@@ -745,12 +886,14 @@ function App() {
         {/* Modals */}
         {showPOICreation && poiCreationPosition && (
           <POICreationModal
+            isOpen={true}
             position={poiCreationPosition}
-            onSubmit={handleCreatePOISubmit}
+            onCreate={handleCreatePOISubmit}
             onCancel={() => {
               setShowPOICreation(false)
               setPOICreationPosition(null)
             }}
+            isLoading={poiState.isLoading}
           />
         )}
 
