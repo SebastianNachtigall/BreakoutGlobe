@@ -186,6 +186,12 @@ function App() {
           if (data.type === 'avatar') {
             // Handle avatar-related state sync events
             console.log('Avatar state sync:', data);
+          } else if (data.type === 'poi' && data.data?.needsRefresh) {
+            // Handle POI events that need data refresh
+            console.log('POI state sync - refreshing data:', data);
+            loadPOIs().catch(error => {
+              console.warn('⚠️ Failed to refresh POI data after state sync:', error);
+            });
           }
         })
 
@@ -253,20 +259,20 @@ function App() {
 
     } catch (error) {
       console.error('❌ Failed to load POIs:', error)
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to load POIs'
       poiStore.getState().setError(errorMessage)
 
       // Show error notification with retry option
       const isNetworkError = error instanceof Error && (
-        error.message.includes('fetch') || 
-        error.message.includes('network') || 
+        error.message.includes('fetch') ||
+        error.message.includes('network') ||
         error.message.includes('Failed to fetch')
       );
 
       errorStore.getState().addError({
         id: Date.now().toString(),
-        message: isNetworkError 
+        message: isNetworkError
           ? 'Network error occurred while loading POIs. Please check your connection.'
           : errorMessage,
         type: isNetworkError ? 'network' : 'api',
@@ -304,6 +310,7 @@ function App() {
     handleAvatarMove({ lat: event.lngLat.lat, lng: event.lngLat.lng })
 
     // Auto-leave current POI and close details panel
+    // POI data will be refreshed automatically via WebSocket poi_left event
     if (wsClient) {
       wsClient.leaveCurrentPOI()
     }
@@ -371,20 +378,20 @@ function App() {
 
     } catch (error) {
       console.error('❌ Failed to create POI:', error)
-      
+
       // Remove optimistic POI on failure
       poiStore.getState().rollbackPOICreation(optimisticPOI.id)
 
       // Show error to user with retry option for network failures
       const isNetworkError = error instanceof Error && (
-        error.message.includes('fetch') || 
-        error.message.includes('network') || 
+        error.message.includes('fetch') ||
+        error.message.includes('network') ||
         error.message.includes('Failed to fetch')
       );
 
       errorStore.getState().addError({
         id: Date.now().toString(),
-        message: isNetworkError 
+        message: isNetworkError
           ? 'Network error occurred while creating POI. Please check your connection and try again.'
           : error instanceof Error ? error.message : 'Failed to create POI',
         type: isNetworkError ? 'network' : 'api',
@@ -464,20 +471,20 @@ function App() {
 
     } catch (error) {
       console.error('❌ Failed to join POI:', error)
-      
+
       // Rollback optimistic update
       poiState.rollbackJoinPOI(poiId, userProfile.id)
 
       // Show error with retry option
       const isNetworkError = error instanceof Error && (
-        error.message.includes('fetch') || 
-        error.message.includes('network') || 
+        error.message.includes('fetch') ||
+        error.message.includes('network') ||
         error.message.includes('Failed to fetch')
       );
 
       errorStore.getState().addError({
         id: Date.now().toString(),
-        message: isNetworkError 
+        message: isNetworkError
           ? 'Network error occurred while joining POI. Please try again.'
           : error instanceof Error ? error.message : 'Failed to join POI',
         type: isNetworkError ? 'network' : 'api',
@@ -510,7 +517,7 @@ function App() {
 
     } catch (error) {
       console.error('❌ Failed to leave POI:', error)
-      
+
       // Rollback optimistic update by rejoining
       poiState.joinPOI(poiId, userProfile.id)
 
@@ -590,6 +597,12 @@ function App() {
           if (data.type === 'avatar') {
             // Handle avatar-related state sync events
             console.log('Avatar state sync:', data);
+          } else if (data.type === 'poi' && data.data?.needsRefresh) {
+            // Handle POI events that need data refresh
+            console.log('POI state sync - refreshing data:', data);
+            loadPOIs().catch(error => {
+              console.warn('⚠️ Failed to refresh POI data after state sync:', error);
+            });
           }
         })
 
@@ -931,7 +944,7 @@ function App() {
           // Get fresh avatar data from store to include updated call status
           const freshAvatar = avatarStore.getState().getAvatarBySessionId(avatarTooltip.avatar.sessionId);
           const avatarData = freshAvatar || avatarTooltip.avatar;
-          
+
           return (
             <AvatarTooltip
               isOpen={avatarTooltip.isOpen}

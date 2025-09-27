@@ -506,9 +506,10 @@ export class WebSocketClient {
     // Update the POI in the store
     poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
     
+    // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
-      data: { action: 'user_joined', poiId, userId, currentCount },
+      data: { action: 'user_joined', poiId, userId, currentCount, needsRefresh: true },
       timestamp: new Date()
     });
   }
@@ -524,9 +525,10 @@ export class WebSocketClient {
     // Update the POI in the store
     poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
     
+    // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
-      data: { action: 'user_left', poiId, userId, currentCount },
+      data: { action: 'user_left', poiId, userId, currentCount, needsRefresh: true },
       timestamp: new Date()
     });
   }
