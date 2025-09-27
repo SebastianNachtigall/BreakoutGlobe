@@ -388,3 +388,103 @@ func ParsePOIUpdatedEvent(event Event) (*POIUpdatedEvent, error) {
 
 	return &updatedEvent, nil
 }
+
+// SubscribePOIEvents subscribes to all POI-related events across all maps and calls the callback for each event
+func (ps *PubSub) SubscribePOIEvents(ctx context.Context, callback func(eventType string, data interface{})) error {
+	// Subscribe to all map channels using a pattern
+	// In Redis, we can use PSUBSCRIBE to subscribe to patterns
+	pubsub := ps.client.PSubscribe(ctx, "map:*:events")
+	defer pubsub.Close()
+
+	// Get the channel for receiving messages
+	msgChan := pubsub.Channel()
+
+	// Process messages until context is cancelled
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case msg, ok := <-msgChan:
+			if !ok {
+				return fmt.Errorf("subscription channel closed")
+			}
+
+			// Parse the event
+			var event Event
+			err := json.Unmarshal([]byte(msg.Payload), &event)
+			if err != nil {
+				// Log error but continue processing other messages
+				continue
+			}
+
+			// Only process POI-related events
+			if event.Type == EventTypePOICreated || 
+			   event.Type == EventTypePOIJoined || 
+			   event.Type == EventTypePOILeft || 
+			   event.Type == EventTypePOIUpdated {
+				
+				// Parse the event data based on type
+				var eventData interface{}
+				switch event.Type {
+				case EventTypePOICreated:
+					var poiEvent POICreatedEvent
+					if err := json.Unmarshal(event.Data, &poiEvent); err == nil {
+						eventData = map[string]interface{}{
+							"poiId":           poiEvent.POIID,
+							"mapId":           poiEvent.MapID,
+							"name":            poiEvent.Name,
+							"description":     poiEvent.Description,
+							"position":        poiEvent.Position,
+							"createdBy":       poiEvent.CreatedBy,
+							"maxParticipants": poiEvent.MaxParticipants,
+							"currentCount":    poiEvent.CurrentCount,
+							"timestamp":       poiEvent.Timestamp,
+						}
+					}
+				case EventTypePOIJoined:
+					var joinEvent POIJoinedEvent
+					if err := json.Unmarshal(event.Data, &joinEvent); err == nil {
+						eventData = map[string]interface{}{
+							"poiId":        joinEvent.POIID,
+							"mapId":        joinEvent.MapID,
+							"userId":       joinEvent.UserID,
+							"sessionId":    joinEvent.SessionID,
+							"currentCount": joinEvent.CurrentCount,
+							"timestamp":    joinEvent.Timestamp,
+						}
+					}
+				case EventTypePOILeft:
+					var leftEvent POILeftEvent
+					if err := json.Unmarshal(event.Data, &leftEvent); err == nil {
+						eventData = map[string]interface{}{
+							"poiId":        leftEvent.POIID,
+							"mapId":        leftEvent.MapID,
+							"userId":       leftEvent.UserID,
+							"sessionId":    leftEvent.SessionID,
+							"currentCount": leftEvent.CurrentCount,
+							"timestamp":    leftEvent.Timestamp,
+						}
+					}
+				case EventTypePOIUpdated:
+					var updatedEvent POIUpdatedEvent
+					if err := json.Unmarshal(event.Data, &updatedEvent); err == nil {
+						eventData = map[string]interface{}{
+							"poiId":           updatedEvent.POIID,
+							"mapId":           updatedEvent.MapID,
+							"name":            updatedEvent.Name,
+							"description":     updatedEvent.Description,
+							"maxParticipants": updatedEvent.MaxParticipants,
+							"currentCount":    updatedEvent.CurrentCount,
+							"timestamp":       updatedEvent.Timestamp,
+						}
+					}
+				}
+
+				// Call the callback with the parsed event
+				if eventData != nil {
+					callback(string(event.Type), eventData)
+				}
+			}
+		}
+	}
+}

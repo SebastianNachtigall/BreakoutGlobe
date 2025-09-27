@@ -334,6 +334,18 @@ export class WebSocketClient {
       case 'poi_create_rejected':
         this.handlePOICreateRejected(message.data);
         break;
+      case 'poi_created':
+        this.handlePOICreated(message.data);
+        break;
+      case 'poi_joined':
+        this.handlePOIJoined(message.data);
+        break;
+      case 'poi_left':
+        this.handlePOILeft(message.data);
+        break;
+      case 'poi_updated':
+        this.handlePOIUpdated(message.data);
+        break;
       case 'call_request':
         this.handleCallRequest(message.data);
         break;
@@ -453,6 +465,93 @@ export class WebSocketClient {
     this.notifyStateSync({
       type: 'poi',
       data: { action: 'create_rejected', tempId: data.tempId, reason: data.reason },
+      timestamp: new Date()
+    });
+  }
+
+  // Real-time POI Event Handlers
+  private handlePOICreated(data: any): void {
+    console.log('🆕 WebSocket: POI created by another user', data);
+    
+    // Convert backend POI data to frontend format
+    const poi: POIData = {
+      id: data.poiId,
+      name: data.name,
+      description: data.description,
+      position: data.position,
+      createdBy: data.createdBy,
+      maxParticipants: data.maxParticipants,
+      participantCount: data.currentCount || 0,
+      participants: []
+    };
+
+    // Add the new POI to the store
+    poiStore.getState().addPOI(poi);
+    
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'created', poi },
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOIJoined(data: any): void {
+    console.log('👥 WebSocket: User joined POI', data);
+    
+    // Update participant count for the POI
+    const poiId = data.poiId;
+    const userId = data.userId;
+    const currentCount = data.currentCount;
+
+    // Update the POI in the store
+    poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
+    
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'user_joined', poiId, userId, currentCount },
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOILeft(data: any): void {
+    console.log('👋 WebSocket: User left POI', data);
+    
+    // Update participant count for the POI
+    const poiId = data.poiId;
+    const userId = data.userId;
+    const currentCount = data.currentCount;
+
+    // Update the POI in the store
+    poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
+    
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'user_left', poiId, userId, currentCount },
+      timestamp: new Date()
+    });
+  }
+
+  private handlePOIUpdated(data: any): void {
+    console.log('📝 WebSocket: POI updated', data);
+    
+    // Convert backend POI data to frontend format
+    const poi: POIData = {
+      id: data.poiId,
+      name: data.name,
+      description: data.description,
+      position: { lat: 0, lng: 0 }, // Position doesn't change in updates
+      createdBy: '', // Not included in update events
+      maxParticipants: data.maxParticipants,
+      participantCount: data.currentCount || 0,
+      participants: []
+    };
+
+    // Update the POI in the store
+    poiStore.getState().handleRealtimeUpdate(poi);
+    
+    this.notifyStateSync({
+      type: 'poi',
+      data: { action: 'updated', poi },
       timestamp: new Date()
     });
   }

@@ -210,6 +210,15 @@ func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLi
 	// Create WebSocket handler
 	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService)
 	
+	// Set up PubSub integration if Redis is available
+	if s.redis != nil {
+		pubsub := redis.NewPubSub(s.redis)
+		wsHandler.SetPubSub(pubsub)
+		log.Println("✅ WebSocket handler PubSub integration enabled")
+	} else {
+		log.Println("⚠️ Redis not available, WebSocket handler will not receive real-time POI events")
+	}
+	
 	// Register the WebSocket handler
 	s.router.GET("/ws", wsHandler.HandleWebSocket)
 	

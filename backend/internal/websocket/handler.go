@@ -50,11 +50,17 @@ type UserServiceInterface interface {
 	GetUser(ctx context.Context, userID string) (*models.User, error)
 }
 
+// PubSubInterface defines the interface for PubSub operations
+type PubSubInterface interface {
+	SubscribePOIEvents(ctx context.Context, callback func(eventType string, data interface{})) error
+}
+
 // Handler handles WebSocket connections and messages
 type Handler struct {
 	sessionService SessionServiceInterface
 	rateLimiter    RateLimiterInterface
 	userService    UserServiceInterface
+	pubsub         PubSubInterface
 	manager        *Manager
 	upgrader       ws.Upgrader
 	logger         *slog.Logger
@@ -66,6 +72,7 @@ func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterI
 		sessionService: sessionService,
 		rateLimiter:    rateLimiter,
 		userService:    userService,
+		pubsub:         nil, // Will be set via SetPubSub if needed
 		manager:        NewManager(),
 		upgrader: ws.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -76,6 +83,16 @@ func NewHandler(sessionService SessionServiceInterface, rateLimiter RateLimiterI
 			WriteBufferSize: 1024,
 		},
 		logger: slog.Default(),
+	}
+}
+
+// SetPubSub sets the PubSub interface for real-time event broadcasting
+func (h *Handler) SetPubSub(pubsub PubSubInterface) {
+	h.pubsub = pubsub
+	
+	// Start listening for PubSub events
+	if pubsub != nil {
+		go h.listenForPubSubEvents()
 	}
 }
 
@@ -1374,4 +1391,148 @@ func (h *Handler) handleICECandidate(ctx context.Context, client *Client, msg Me
 		"callId", callId,
 		"from", client.UserID,
 		"to", targetUserId)
+}
+
+// listenForPubSubEvents listens for Redis PubSub events and broadcasts them to WebSocket clients
+func (h *Handler) listenForPubSubEvents() {
+	if h.pubsub == nil {
+		return
+	}
+	
+	h.logger.Info("🔊 Starting PubSub event listener for WebSocket broadcasting")
+	
+	ctx := context.Background()
+	err := h.pubsub.SubscribePOIEvents(ctx, func(eventType string, data interface{}) {
+		h.handlePubSubEvent(eventType, data)
+	})
+	
+	if err != nil {
+		h.logger.Error("❌ Failed to subscribe to PubSub events", "error", err)
+	}
+}
+
+// handlePubSubEvent processes PubSub events and broadcasts them to appropriate WebSocket clients
+func (h *Handler) handlePubSubEvent(eventType string, data interface{}) {
+	h.logger.Info("📢 Received PubSub event", "type", eventType, "data", data)
+	
+	switch eventType {
+	case "poi_created":
+		h.handlePOICreatedEvent(data)
+	case "poi_joined":
+		h.handlePOIJoinedEvent(data)
+	case "poi_left":
+		h.handlePOILeftEvent(data)
+	case "poi_updated":
+		h.handlePOIUpdatedEvent(data)
+	default:
+		h.logger.Warn("❓ Unknown PubSub event type", "type", eventType)
+	}
+}
+
+// handlePOICreatedEvent broadcasts POI creation to all clients on the same map
+func (h *Handler) handlePOICreatedEvent(data interface{}) {
+	poiData, ok := data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("❌ Invalid POI created event data", "data", data)
+		return
+	}
+	
+	mapID, ok := poiData["mapId"].(string)
+	if !ok {
+		h.logger.Error("❌ Missing mapId in POI created event", "data", data)
+		return
+	}
+	
+	// Create WebSocket message
+	message := Message{
+		Type:      "poi_created",
+		Data:      poiData,
+		Timestamp: time.Now(),
+	}
+	
+	// Broadcast to all clients on the same map
+	h.manager.BroadcastToMap(mapID, message)
+	
+	h.logger.Info("📢 Broadcasted POI created event", "mapId", mapID, "poiId", poiData["poiId"])
+}
+
+// handlePOIJoinedEvent broadcasts POI join to all clients on the same map
+func (h *Handler) handlePOIJoinedEvent(data interface{}) {
+	poiData, ok := data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("❌ Invalid POI joined event data", "data", data)
+		return
+	}
+	
+	mapID, ok := poiData["mapId"].(string)
+	if !ok {
+		h.logger.Error("❌ Missing mapId in POI joined event", "data", data)
+		return
+	}
+	
+	// Create WebSocket message
+	message := Message{
+		Type:      "poi_joined",
+		Data:      poiData,
+		Timestamp: time.Now(),
+	}
+	
+	// Broadcast to all clients on the same map
+	h.manager.BroadcastToMap(mapID, message)
+	
+	h.logger.Info("📢 Broadcasted POI joined event", "mapId", mapID, "poiId", poiData["poiId"], "userId", poiData["userId"])
+}
+
+// handlePOILeftEvent broadcasts POI leave to all clients on the same map
+func (h *Handler) handlePOILeftEvent(data interface{}) {
+	poiData, ok := data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("❌ Invalid POI left event data", "data", data)
+		return
+	}
+	
+	mapID, ok := poiData["mapId"].(string)
+	if !ok {
+		h.logger.Error("❌ Missing mapId in POI left event", "data", data)
+		return
+	}
+	
+	// Create WebSocket message
+	message := Message{
+		Type:      "poi_left",
+		Data:      poiData,
+		Timestamp: time.Now(),
+	}
+	
+	// Broadcast to all clients on the same map
+	h.manager.BroadcastToMap(mapID, message)
+	
+	h.logger.Info("📢 Broadcasted POI left event", "mapId", mapID, "poiId", poiData["poiId"], "userId", poiData["userId"])
+}
+
+// handlePOIUpdatedEvent broadcasts POI updates to all clients on the same map
+func (h *Handler) handlePOIUpdatedEvent(data interface{}) {
+	poiData, ok := data.(map[string]interface{})
+	if !ok {
+		h.logger.Error("❌ Invalid POI updated event data", "data", data)
+		return
+	}
+	
+	mapID, ok := poiData["mapId"].(string)
+	if !ok {
+		h.logger.Error("❌ Missing mapId in POI updated event", "data", data)
+		return
+	}
+	
+	// Create WebSocket message
+	message := Message{
+		Type:      "poi_updated",
+		Data:      poiData,
+		Timestamp: time.Now(),
+	}
+	
+	// Broadcast to all clients on the same map
+	h.manager.BroadcastToMap(mapID, message)
+	
+	h.logger.Info("📢 Broadcasted POI updated event", "mapId", mapID, "poiId", poiData["poiId"])
 }
