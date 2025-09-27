@@ -3,6 +3,8 @@ import { Map, NavigationControl, ScaleControl, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { POIContextMenu } from './POIContextMenu';
 import { ProfileCard } from './ProfileCard';
+import { createPOIMarkerElement } from './POIMarker';
+import { createAvatarMarkerElement } from './AvatarMarker';
 
 export interface AvatarData {
   sessionId: string;
@@ -88,18 +90,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     mapPosition: { lat: number; lng: number };
   } | null>(null);
 
-  // Utility function to generate initials from display name or fallback to sessionId
-  const generateInitials = useCallback((displayName?: string, sessionId?: string): string => {
-    const name = displayName || sessionId || 'U';
-    const words = name.trim().split(/\s+/);
-    if (words.length >= 2) {
-      return (words[0][0] + words[1][0]).toUpperCase();
-    } else if (words.length === 1 && words[0].length >= 2) {
-      return words[0].substring(0, 2).toUpperCase();
-    } else {
-      return words[0][0].toUpperCase();
-    }
-  }, []);
+
 
   // Memoize click handler to prevent re-renders
   const handleMapClick = useCallback((event: { lngLat: { lng: number; lat: number } }) => {
@@ -116,183 +107,9 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
 
 
-  // Create enhanced marker element with avatar support
-  const createMarkerElement = useCallback((avatar: AvatarData) => {
-    const markerElement = document.createElement('div');
-    
-    // Determine role-based styling
-    const getRoleRing = (role?: string) => {
-      switch (role) {
-        case 'admin':
-          return 'ring-yellow-400';
-        case 'superadmin':
-          return 'ring-red-400';
-        default:
-          return avatar.isCurrentUser ? 'ring-blue-500' : 'ring-gray-400';
-      }
-    };
 
-    const baseClasses = `
-      w-8 h-8 rounded-full border-2 
-      ${avatar.isCurrentUser
-        ? 'bg-blue-500 border-blue-600'
-        : 'bg-gray-500 border-gray-600'
-      }
-      ring-2 ${getRoleRing(avatar.role)} ring-opacity-50
-      shadow-lg cursor-pointer hover:scale-110
-      flex items-center justify-center text-white text-xs font-bold
-      relative overflow-hidden
-    `;
 
-    markerElement.className = baseClasses;
-    markerElement.title = avatar.displayName || avatar.sessionId;
 
-    // Handle avatar image or initials
-
-    if (avatar.avatarURL) {
-      // Show loading state initially
-      markerElement.classList.add('animate-pulse');
-      
-      const avatarImg = document.createElement('img');
-      avatarImg.src = avatar.avatarURL;
-      avatarImg.className = 'w-full h-full object-cover rounded-full';
-      avatarImg.alt = avatar.displayName || avatar.sessionId;
-      
-      avatarImg.onload = () => {
-        markerElement.classList.remove('animate-pulse');
-        markerElement.textContent = ''; // Clear any existing content
-        markerElement.appendChild(avatarImg);
-      };
-      
-      avatarImg.onerror = () => {
-        markerElement.classList.remove('animate-pulse');
-        const initials = generateInitials(avatar.displayName, avatar.sessionId);
-        markerElement.textContent = initials;
-      };
-      
-      // Set initial fallback while loading
-      const initialInitials = generateInitials(avatar.displayName, avatar.sessionId);
-      markerElement.textContent = initialInitials;
-    } else {
-      // Display initials
-      const initials = generateInitials(avatar.displayName, avatar.sessionId);
-      markerElement.textContent = initials;
-    }
-
-    // Add click handler for profile card
-    markerElement.addEventListener('click', (event) => {
-      event.stopPropagation();
-      if (onAvatarClick && avatar.userId) {
-        const clickPosition = {
-          x: event.clientX,
-          y: event.clientY
-        };
-        onAvatarClick(avatar.userId, clickPosition);
-      }
-    });
-
-    // Performance optimizations - NO CSS transitions for position
-    markerElement.style.willChange = 'transform';
-    markerElement.style.backfaceVisibility = 'hidden';
-    markerElement.style.transform = 'translateZ(0)';
-    markerElement.style.contain = 'layout style paint';
-    markerElement.style.pointerEvents = 'auto';
-    // CRITICAL: Only allow hover transitions, no position transitions
-    markerElement.style.transition = 'transform 0.2s ease'; // Only for hover scale
-
-    // CRITICAL FIX: Add explicit positioning for MapLibre markers
-    markerElement.style.position = 'absolute';
-    markerElement.style.zIndex = '1000';
-    
-    // Add explicit dimensions and styling as fallback for Tailwind classes
-    markerElement.style.width = '32px';  // w-8
-    markerElement.style.height = '32px'; // h-8
-    markerElement.style.borderRadius = '50%'; // rounded-full
-
-    return markerElement;
-  }, [generateInitials, onAvatarClick]);
-
-  // Create POI marker element
-  const createPOIMarkerElement = useCallback((poi: POIData) => {
-    const markerElement = document.createElement('div');
-    const isFull = poi.participantCount >= poi.maxParticipants;
-
-    console.log(`🖼️ MapContainer: Creating POI marker for "${poi.name}" with imageUrl:`, poi.imageUrl);
-
-    // If POI has an image, create image-based marker
-    if (poi.imageUrl) {
-      console.log(`🎨 MapContainer: Creating image marker for "${poi.name}"`);
-      
-      markerElement.className = `
-        w-24 h-16 rounded-lg border-2 cursor-pointer relative overflow-hidden
-        shadow-lg hover:scale-105 transition-transform duration-200
-        ${isFull
-          ? 'border-red-600 cursor-not-allowed'
-          : 'border-green-600'
-        }
-      `;
-
-      markerElement.innerHTML = `
-        <img 
-          src="${poi.imageUrl}" 
-          alt="${poi.name}"
-          class="w-full h-full object-cover"
-          onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
-          onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
-        />
-        <div class="absolute bottom-0 left-0 right-0 ${isFull ? 'bg-red-500/90' : 'bg-green-500/90'} text-white text-xs font-bold px-1 py-0.5">
-          <div class="text-center leading-tight">
-            <div class="truncate">${poi.name}</div>
-            <div class="text-xs opacity-90">
-              ${poi.participantCount}/${poi.maxParticipants}
-            </div>
-          </div>
-        </div>
-      `;
-    } else {
-      // Default marker without image
-      console.log(`📦 MapContainer: Creating default marker for "${poi.name}"`);
-      
-      markerElement.className = `
-        w-20 h-12 rounded-lg border-2 cursor-pointer
-        flex flex-col items-center justify-center text-white text-xs font-bold
-        shadow-lg hover:scale-105 transition-transform duration-200
-        ${isFull
-          ? 'bg-red-500 border-red-600 cursor-not-allowed'
-          : 'bg-green-500 border-green-600'
-        }
-      `;
-
-      markerElement.innerHTML = `
-        <div class="text-center leading-tight">
-          <div class="truncate max-w-20">${poi.name}</div>
-          <div class="text-xs opacity-90">
-            ${poi.participantCount}/${poi.maxParticipants}
-          </div>
-        </div>
-      `;
-    }
-
-    markerElement.title = `${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`;
-    markerElement.setAttribute('data-testid', 'poi-marker');
-
-    // Add click handler
-    markerElement.addEventListener('click', (event) => {
-      event.stopPropagation(); // Prevent map click handler from firing
-      if (!isFull && onPOIClick) {
-        onPOIClick(poi.id);
-      }
-    });
-
-    // Performance optimizations
-    markerElement.style.willChange = 'transform';
-    markerElement.style.backfaceVisibility = 'hidden';
-    markerElement.style.transform = 'translateZ(0)';
-    markerElement.style.contain = 'layout style paint';
-    markerElement.style.pointerEvents = 'auto';
-
-    return markerElement;
-  }, [onPOIClick]);
 
   // Ultra-simple animation system
   const animateMarkerTo = useCallback((marker: Marker, newPosition: [number, number], sessionId: string) => {
@@ -398,7 +215,12 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     // Optimize marker rendering during map movements
     map.current.on('movestart', () => {
       // Disable hover transitions during map movement for better performance
+      // Apply to both avatar markers and POI markers
       markers.current.forEach(marker => {
+        const element = marker.getElement();
+        element.style.transition = 'none';
+      });
+      poiMarkers.current.forEach(marker => {
         const element = marker.getElement();
         element.style.transition = 'none';
       });
@@ -406,8 +228,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
     map.current.on('moveend', () => {
       // Re-enable only hover transitions (not position transitions)
+      // Apply to both avatar markers and POI markers
       setTimeout(() => {
         markers.current.forEach(marker => {
+          const element = marker.getElement();
+          element.style.transition = 'transform 0.2s ease'; // Only for hover
+        });
+        poiMarkers.current.forEach(marker => {
           const element = marker.getElement();
           element.style.transition = 'transform 0.2s ease'; // Only for hover
         });
@@ -460,7 +287,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
       if (!marker) {
         // Create new marker
-        const markerElement = createMarkerElement(avatar);
+        const markerElement = createAvatarMarkerElement(avatar, onAvatarClick);
         marker = new Marker({
           element: markerElement,
           pitchAlignment: 'viewport',
@@ -489,7 +316,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         }
       }
     });
-  }, [avatars, createMarkerElement, animateMarkerTo]);
+  }, [avatars, onAvatarClick, animateMarkerTo]);
 
   // POI marker management
   useEffect(() => {
@@ -511,7 +338,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
       if (!marker) {
         // Create new POI marker
-        const markerElement = createPOIMarkerElement(poi);
+        const markerElement = createPOIMarkerElement(poi, onPOIClick);
         marker = new Marker({
           element: markerElement,
           pitchAlignment: 'viewport',
@@ -561,7 +388,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         }
       }
     });
-  }, [pois, createPOIMarkerElement]);
+  }, [pois, onPOIClick]);
 
   const handlePOIClick = (poiId: string) => {
     if (onPOIClick) {
