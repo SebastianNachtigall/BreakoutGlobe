@@ -189,8 +189,8 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		baseURL := "http://localhost:8080" // TODO: Make this configurable
 		imageUploader := uploads.NewImageUploader(uploadDir, baseURL)
 		
-		// Create POI service with image uploader
-		s.poiService = services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader)
+		// Create POI service with image uploader and user service
+		s.poiService = services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader, userService)
 		
 		// Create rate limiter (simple in-memory for now)
 		rateLimiter := &SimpleRateLimiter{}

@@ -3,7 +3,7 @@ import { Map, NavigationControl, ScaleControl, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { POIContextMenu } from './POIContextMenu';
 import { ProfileCard } from './ProfileCard';
-import { createPOIMarkerElement } from './POIMarker';
+import { createPOIMarkerElement, updatePOIMarkerElement } from './POIMarker';
 import { createAvatarMarkerElement } from './AvatarMarker';
 
 export interface AvatarData {
@@ -25,6 +25,7 @@ export interface AvatarData {
 export interface POIParticipant {
   id: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 export interface POIData {
@@ -349,62 +350,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         poiMarkers.current.set(poi.id, marker);
       } else {
-        // Update existing POI marker content without replacing the element
+        // Update existing POI marker content using the update function
         const currentElement = marker.getElement();
         const currentPos = marker.getLngLat();
         const newPosition: [number, number] = [poi.position.lng, poi.position.lat];
-        const isFull = poi.participantCount >= poi.maxParticipants;
 
-        // Update the element's content and styling using the same logic as createPOIMarkerElement
-        if (poi.imageUrl) {
-          // Update circular image-based marker
-          currentElement.className = `
-            flex flex-col items-center cursor-pointer hover:scale-105 transition-transform duration-200
-            ${isFull ? 'cursor-not-allowed' : ''}
-          `;
-
-          currentElement.innerHTML = `
-            <div class="relative p-1">
-              <img 
-                src="${poi.imageUrl}" 
-                alt="${poi.name}"
-                class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
-                onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
-                onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
-              />
-              <div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-md">
-                ${poi.participantCount}
-              </div>
-            </div>
-            <div class="mt-1 text-center">
-              <div class="text-xs font-semibold text-gray-800 max-w-20 truncate">
-                ${poi.name}
-              </div>
-            </div>
-          `;
-        } else {
-          // Update default marker without image
-          currentElement.className = `
-            w-20 h-12 rounded-lg border-2 cursor-pointer
-            flex flex-col items-center justify-center text-white text-xs font-bold
-            shadow-lg hover:scale-105 transition-transform duration-200
-            ${isFull
-              ? 'bg-red-500 border-red-600 cursor-not-allowed'
-              : 'bg-green-500 border-green-600'
-            }
-          `;
-
-          currentElement.innerHTML = `
-            <div class="text-center leading-tight">
-              <div class="truncate max-w-20">${poi.name}</div>
-              <div class="text-xs opacity-90">
-                ${poi.participantCount}/${poi.maxParticipants}
-              </div>
-            </div>
-          `;
-        }
-
-        currentElement.title = `${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`;
+        // Update the element with new POI data (including participant badges)
+        updatePOIMarkerElement(currentElement, poi);
 
         // Update position if changed
         const hasPositionChanged =

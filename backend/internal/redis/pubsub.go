@@ -66,6 +66,13 @@ type POIUpdatedEvent struct {
 	Timestamp       time.Time `json:"timestamp"`
 }
 
+// POIParticipant represents a participant in a POI with avatar information
+type POIParticipant struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
 // POIJoinedEvent represents a user joining a POI
 type POIJoinedEvent struct {
 	POIID        string    `json:"poiId"`
@@ -76,6 +83,17 @@ type POIJoinedEvent struct {
 	Timestamp    time.Time `json:"timestamp"`
 }
 
+// POIJoinedEventWithParticipants represents a user joining a POI with participant information
+type POIJoinedEventWithParticipants struct {
+	POIID        string           `json:"poiId"`
+	MapID        string           `json:"mapId"`
+	UserID       string           `json:"userId"`
+	SessionID    string           `json:"sessionId"`
+	CurrentCount int              `json:"currentCount"`
+	Participants []POIParticipant `json:"participants"`
+	Timestamp    time.Time        `json:"timestamp"`
+}
+
 // POILeftEvent represents a user leaving a POI
 type POILeftEvent struct {
 	POIID        string    `json:"poiId"`
@@ -84,6 +102,17 @@ type POILeftEvent struct {
 	SessionID    string    `json:"sessionId"`
 	CurrentCount int       `json:"currentCount"`
 	Timestamp    time.Time `json:"timestamp"`
+}
+
+// POILeftEventWithParticipants represents a user leaving a POI with participant information
+type POILeftEventWithParticipants struct {
+	POIID        string           `json:"poiId"`
+	MapID        string           `json:"mapId"`
+	UserID       string           `json:"userId"`
+	SessionID    string           `json:"sessionId"`
+	CurrentCount int              `json:"currentCount"`
+	Participants []POIParticipant `json:"participants"`
+	Timestamp    time.Time        `json:"timestamp"`
 }
 
 // PubSub manages Redis pub/sub operations for real-time events
@@ -118,8 +147,18 @@ func (ps *PubSub) PublishPOIJoined(ctx context.Context, event POIJoinedEvent) er
 	return ps.publishEvent(ctx, EventTypePOIJoined, event, event.MapID, event.UserID)
 }
 
+// PublishPOIJoinedWithParticipants publishes a POI joined event with participant information
+func (ps *PubSub) PublishPOIJoinedWithParticipants(ctx context.Context, event POIJoinedEventWithParticipants) error {
+	return ps.publishEvent(ctx, EventTypePOIJoined, event, event.MapID, event.UserID)
+}
+
 // PublishPOILeft publishes a POI left event
 func (ps *PubSub) PublishPOILeft(ctx context.Context, event POILeftEvent) error {
+	return ps.publishEvent(ctx, EventTypePOILeft, event, event.MapID, event.UserID)
+}
+
+// PublishPOILeftWithParticipants publishes a POI left event with participant information
+func (ps *PubSub) PublishPOILeftWithParticipants(ctx context.Context, event POILeftEventWithParticipants) error {
 	return ps.publishEvent(ctx, EventTypePOILeft, event, event.MapID, event.UserID)
 }
 

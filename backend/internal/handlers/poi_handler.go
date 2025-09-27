@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -30,6 +29,7 @@ type POIServiceInterface interface {
 	LeavePOI(ctx context.Context, poiID, userID string) error
 	GetPOIParticipants(ctx context.Context, poiID string) ([]string, error)
 	GetPOIParticipantCount(ctx context.Context, poiID string) (int, error)
+	GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error)
 	GetUserPOIs(ctx context.Context, userID string) ([]string, error)
 	ValidatePOI(ctx context.Context, poiID string) (*models.POI, error)
 }
@@ -133,8 +133,9 @@ type POIInfo struct {
 
 // ParticipantInfo represents a participant in a POI
 type ParticipantInfo struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatarUrl"`
 }
 
 // GetPOIsResponse represents the response for getting POIs
@@ -262,28 +263,20 @@ func (h *POIHandler) GetPOIs(c *gin.Context) {
 			participantCount = 0
 		}
 		
-		// Get participant details
-		participantIDs, err := h.poiService.GetPOIParticipants(c, poi.ID)
+		// Get participant details with avatar information
+		participantsInfo, err := h.poiService.GetPOIParticipantsWithInfo(c, poi.ID)
 		if err != nil {
 			// Log error but don't fail the request
-			participantIDs = []string{}
+			participantsInfo = []services.POIParticipantInfo{}
 		}
 		
-		// Convert participant IDs to participant info
-		participants := make([]ParticipantInfo, len(participantIDs))
-		for j, participantID := range participantIDs {
-			// Try to get user display name from user service
-			displayName := fmt.Sprintf("User-%s", participantID) // Fallback
-			
-			if h.userService != nil {
-				if user, err := h.userService.GetUser(c, participantID); err == nil && user != nil {
-					displayName = user.DisplayName
-				}
-			}
-			
+		// Convert to handler participant info format
+		participants := make([]ParticipantInfo, len(participantsInfo))
+		for j, participantInfo := range participantsInfo {
 			participants[j] = ParticipantInfo{
-				ID:   participantID,
-				Name: displayName,
+				ID:        participantInfo.ID,
+				Name:      participantInfo.Name,
+				AvatarURL: participantInfo.AvatarURL,
 			}
 		}
 		

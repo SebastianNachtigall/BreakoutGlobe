@@ -502,14 +502,20 @@ export class WebSocketClient {
     const poiId = data.poiId;
     const userId = data.userId;
     const currentCount = data.currentCount;
+    const participants = data.participants || [];
 
-    // Update the POI in the store
-    poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
+    // Update the POI in the store with participant information
+    poiStore.getState().updatePOIParticipants(poiId, currentCount, participants);
+    
+    // Hide the avatar for the user who joined the POI
+    if (userId) {
+      avatarStore.getState().hideAvatarForPOI(userId, poiId);
+    }
     
     // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
-      data: { action: 'user_joined', poiId, userId, currentCount, needsRefresh: true },
+      data: { action: 'user_joined', poiId, userId, currentCount, participants, needsRefresh: true },
       timestamp: new Date()
     });
   }
@@ -521,14 +527,20 @@ export class WebSocketClient {
     const poiId = data.poiId;
     const userId = data.userId;
     const currentCount = data.currentCount;
+    const participants = data.participants || [];
 
-    // Update the POI in the store
-    poiStore.getState().updatePOIParticipantCount(poiId, currentCount);
+    // Update the POI in the store with participant information
+    poiStore.getState().updatePOIParticipants(poiId, currentCount, participants);
+    
+    // Show the avatar for the user who left the POI
+    if (userId) {
+      avatarStore.getState().showAvatarForPOI(userId, poiId);
+    }
     
     // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
-      data: { action: 'user_left', poiId, userId, currentCount, needsRefresh: true },
+      data: { action: 'user_left', poiId, userId, currentCount, participants, needsRefresh: true },
       timestamp: new Date()
     });
   }

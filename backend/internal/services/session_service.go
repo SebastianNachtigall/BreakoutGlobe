@@ -44,6 +44,8 @@ type PubSub interface {
 	PublishPOIUpdated(ctx context.Context, event redis.POIUpdatedEvent) error
 	PublishPOIJoined(ctx context.Context, event redis.POIJoinedEvent) error
 	PublishPOILeft(ctx context.Context, event redis.POILeftEvent) error
+	PublishPOIJoinedWithParticipants(ctx context.Context, event redis.POIJoinedEventWithParticipants) error
+	PublishPOILeftWithParticipants(ctx context.Context, event redis.POILeftEventWithParticipants) error
 }
 
 // SessionService handles session management business logic

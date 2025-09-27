@@ -5,6 +5,7 @@ interface AvatarState {
   // State
   avatars: Map<string, AvatarData>; // sessionId -> AvatarData
   currentMap: string | null;
+  hiddenAvatars: Set<string>; // userIds of avatars hidden due to POI participation
   
   // Actions
   addOrUpdateAvatar: (avatar: AvatarData) => void;
@@ -14,6 +15,10 @@ interface AvatarState {
   loadInitialUsers: (users: AvatarData[]) => void;
   setCurrentMap: (mapId: string | null) => void;
   clearAllAvatars: () => void;
+  
+  // POI-related avatar visibility
+  hideAvatarForPOI: (userId: string, poiId: string) => void;
+  showAvatarForPOI: (userId: string, poiId: string) => void;
   
   // Getters
   getOtherUsersAvatars: () => AvatarData[];
@@ -25,6 +30,7 @@ export const avatarStore = create<AvatarState>((set, get) => ({
   // Initial state
   avatars: new Map(),
   currentMap: null,
+  hiddenAvatars: new Set(),
   
   // Actions
   addOrUpdateAvatar: (avatar: AvatarData) => {
@@ -111,18 +117,38 @@ export const avatarStore = create<AvatarState>((set, get) => ({
   },
   
   clearAllAvatars: () => {
-    set({ avatars: new Map() });
+    set({ avatars: new Map(), hiddenAvatars: new Set() });
+  },
+
+  hideAvatarForPOI: (userId: string, poiId: string) => {
+    set((state) => {
+      const newHiddenAvatars = new Set(state.hiddenAvatars);
+      newHiddenAvatars.add(userId);
+      return { hiddenAvatars: newHiddenAvatars };
+    });
+  },
+
+  showAvatarForPOI: (userId: string, poiId: string) => {
+    set((state) => {
+      const newHiddenAvatars = new Set(state.hiddenAvatars);
+      newHiddenAvatars.delete(userId);
+      return { hiddenAvatars: newHiddenAvatars };
+    });
   },
   
   // Getters
   getOtherUsersAvatars: () => {
     const state = get();
-    return Array.from(state.avatars.values());
+    return Array.from(state.avatars.values()).filter(avatar => 
+      !state.hiddenAvatars.has(avatar.userId || '')
+    );
   },
   
   getAvatarsForCurrentMap: () => {
     const state = get();
-    const allAvatars = Array.from(state.avatars.values());
+    const allAvatars = Array.from(state.avatars.values()).filter(avatar => 
+      !state.hiddenAvatars.has(avatar.userId || '')
+    );
     
     // If no current map is set, return all avatars
     if (!state.currentMap) {

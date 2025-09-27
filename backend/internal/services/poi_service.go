@@ -48,6 +48,9 @@ type POIServiceInterface interface {
 	// GetPOIParticipantCount retrieves the current participant count
 	GetPOIParticipantCount(ctx context.Context, poiID string) (int, error)
 	
+	// GetPOIParticipantsWithInfo retrieves all participants of a POI with their display names and avatars
+	GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]POIParticipantInfo, error)
+	
 	// GetUserPOIs retrieves all POIs a user is participating in
 	GetUserPOIs(ctx context.Context, userID string) ([]string, error)
 	
@@ -84,12 +87,20 @@ type ImageUploaderInterface interface {
 	UploadPOIImage(ctx context.Context, imageFile *multipart.FileHeader) (string, error)
 }
 
+// UserServiceInterface defines the interface for user operations needed by POI service
+type UserServiceInterface interface {
+	GetUser(ctx context.Context, userID string) (*models.User, error)
+}
+
+
+
 // POIService implements POI management operations
 type POIService struct {
 	poiRepo       POIRepositoryInterface
 	participants  POIParticipantsInterface
 	pubsub        PubSub
 	imageUploader ImageUploaderInterface
+	userService   UserServiceInterface
 }
 
 // POIBounds represents geographic bounds for POI queries
@@ -107,6 +118,13 @@ type POIUpdateData struct {
 	MaxParticipants int    `json:"maxParticipants,omitempty"`
 }
 
+// POIParticipantInfo represents a POI participant with display information
+type POIParticipantInfo struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	AvatarURL string `json:"avatarUrl"`
+}
+
 // Default configuration values
 const (
 	MaxPOINameLength        = 100
@@ -114,22 +132,24 @@ const (
 )
 
 // NewPOIService creates a new POIService instance
-func NewPOIService(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub) *POIService {
+func NewPOIService(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, userService UserServiceInterface) *POIService {
 	return &POIService{
 		poiRepo:       poiRepo,
 		participants:  participants,
 		pubsub:        pubsub,
 		imageUploader: nil, // No image uploader by default
+		userService:   userService,
 	}
 }
 
 // NewPOIServiceWithImageUploader creates a new POIService instance with image upload support
-func NewPOIServiceWithImageUploader(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, imageUploader ImageUploaderInterface) *POIService {
+func NewPOIServiceWithImageUploader(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, imageUploader ImageUploaderInterface, userService UserServiceInterface) *POIService {
 	return &POIService{
 		poiRepo:       poiRepo,
 		participants:  participants,
 		pubsub:        pubsub,
 		imageUploader: imageUploader,
+		userService:   userService,
 	}
 }
 
@@ -443,19 +463,38 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 		currentCount = 0 // Fallback to 0 if we can't get the count
 	}
 
-	// Publish POI joined event
-	joinedEvent := redis.POIJoinedEvent{
+	// Get updated participant information for the event
+	participantsInfo, err := s.GetPOIParticipantsWithInfo(ctx, poiID)
+	if err != nil {
+		// Log error but continue with basic event
+		fmt.Printf("Warning: failed to get participant info for POI joined event: %v\n", err)
+		participantsInfo = []POIParticipantInfo{}
+	}
+
+	// Convert to Redis participant format
+	var redisParticipants []redis.POIParticipant
+	for _, p := range participantsInfo {
+		redisParticipants = append(redisParticipants, redis.POIParticipant{
+			ID:        p.ID,
+			Name:      p.Name,
+			AvatarURL: p.AvatarURL,
+		})
+	}
+
+	// Publish enhanced POI joined event with participant information
+	joinedEventWithParticipants := redis.POIJoinedEventWithParticipants{
 		POIID:        poiID,
 		MapID:        poi.MapID,
 		UserID:       userID,
 		SessionID:    userID, // For now, use userID as sessionID
 		CurrentCount: currentCount,
+		Participants: redisParticipants,
 		Timestamp:    time.Now(),
 	}
 
-	if err := s.pubsub.PublishPOIJoined(ctx, joinedEvent); err != nil {
+	if err := s.pubsub.PublishPOIJoinedWithParticipants(ctx, joinedEventWithParticipants); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Warning: failed to publish POI joined event: %v\n", err)
+		fmt.Printf("Warning: failed to publish POI joined event with participants: %v\n", err)
 	}
 
 	return nil
@@ -498,19 +537,38 @@ func (s *POIService) LeavePOI(ctx context.Context, poiID, userID string) error {
 		currentCount = 0 // Fallback to 0 if we can't get the count
 	}
 
-	// Publish POI left event
-	leftEvent := redis.POILeftEvent{
+	// Get updated participant information for the event (after user left)
+	participantsInfo, err := s.GetPOIParticipantsWithInfo(ctx, poiID)
+	if err != nil {
+		// Log error but continue with basic event
+		fmt.Printf("Warning: failed to get participant info for POI left event: %v\n", err)
+		participantsInfo = []POIParticipantInfo{}
+	}
+
+	// Convert to Redis participant format
+	var redisParticipants []redis.POIParticipant
+	for _, p := range participantsInfo {
+		redisParticipants = append(redisParticipants, redis.POIParticipant{
+			ID:        p.ID,
+			Name:      p.Name,
+			AvatarURL: p.AvatarURL,
+		})
+	}
+
+	// Publish enhanced POI left event with participant information
+	leftEventWithParticipants := redis.POILeftEventWithParticipants{
 		POIID:        poiID,
 		MapID:        poi.MapID,
 		UserID:       userID,
 		SessionID:    userID, // For now, use userID as sessionID
 		CurrentCount: currentCount,
+		Participants: redisParticipants,
 		Timestamp:    time.Now(),
 	}
 
-	if err := s.pubsub.PublishPOILeft(ctx, leftEvent); err != nil {
+	if err := s.pubsub.PublishPOILeftWithParticipants(ctx, leftEventWithParticipants); err != nil {
 		// Log error but don't fail the operation
-		fmt.Printf("Warning: failed to publish POI left event: %v\n", err)
+		fmt.Printf("Warning: failed to publish POI left event with participants: %v\n", err)
 	}
 
 	return nil
@@ -532,6 +590,41 @@ func (s *POIService) GetPOIParticipantCount(ctx context.Context, poiID string) (
 		return 0, fmt.Errorf("failed to get POI participant count: %w", err)
 	}
 	return count, nil
+}
+
+// GetPOIParticipantsWithInfo retrieves all participants of a POI with their display names and avatars
+func (s *POIService) GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]POIParticipantInfo, error) {
+	// Get participant user IDs
+	participantIDs, err := s.participants.GetParticipants(ctx, poiID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get POI participants: %w", err)
+	}
+
+	// Get user information for each participant
+	var participantsInfo []POIParticipantInfo
+	for _, userID := range participantIDs {
+		participantInfo := POIParticipantInfo{
+			ID:        userID,
+			Name:      userID, // Fallback to userID
+			AvatarURL: "",     // No avatar by default
+		}
+
+		// Try to get user details if user service is available
+		if s.userService != nil {
+			user, err := s.userService.GetUser(ctx, userID)
+			if err == nil && user != nil {
+				participantInfo.Name = user.DisplayName
+				if user.AvatarURL != nil {
+					participantInfo.AvatarURL = *user.AvatarURL
+				}
+			}
+			// If user service fails, we continue with fallback values
+		}
+
+		participantsInfo = append(participantsInfo, participantInfo)
+	}
+
+	return participantsInfo, nil
 }
 
 // GetUserPOIs retrieves all POIs a user is participating in

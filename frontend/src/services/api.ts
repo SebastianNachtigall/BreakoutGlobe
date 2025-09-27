@@ -22,7 +22,7 @@ export interface POIResponse {
   createdBy: string;
   maxParticipants: number;
   participantCount?: number;
-  participants?: Array<{ id: string; name: string }>;
+  participants?: Array<{ id: string; name: string; avatarUrl: string }>;
   imageUrl?: string;
   
   // Discussion timer fields

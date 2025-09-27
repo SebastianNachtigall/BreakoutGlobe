@@ -48,6 +48,7 @@ export interface POIState {
   handleRealtimeUpdate: (poi: POIData) => void;
   handleRealtimeDelete: (poiId: string) => void;
   updatePOIParticipantCount: (poiId: string, count: number) => void;
+  updatePOIParticipants: (poiId: string, count: number, participants: any[]) => void;
   
   // Store management
   reset: () => void;
@@ -343,6 +344,24 @@ export const poiStore = create<POIState>()(
           pois: state.pois.map(poi => 
             poi.id === poiId 
               ? { ...poi, participantCount: count }
+              : poi
+          ),
+        }));
+      },
+
+      updatePOIParticipants: (poiId: string, count: number, participants: any[]) => {
+        set((state) => ({
+          pois: state.pois.map(poi => 
+            poi.id === poiId 
+              ? { 
+                  ...poi, 
+                  participantCount: count,
+                  participants: participants.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    avatarUrl: p.avatarUrl
+                  }))
+                }
               : poi
           ),
         }));
