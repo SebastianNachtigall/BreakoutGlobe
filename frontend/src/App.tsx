@@ -17,6 +17,7 @@ import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, getPOIs } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
+
 import type { UserProfile } from './types/models'
 
 // Mock data for development
@@ -33,6 +34,8 @@ function App() {
   // const errorState = errorStore() // Not used in current implementation
   const avatarState = avatarStore()
   const videoCallState = videoCallStore()
+
+  // Discussion timer is now handled directly in POIDetailsPanel component
 
   // Force re-render when avatar store changes by subscribing to the entire store
   const [avatarStoreVersion, setAvatarStoreVersion] = useState(0)

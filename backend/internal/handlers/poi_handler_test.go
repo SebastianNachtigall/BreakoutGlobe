@@ -109,6 +109,7 @@ func (m *MockPOIService) ValidatePOI(ctx context.Context, poiID string) (*models
 type POIHandlerTestSuite struct {
 	suite.Suite
 	mockPOIService  *MockPOIService
+	mockUserService *MockPOIUserService
 	mockRateLimiter *MockRateLimiter
 	handler         *POIHandler
 	router          *gin.Engine
@@ -120,7 +121,8 @@ func (suite *POIHandlerTestSuite) SetupTest() {
 	
 	suite.mockPOIService = new(MockPOIService)
 	suite.mockRateLimiter = new(MockRateLimiter)
-	suite.handler = NewPOIHandler(suite.mockPOIService, suite.mockRateLimiter)
+	suite.mockUserService = &MockPOIUserService{}
+	suite.handler = NewPOIHandler(suite.mockPOIService, suite.mockUserService, suite.mockRateLimiter)
 	
 	// Setup router
 	suite.router = gin.New()
@@ -129,6 +131,7 @@ func (suite *POIHandlerTestSuite) SetupTest() {
 
 func (suite *POIHandlerTestSuite) TearDownTest() {
 	suite.mockPOIService.AssertExpectations(suite.T())
+	suite.mockUserService.AssertExpectations(suite.T())
 	suite.mockRateLimiter.AssertExpectations(suite.T())
 }
 
@@ -162,6 +165,10 @@ func (suite *POIHandlerTestSuite) TestGetPOIs() {
 	for _, poi := range expectedPOIs {
 		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(2, nil)
 		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1", "session-2"}, nil)
+		
+		// Mock user service calls for participant names
+		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-1").Return(&models.User{DisplayName: "User-session-1"}, nil)
+		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-2").Return(&models.User{DisplayName: "User-session-2"}, nil)
 	}
 	
 	// Create request
@@ -220,6 +227,9 @@ func (suite *POIHandlerTestSuite) TestGetPOIsWithBounds() {
 	for _, poi := range expectedPOIs {
 		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(1, nil)
 		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1"}, nil)
+		
+		// Mock user service calls for participant names
+		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-1").Return(&models.User{DisplayName: "User-session-1"}, nil)
 	}
 	
 	// Create request with bounds query parameters
@@ -581,4 +591,17 @@ func (suite *POIHandlerTestSuite) TestLeavePOI_POINotFound() {
 
 func TestPOIHandlerTestSuite(t *testing.T) {
 	suite.Run(t, new(POIHandlerTestSuite))
+}
+
+// MockPOIUserService is a mock implementation of POIUserServiceInterface for testing
+type MockPOIUserService struct {
+	mock.Mock
+}
+
+func (m *MockPOIUserService) GetUser(ctx context.Context, userID string) (*models.User, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
 }

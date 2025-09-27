@@ -21,9 +21,7 @@ export interface POIState {
   getPOIById: (id: string) => POIData | undefined;
   setPOIs: (pois: POIData[]) => void;
   
-  // Discussion timer management
-  updateDiscussionTimer: (poiId: string, duration: number) => void;
-  getDiscussionTimerState: (poiId: string) => { isActive: boolean; duration: number; startTime: Date | null } | null;
+  // Discussion timer is now handled directly in POIDetailsPanel component
   
   // Participant management
   joinPOI: (poiId: string, userId: string) => boolean;
@@ -72,8 +70,7 @@ export const poiStore = create<POIState>()(
         const poiWithTimer = {
           ...poi,
           discussionStartTime: poi.discussionStartTime || null,
-          isDiscussionActive: poi.isDiscussionActive || false,
-          discussionDuration: poi.discussionDuration || 0
+          isDiscussionActive: poi.isDiscussionActive || false
         };
         
         set((state) => ({
@@ -120,12 +117,9 @@ export const poiStore = create<POIState>()(
               ? { 
                   ...p, 
                   participantCount: newParticipantCount,
-                  // Start discussion timer if reaching 2 participants
-                  discussionStartTime: newParticipantCount >= 2 && !p.isDiscussionActive 
-                    ? new Date() 
-                    : p.discussionStartTime,
-                  isDiscussionActive: newParticipantCount >= 2,
-                  discussionDuration: p.discussionDuration || 0
+                  // Backend handles discussion timer logic - frontend just displays
+                  discussionStartTime: p.discussionStartTime,
+                  isDiscussionActive: p.isDiscussionActive
                 }
               : p
           ),
@@ -151,11 +145,9 @@ export const poiStore = create<POIState>()(
               ? { 
                   ...p, 
                   participantCount: newParticipantCount,
-                  // Pause discussion timer if dropping below 2 participants
-                  isDiscussionActive: newParticipantCount >= 2,
-                  // Reset timer if no participants left
-                  discussionStartTime: newParticipantCount === 0 ? null : p.discussionStartTime,
-                  discussionDuration: newParticipantCount === 0 ? 0 : p.discussionDuration || 0
+                  // Backend handles discussion timer logic - frontend just displays
+                  isDiscussionActive: p.isDiscussionActive,
+                  discussionStartTime: p.discussionStartTime
                 }
               : p
           ),
@@ -356,31 +348,7 @@ export const poiStore = create<POIState>()(
         }));
       },
       
-      // Discussion timer management
-      updateDiscussionTimer: (poiId: string, duration: number) => {
-        set((state) => ({
-          pois: state.pois.map(p => 
-            p.id === poiId 
-              ? { ...p, discussionDuration: duration }
-              : p
-          ),
-        }));
-      },
-      
-      getDiscussionTimerState: (poiId: string) => {
-        const state = get();
-        const poi = state.pois.find(p => p.id === poiId);
-        
-        if (!poi) {
-          return null;
-        }
-        
-        return {
-          isActive: poi.isDiscussionActive || false,
-          duration: poi.discussionDuration || 0,
-          startTime: poi.discussionStartTime || null
-        };
-      },
+      // Discussion timer is now handled directly in POIDetailsPanel component
       
       reset: () => {
         set({

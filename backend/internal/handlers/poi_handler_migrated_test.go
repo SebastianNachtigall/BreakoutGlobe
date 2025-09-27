@@ -36,7 +36,8 @@ func newSimplePOIScenario(t *testing.T) *simplePOIScenario {
 	
 	mockPOIService := new(MockPOIService)
 	mockRateLimiter := new(MockRateLimiter)
-	handler := NewPOIHandler(mockPOIService, mockRateLimiter)
+	mockUserService := &MockPOIUserService{}
+	handler := NewPOIHandler(mockPOIService, mockUserService, mockRateLimiter)
 	
 	router := gin.New()
 	handler.RegisterRoutes(router)

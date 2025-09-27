@@ -41,10 +41,9 @@ export interface POIData {
   imageUrl?: string;
   createdBy: string;
   createdAt: Date;
-  // Discussion timer fields
+  // Discussion timer fields - backend only tracks when 2+ users are present
   discussionStartTime?: Date | null;
   isDiscussionActive?: boolean;
-  discussionDuration?: number; // in seconds
 }
 
 export interface MapContainerProps {

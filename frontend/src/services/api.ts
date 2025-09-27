@@ -24,6 +24,11 @@ export interface POIResponse {
   participantCount?: number;
   participants?: Array<{ id: string; name: string }>;
   imageUrl?: string;
+  
+  // Discussion timer fields
+  discussionStartTime?: string;
+  isDiscussionActive?: boolean;
+  
   createdAt: string;
 }
 
@@ -391,6 +396,9 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
   imageUrl?: string;
   createdBy: string;
   createdAt: Date;
+  // Discussion timer fields
+  discussionStartTime?: Date | null;
+  isDiscussionActive?: boolean;
 } {
   return {
     id: apiResponse.id,
@@ -402,6 +410,9 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
     participants: apiResponse.participants,
     imageUrl: apiResponse.imageUrl,
     createdBy: apiResponse.createdBy,
-    createdAt: new Date(apiResponse.createdAt)
+    createdAt: new Date(apiResponse.createdAt),
+    // Transform discussion timer fields - backend only tracks when 2+ users are present
+    discussionStartTime: apiResponse.discussionStartTime ? new Date(apiResponse.discussionStartTime) : null,
+    isDiscussionActive: apiResponse.isDiscussionActive || false
   };
 }

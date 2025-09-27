@@ -178,6 +178,10 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		poiParticipants := redis.NewPOIParticipants(s.redis)
 		pubsub := redis.NewPubSub(s.redis)
 		
+		// Create user service for participant name resolution
+		userRepo := repository.NewUserRepository(s.db)
+		userService := services.NewUserService(userRepo)
+		
 		// Create image uploader
 		uploadDir := filepath.Join(".", "uploads")
 		baseURL := "http://localhost:8080" // TODO: Make this configurable
@@ -189,8 +193,8 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		// Create rate limiter (simple in-memory for now)
 		rateLimiter := &SimpleRateLimiter{}
 		
-		// Create POI handler
-		poiHandler := handlers.NewPOIHandler(poiService, rateLimiter)
+		// Create POI handler with user service for participant names
+		poiHandler := handlers.NewPOIHandler(poiService, userService, rateLimiter)
 		
 		// Register POI routes
 		poiHandler.RegisterRoutes(s.router)

@@ -34,16 +34,23 @@ type POIServiceInterface interface {
 	ValidatePOI(ctx context.Context, poiID string) (*models.POI, error)
 }
 
+// POIUserServiceInterface defines the interface for user service operations needed by POI handler
+type POIUserServiceInterface interface {
+	GetUser(ctx context.Context, userID string) (*models.User, error)
+}
+
 // POIHandler handles HTTP requests for POI operations
 type POIHandler struct {
 	poiService  POIServiceInterface
+	userService POIUserServiceInterface
 	rateLimiter services.RateLimiterInterface
 }
 
 // NewPOIHandler creates a new POIHandler instance
-func NewPOIHandler(poiService POIServiceInterface, rateLimiter services.RateLimiterInterface) *POIHandler {
+func NewPOIHandler(poiService POIServiceInterface, userService POIUserServiceInterface, rateLimiter services.RateLimiterInterface) *POIHandler {
 	return &POIHandler{
 		poiService:  poiService,
+		userService: userService,
 		rateLimiter: rateLimiter,
 	}
 }
@@ -116,6 +123,11 @@ type POIInfo struct {
 	ParticipantCount int               `json:"participantCount"`
 	Participants    []ParticipantInfo  `json:"participants"`
 	ImageURL        string             `json:"imageUrl,omitempty"`
+	
+	// Discussion timer fields - backend only tracks when 2+ users are present
+	DiscussionStartTime *time.Time `json:"discussionStartTime,omitempty"`
+	IsDiscussionActive  bool       `json:"isDiscussionActive"`
+	
 	CreatedAt       time.Time          `json:"createdAt"`
 }
 
@@ -260,16 +272,23 @@ func (h *POIHandler) GetPOIs(c *gin.Context) {
 		// Convert participant IDs to participant info
 		participants := make([]ParticipantInfo, len(participantIDs))
 		for j, participantID := range participantIDs {
-			// For now, use session ID as display name
-			// TODO: Enhance this when we add proper user authentication
-			// For now, use a simplified display name based on session ID
-			// TODO: Enhance this when we add proper user authentication
-			displayName := fmt.Sprintf("User-%s", participantID)
+			// Try to get user display name from user service
+			displayName := fmt.Sprintf("User-%s", participantID) // Fallback
+			
+			if h.userService != nil {
+				if user, err := h.userService.GetUser(c, participantID); err == nil && user != nil {
+					displayName = user.DisplayName
+				}
+			}
+			
 			participants[j] = ParticipantInfo{
 				ID:   participantID,
 				Name: displayName,
 			}
 		}
+		
+		// Calculate discussion timer state
+		isDiscussionActive := participantCount >= 2
 		
 		poiInfos[i] = POIInfo{
 			ID:               poi.ID,
@@ -282,6 +301,11 @@ func (h *POIHandler) GetPOIs(c *gin.Context) {
 			ParticipantCount: participantCount,
 			Participants:     participants,
 			ImageURL:         poi.ImageURL,
+			
+			// Discussion timer fields - backend only tracks when 2+ users are present
+			DiscussionStartTime: poi.DiscussionStartTime,
+			IsDiscussionActive:  isDiscussionActive,
+			
 			CreatedAt:        poi.CreatedAt,
 		}
 	}

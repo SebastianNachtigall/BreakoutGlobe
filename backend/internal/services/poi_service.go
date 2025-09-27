@@ -430,6 +430,12 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 	if err := s.participants.JoinPOI(ctx, poiID, userID); err != nil {
 		return fmt.Errorf("failed to join POI: %w", err)
 	}
+	
+	// Update discussion timer based on new participant count
+	if err := s.updateDiscussionTimer(ctx, poiID); err != nil {
+		// Log error but don't fail the join operation
+		// Discussion timer is not critical for POI functionality
+	}
 
 	// Get updated participant count
 	currentCount, err := s.participants.GetParticipantCount(ctx, poiID)
@@ -478,6 +484,12 @@ func (s *POIService) LeavePOI(ctx context.Context, poiID, userID string) error {
 	// Remove user from POI
 	if err := s.participants.LeavePOI(ctx, poiID, userID); err != nil {
 		return fmt.Errorf("failed to leave POI: %w", err)
+	}
+	
+	// Update discussion timer based on new participant count
+	if err := s.updateDiscussionTimer(ctx, poiID); err != nil {
+		// Log error but don't fail the leave operation
+		// Discussion timer is not critical for POI functionality
 	}
 
 	// Get updated participant count
@@ -579,5 +591,50 @@ func (s *POIService) validateBounds(bounds POIBounds) error {
 	if bounds.MinLng < -180 || bounds.MaxLng > 180 {
 		return fmt.Errorf("longitude bounds must be between -180 and 180")
 	}
+	return nil
+}
+
+// updateDiscussionTimer updates the discussion timer state based on participant count
+// Backend only tracks when 2+ users are present - frontend calculates duration
+func (s *POIService) updateDiscussionTimer(ctx context.Context, poiID string) error {
+	// Get current POI
+	poi, err := s.poiRepo.GetByID(ctx, poiID)
+	if err != nil {
+		return fmt.Errorf("failed to get POI: %w", err)
+	}
+	
+	// Get current participant count
+	participantCount, err := s.participants.GetParticipantCount(ctx, poiID)
+	if err != nil {
+		return fmt.Errorf("failed to get participant count: %w", err)
+	}
+	
+	now := time.Now()
+	
+	// Determine if discussion should be active (2+ participants)
+	shouldBeActive := participantCount >= 2
+	needsUpdate := false
+	
+	if shouldBeActive && !poi.IsDiscussionActive {
+		// Start discussion timer - set timestamp when 2+ users are present
+		poi.DiscussionStartTime = &now
+		poi.IsDiscussionActive = true
+		needsUpdate = true
+		
+	} else if !shouldBeActive && poi.IsDiscussionActive {
+		// Stop discussion timer - clear timestamp when users drop below 2
+		poi.IsDiscussionActive = false
+		poi.DiscussionStartTime = nil
+		needsUpdate = true
+	}
+	
+	// Only update POI in database if there was a state change
+	if needsUpdate {
+		poi.UpdatedAt = now
+		if err := s.poiRepo.Update(ctx, poi); err != nil {
+			return fmt.Errorf("failed to update POI discussion timer: %w", err)
+		}
+	}
+	
 	return nil
 }

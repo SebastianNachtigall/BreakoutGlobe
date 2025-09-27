@@ -12,6 +12,19 @@ export interface POIDetailsPanelProps {
   position?: { x: number; y: number };
 }
 
+// Helper function to calculate discussion duration from start time
+const calculateDiscussionDuration = (poi: POIData): number => {
+  if (!poi.isDiscussionActive || !poi.discussionStartTime) {
+    return 0;
+  }
+  
+  const now = new Date();
+  const startTime = new Date(poi.discussionStartTime);
+  const elapsedSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+  
+  return Math.max(0, elapsedSeconds); // Ensure non-negative
+};
+
 // Helper function to format discussion time
 const formatDiscussionTime = (durationInSeconds: number): string => {
   const minutes = Math.floor(durationInSeconds / 60);
@@ -38,8 +51,22 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
   isLoading = false,
   position
 }) => {
+  const [currentDuration, setCurrentDuration] = React.useState(() => calculateDiscussionDuration(poi));
   const isFull = poi.participantCount >= poi.maxParticipants;
   const isNearFull = poi.participantCount >= poi.maxParticipants - 1 && !isFull;
+  
+  // Update the duration every second for active discussions
+  React.useEffect(() => {
+    if (poi.isDiscussionActive && poi.discussionStartTime) {
+      const interval = setInterval(() => {
+        setCurrentDuration(calculateDiscussionDuration(poi));
+      }, 1000);
+      
+      return () => clearInterval(interval);
+    } else {
+      setCurrentDuration(0);
+    }
+  }, [poi.isDiscussionActive, poi.discussionStartTime]);
 
   // Handle escape key
   useEffect(() => {
@@ -115,6 +142,21 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         </button>
       </div>
 
+      {poi.imageUrl && (
+        <div className="poi-image mb-4">
+          <img
+            src={poi.imageUrl}
+            alt={poi.name}
+            className="w-full h-32 object-cover rounded-md border border-gray-200"
+            onError={(e) => {
+              console.warn(`Failed to load POI image: ${poi.imageUrl}`);
+              // Keep the image element but hide it gracefully
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </div>
+      )}
+
       <div className="poi-description mb-4">
         <p className="text-gray-700 text-sm">{poi.description}</p>
       </div>
@@ -130,16 +172,25 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         <h4 className="text-sm font-medium text-gray-900 mb-2">Participants</h4>
         {poi.participants && poi.participants.length > 0 ? (
           <ul className="space-y-1">
-            {poi.participants.map((participant) => (
-              <li
-                key={participant.id}
-                className="text-sm text-gray-700"
-                data-testid={participant.id === currentUserId ? 'current-user' : undefined}
-              >
-                {participant.name}
-                {participant.id === currentUserId && <span className="text-blue-600 font-medium"> (You)</span>}
-              </li>
-            ))}
+            {poi.participants.map((participant) => {
+              // Use display name if available, otherwise fallback to user ID
+              const displayName = participant.name && participant.name.trim() 
+                ? participant.name 
+                : participant.id.length > 8 
+                  ? participant.id.substring(0, 8) 
+                  : participant.id;
+              
+              return (
+                <li
+                  key={participant.id}
+                  className="text-sm text-gray-700"
+                  data-testid={participant.id === currentUserId ? 'current-user' : undefined}
+                >
+                  {displayName}
+                  {participant.id === currentUserId && <span className="text-blue-600 font-medium"> (You)</span>}
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-sm text-gray-500 italic">No participants yet</p>
@@ -148,9 +199,9 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
 
       <div className="poi-discussion-timer mb-4">
         <div className="text-sm text-gray-600">
-          {poi.isDiscussionActive ? (
+          {poi.isDiscussionActive && poi.discussionStartTime ? (
             <span className="text-green-600 font-medium">
-              Discussion active for: {formatDiscussionTime(poi.discussionDuration || 0)}
+              Discussion active for: {formatDiscussionTime(currentDuration)}
             </span>
           ) : (
             <span className="text-gray-500 italic">No active discussion</span>

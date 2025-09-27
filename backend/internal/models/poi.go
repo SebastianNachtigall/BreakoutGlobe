@@ -20,6 +20,11 @@ type POI struct {
 	Creator         *User          `json:"creator,omitempty" gorm:"foreignKey:CreatedBy;references:ID"`
 	MaxParticipants int            `json:"maxParticipants" gorm:"default:10;not null"`
 	ImageURL        string         `json:"imageUrl,omitempty" gorm:"type:varchar(500)"` // Optional POI image
+	
+	// Discussion timer fields - backend only tracks when 2+ users are present
+	DiscussionStartTime *time.Time `json:"discussionStartTime,omitempty" gorm:"type:timestamp"`
+	IsDiscussionActive  bool       `json:"isDiscussionActive" gorm:"default:false"`
+	
 	CreatedAt       time.Time      `json:"createdAt" gorm:"not null"`
 	UpdatedAt       time.Time      `json:"updatedAt" gorm:"not null"`
 	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"` // Soft delete support
