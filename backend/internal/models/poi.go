@@ -19,6 +19,7 @@ type POI struct {
 	CreatedBy       string         `json:"createdBy" gorm:"index;type:varchar(36);not null"`
 	Creator         *User          `json:"creator,omitempty" gorm:"foreignKey:CreatedBy;references:ID"`
 	MaxParticipants int            `json:"maxParticipants" gorm:"default:10;not null"`
+	ImageURL        string         `json:"imageUrl,omitempty" gorm:"type:varchar(500)"` // Optional POI image
 	CreatedAt       time.Time      `json:"createdAt" gorm:"not null"`
 	UpdatedAt       time.Time      `json:"updatedAt" gorm:"not null"`
 	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"` // Soft delete support
@@ -78,6 +79,10 @@ func (p POI) Validate() error {
 
 	if p.CreatedAt.IsZero() {
 		return fmt.Errorf("created at is required")
+	}
+
+	if len(p.ImageURL) > 500 {
+		return fmt.Errorf("image URL must be 500 characters or less")
 	}
 
 	return nil

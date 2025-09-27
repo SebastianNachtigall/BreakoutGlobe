@@ -16,6 +16,49 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
     }
   };
 
+  // If POI has an image, render it with overlay text
+  if (poi.imageUrl) {
+    return (
+      <div
+        data-testid="poi-marker"
+        className={`
+          w-24 h-16 rounded-lg border-2 cursor-pointer relative overflow-hidden
+          shadow-lg hover:scale-105 transition-transform duration-200
+          ${isFull 
+            ? 'border-red-600 cursor-not-allowed' 
+            : 'border-green-600'
+          }
+        `}
+        onClick={handleClick}
+        title={`${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`}
+      >
+        <img 
+          src={poi.imageUrl} 
+          alt={poi.name}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            // Fallback to default marker if image fails to load
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
+        <div className={`
+          absolute bottom-0 left-0 right-0 
+          ${isFull ? 'bg-red-500/90' : 'bg-green-500/90'}
+          text-white text-xs font-bold px-1 py-0.5
+        `}>
+          <div className="text-center leading-tight">
+            <div className="truncate">{poi.name}</div>
+            <div className="text-xs opacity-90">
+              {poi.participantCount}/{poi.maxParticipants}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default marker without image
   return (
     <div
       data-testid="poi-marker"

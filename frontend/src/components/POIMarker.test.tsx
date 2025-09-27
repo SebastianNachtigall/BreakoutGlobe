@@ -65,6 +65,24 @@ describe('POIMarker', () => {
       const marker = screen.getByTestId('poi-marker');
       expect(marker).toHaveClass('bg-red-500'); // Full indicator
     });
+
+    it('should render POI marker with image when imageUrl is provided', () => {
+      const poiWithImage = { ...mockPOI, imageUrl: 'https://example.com/test-image.jpg' };
+      const onPOIClick = vi.fn();
+      
+      render(
+        <POIMarker 
+          poi={poiWithImage} 
+          onPOIClick={onPOIClick}
+        />
+      );
+      
+      const image = screen.getByAltText('Test Meeting Room');
+      expect(image).toBeInTheDocument();
+      expect(image).toHaveAttribute('src', 'https://example.com/test-image.jpg');
+      expect(screen.getByText('Test Meeting Room')).toBeInTheDocument();
+      expect(screen.getByText('3/10')).toBeInTheDocument();
+    });
   });
 
   describe('Interaction', () => {

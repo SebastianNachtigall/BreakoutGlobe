@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,6 +27,14 @@ type MockPOIService struct {
 
 func (m *MockPOIService) CreatePOI(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int) (*models.POI, error) {
 	args := m.Called(ctx, mapID, name, description, position, createdBy, maxParticipants)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.POI), args.Error(1)
+}
+
+func (m *MockPOIService) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile *multipart.FileHeader) (*models.POI, error) {
+	args := m.Called(ctx, mapID, name, description, position, createdBy, maxParticipants, imageFile)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"time"
 
 	"breakoutglobe/internal/models"
@@ -16,6 +17,9 @@ import (
 type POIServiceInterface interface {
 	// CreatePOI creates a new POI with duplicate location checking
 	CreatePOI(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int) (*models.POI, error)
+	
+	// CreatePOIWithImage creates a new POI with optional image upload
+	CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile *multipart.FileHeader) (*models.POI, error)
 	
 	// GetPOI retrieves a POI by ID
 	GetPOI(ctx context.Context, poiID string) (*models.POI, error)
@@ -75,11 +79,17 @@ type POIParticipantsInterface interface {
 	GetPOIsForParticipant(ctx context.Context, userID string) ([]string, error)
 }
 
+// ImageUploaderInterface defines the interface for image upload operations
+type ImageUploaderInterface interface {
+	UploadPOIImage(ctx context.Context, imageFile *multipart.FileHeader) (string, error)
+}
+
 // POIService implements POI management operations
 type POIService struct {
-	poiRepo      POIRepositoryInterface
-	participants POIParticipantsInterface
-	pubsub       PubSub
+	poiRepo       POIRepositoryInterface
+	participants  POIParticipantsInterface
+	pubsub        PubSub
+	imageUploader ImageUploaderInterface
 }
 
 // POIBounds represents geographic bounds for POI queries
@@ -106,9 +116,20 @@ const (
 // NewPOIService creates a new POIService instance
 func NewPOIService(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub) *POIService {
 	return &POIService{
-		poiRepo:      poiRepo,
-		participants: participants,
-		pubsub:       pubsub,
+		poiRepo:       poiRepo,
+		participants:  participants,
+		pubsub:        pubsub,
+		imageUploader: nil, // No image uploader by default
+	}
+}
+
+// NewPOIServiceWithImageUploader creates a new POIService instance with image upload support
+func NewPOIServiceWithImageUploader(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, imageUploader ImageUploaderInterface) *POIService {
+	return &POIService{
+		poiRepo:       poiRepo,
+		participants:  participants,
+		pubsub:        pubsub,
+		imageUploader: imageUploader,
 	}
 }
 
@@ -142,6 +163,79 @@ func (s *POIService) CreatePOI(ctx context.Context, mapID, name, description str
 		Position:        position,
 		CreatedBy:       createdBy,
 		MaxParticipants: maxParticipants,
+		CreatedAt:       time.Now(),
+	}
+
+	// Validate the POI
+	if err := poi.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid POI data: %w", err)
+	}
+
+	// Save to database
+	if err := s.poiRepo.Create(ctx, poi); err != nil {
+		return nil, fmt.Errorf("failed to create POI in database: %w", err)
+	}
+
+	// Publish POI created event
+	createdEvent := redis.POICreatedEvent{
+		POIID:           poi.ID,
+		MapID:           poi.MapID,
+		Name:            poi.Name,
+		Description:     poi.Description,
+		Position:        redis.LatLng{Lat: position.Lat, Lng: position.Lng},
+		CreatedBy:       poi.CreatedBy,
+		MaxParticipants: poi.MaxParticipants,
+		Timestamp:       time.Now(),
+	}
+
+	if err := s.pubsub.PublishPOICreated(ctx, createdEvent); err != nil {
+		// Log error but don't fail the operation
+		fmt.Printf("Warning: failed to publish POI created event: %v\n", err)
+	}
+
+	return poi, nil
+}
+
+// CreatePOIWithImage creates a new POI with optional image upload
+func (s *POIService) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile *multipart.FileHeader) (*models.POI, error) {
+	// Validate input
+	if err := s.validatePOIInput(mapID, name, createdBy, maxParticipants); err != nil {
+		return nil, err
+	}
+
+	// Validate position
+	if err := position.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid position: %w", err)
+	}
+
+	// Check for duplicate location
+	duplicates, err := s.poiRepo.CheckDuplicateLocation(ctx, mapID, position.Lat, position.Lng, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to check duplicate location: %w", err)
+	}
+	if len(duplicates) > 0 {
+		return nil, fmt.Errorf("POI already exists at this location (lat: %f, lng: %f)", position.Lat, position.Lng)
+	}
+
+	// Upload image if provided
+	var imageURL string
+	if imageFile != nil && s.imageUploader != nil {
+		imageURL, err = s.imageUploader.UploadPOIImage(ctx, imageFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload POI image: %w", err)
+		}
+	}
+
+	// Create new POI
+	poi := &models.POI{
+		ID:              uuid.New().String(),
+		MapID:           mapID,
+		Name:            name,
+		Description:     description,
+		Position:        position,
+		CreatedBy:       createdBy,
+		MaxParticipants: maxParticipants,
+		ImageURL:        imageURL,
 		CreatedAt:       time.Now(),
 	}
 

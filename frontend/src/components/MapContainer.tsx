@@ -36,6 +36,7 @@ export interface POIData {
   participantCount: number;
   maxParticipants: number;
   participants?: POIParticipant[];
+  imageUrl?: string;
   createdBy: string;
   createdAt: Date;
   // Discussion timer fields
@@ -216,24 +217,61 @@ export const MapContainer: React.FC<MapContainerProps> = ({
     const markerElement = document.createElement('div');
     const isFull = poi.participantCount >= poi.maxParticipants;
 
-    markerElement.className = `
-      w-20 h-12 rounded-lg border-2 cursor-pointer
-      flex flex-col items-center justify-center text-white text-xs font-bold
-      shadow-lg hover:scale-105 transition-transform duration-200
-      ${isFull
-        ? 'bg-red-500 border-red-600 cursor-not-allowed'
-        : 'bg-green-500 border-green-600'
-      }
-    `;
+    console.log(`🖼️ MapContainer: Creating POI marker for "${poi.name}" with imageUrl:`, poi.imageUrl);
 
-    markerElement.innerHTML = `
-      <div class="text-center leading-tight">
-        <div class="truncate max-w-20">${poi.name}</div>
-        <div class="text-xs opacity-90">
-          ${poi.participantCount}/${poi.maxParticipants}
+    // If POI has an image, create image-based marker
+    if (poi.imageUrl) {
+      console.log(`🎨 MapContainer: Creating image marker for "${poi.name}"`);
+      
+      markerElement.className = `
+        w-24 h-16 rounded-lg border-2 cursor-pointer relative overflow-hidden
+        shadow-lg hover:scale-105 transition-transform duration-200
+        ${isFull
+          ? 'border-red-600 cursor-not-allowed'
+          : 'border-green-600'
+        }
+      `;
+
+      markerElement.innerHTML = `
+        <img 
+          src="${poi.imageUrl}" 
+          alt="${poi.name}"
+          class="w-full h-full object-cover"
+          onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
+          onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
+        />
+        <div class="absolute bottom-0 left-0 right-0 ${isFull ? 'bg-red-500/90' : 'bg-green-500/90'} text-white text-xs font-bold px-1 py-0.5">
+          <div class="text-center leading-tight">
+            <div class="truncate">${poi.name}</div>
+            <div class="text-xs opacity-90">
+              ${poi.participantCount}/${poi.maxParticipants}
+            </div>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      // Default marker without image
+      console.log(`📦 MapContainer: Creating default marker for "${poi.name}"`);
+      
+      markerElement.className = `
+        w-20 h-12 rounded-lg border-2 cursor-pointer
+        flex flex-col items-center justify-center text-white text-xs font-bold
+        shadow-lg hover:scale-105 transition-transform duration-200
+        ${isFull
+          ? 'bg-red-500 border-red-600 cursor-not-allowed'
+          : 'bg-green-500 border-green-600'
+        }
+      `;
+
+      markerElement.innerHTML = `
+        <div class="text-center leading-tight">
+          <div class="truncate max-w-20">${poi.name}</div>
+          <div class="text-xs opacity-90">
+            ${poi.participantCount}/${poi.maxParticipants}
+          </div>
+        </div>
+      `;
+    }
 
     markerElement.title = `${poi.name} - ${poi.participantCount}/${poi.maxParticipants} participants`;
     markerElement.setAttribute('data-testid', 'poi-marker');

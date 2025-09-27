@@ -241,9 +241,11 @@ function App() {
 
       const apiPOIs = await getPOIs('default-map')
       console.log('📦 Loaded POIs from API:', apiPOIs.length)
+      console.log('🔍 API POIs with images:', apiPOIs.filter(poi => poi.imageUrl).map(poi => ({ name: poi.name, imageUrl: poi.imageUrl })))
 
       // Transform API responses to frontend format
       const transformedPOIs = apiPOIs.map(transformFromPOIResponse)
+      console.log('🔄 Transformed POIs with images:', transformedPOIs.filter(poi => poi.imageUrl).map(poi => ({ name: poi.name, imageUrl: poi.imageUrl })))
       poiStore.getState().setPOIs(transformedPOIs)
 
     } catch (error) {
@@ -317,8 +319,21 @@ function App() {
     description: string;
     maxParticipants: number;
     position: { lat: number; lng: number };
+    image?: File;
   }) => {
     if (!poiCreationPosition || !userProfile) return
+
+    // Create optimistic POI for immediate UI feedback (declare outside try block)
+    const optimisticPOI: POIData = {
+      id: `temp-${Date.now()}`,
+      name: poiData.name,
+      description: poiData.description,
+      position: poiData.position,
+      participantCount: 0,
+      maxParticipants: poiData.maxParticipants,
+      createdBy: userProfile.id,
+      createdAt: new Date()
+    }
 
     try {
       // Set loading state
@@ -332,18 +347,6 @@ function App() {
       )
 
       console.log('🚀 Creating POI with data:', apiRequest)
-
-      // Create optimistic POI for immediate UI feedback
-      const optimisticPOI: POIData = {
-        id: `temp-${Date.now()}`,
-        name: poiData.name,
-        description: poiData.description,
-        position: poiData.position,
-        participantCount: 0,
-        maxParticipants: poiData.maxParticipants,
-        createdBy: userProfile.id,
-        createdAt: new Date()
-      }
 
       // Add optimistic POI to store
       poiStore.getState().createPOIOptimistic(optimisticPOI)

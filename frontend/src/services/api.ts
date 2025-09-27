@@ -10,6 +10,7 @@ export interface CreatePOIRequest {
   position: { lat: number; lng: number };
   createdBy: string;
   maxParticipants: number;
+  image?: File; // Optional image file
 }
 
 export interface POIResponse {
@@ -22,6 +23,7 @@ export interface POIResponse {
   maxParticipants: number;
   participantCount?: number;
   participants?: Array<{ id: string; name: string }>;
+  imageUrl?: string;
   createdAt: string;
 }
 
@@ -203,13 +205,35 @@ export async function uploadAvatar(avatarFile: File): Promise<UserProfile> {
 export async function createPOI(request: CreatePOIRequest): Promise<POIResponse> {
   console.log('🌐 API: createPOI called with:', request);
 
-  const response = await fetch(`${API_BASE_URL}/api/pois`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  });
+  let response: Response;
+
+  // If image is provided, use multipart form data
+  if (request.image) {
+    const formData = new FormData();
+    formData.append('mapId', request.mapId);
+    formData.append('name', request.name);
+    formData.append('description', request.description);
+    formData.append('position.lat', request.position.lat.toString());
+    formData.append('position.lng', request.position.lng.toString());
+    formData.append('createdBy', request.createdBy);
+    formData.append('maxParticipants', request.maxParticipants.toString());
+    formData.append('image', request.image);
+
+    response = await fetch(`${API_BASE_URL}/api/pois`, {
+      method: 'POST',
+      body: formData,
+    });
+  } else {
+    // Use JSON for requests without image (existing functionality)
+    const { image, ...jsonRequest } = request;
+    response = await fetch(`${API_BASE_URL}/api/pois`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(jsonRequest),
+    });
+  }
 
   console.log('📨 API: POI creation response status:', response.status);
 
@@ -340,6 +364,7 @@ export function transformToCreatePOIRequest(
     description: string;
     maxParticipants: number;
     position: { lat: number; lng: number };
+    image?: File;
   },
   userId: string,
   mapId: string = 'default-map'
@@ -350,7 +375,8 @@ export function transformToCreatePOIRequest(
     description: formData.description,
     position: formData.position,
     createdBy: userId,
-    maxParticipants: formData.maxParticipants
+    maxParticipants: formData.maxParticipants,
+    image: formData.image
   };
 }
 
@@ -362,6 +388,7 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
   participantCount: number;
   maxParticipants: number;
   participants?: Array<{ id: string; name: string }>;
+  imageUrl?: string;
   createdBy: string;
   createdAt: Date;
 } {
@@ -373,6 +400,7 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
     participantCount: apiResponse.participantCount || 0,
     maxParticipants: apiResponse.maxParticipants,
     participants: apiResponse.participants,
+    imageUrl: apiResponse.imageUrl,
     createdBy: apiResponse.createdBy,
     createdAt: new Date(apiResponse.createdAt)
   };

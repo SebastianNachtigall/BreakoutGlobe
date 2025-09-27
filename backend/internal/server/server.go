@@ -23,6 +23,7 @@ import (
 	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
+	"breakoutglobe/internal/services/uploads"
 	"breakoutglobe/internal/websocket"
 )
 
@@ -131,6 +132,9 @@ func (s *Server) setupRoutes() {
 		
 		// Serve uploaded avatar files
 		api.GET("/users/avatar/:filename", s.serveAvatar)
+		
+		// Serve uploaded POI images
+		s.router.Static("/uploads", "./uploads")
 	}
 	
 	// WebSocket handler setup removed during phantom debugging
@@ -174,8 +178,13 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		poiParticipants := redis.NewPOIParticipants(s.redis)
 		pubsub := redis.NewPubSub(s.redis)
 		
-		// Create POI service
-		poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub)
+		// Create image uploader
+		uploadDir := filepath.Join(".", "uploads")
+		baseURL := "http://localhost:8080" // TODO: Make this configurable
+		imageUploader := uploads.NewImageUploader(uploadDir, baseURL)
+		
+		// Create POI service with image uploader
+		poiService := services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader)
 		
 		// Create rate limiter (simple in-memory for now)
 		rateLimiter := &SimpleRateLimiter{}
