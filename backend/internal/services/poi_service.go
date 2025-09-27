@@ -337,12 +337,20 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 		return fmt.Errorf("failed to join POI: %w", err)
 	}
 
+	// Get updated participant count
+	currentCount, err := s.participants.GetParticipantCount(ctx, poiID)
+	if err != nil {
+		currentCount = 0 // Fallback to 0 if we can't get the count
+	}
+
 	// Publish POI joined event
 	joinedEvent := redis.POIJoinedEvent{
-		POIID:     poiID,
-		MapID:     poi.MapID,
-		UserID:    userID,
-		Timestamp: time.Now(),
+		POIID:        poiID,
+		MapID:        poi.MapID,
+		UserID:       userID,
+		SessionID:    userID, // For now, use userID as sessionID
+		CurrentCount: currentCount,
+		Timestamp:    time.Now(),
 	}
 
 	if err := s.pubsub.PublishPOIJoined(ctx, joinedEvent); err != nil {
@@ -378,12 +386,20 @@ func (s *POIService) LeavePOI(ctx context.Context, poiID, userID string) error {
 		return fmt.Errorf("failed to leave POI: %w", err)
 	}
 
+	// Get updated participant count
+	currentCount, err := s.participants.GetParticipantCount(ctx, poiID)
+	if err != nil {
+		currentCount = 0 // Fallback to 0 if we can't get the count
+	}
+
 	// Publish POI left event
 	leftEvent := redis.POILeftEvent{
-		POIID:     poiID,
-		MapID:     poi.MapID,
-		UserID:    userID,
-		Timestamp: time.Now(),
+		POIID:        poiID,
+		MapID:        poi.MapID,
+		UserID:       userID,
+		SessionID:    userID, // For now, use userID as sessionID
+		CurrentCount: currentCount,
+		Timestamp:    time.Now(),
 	}
 
 	if err := s.pubsub.PublishPOILeft(ctx, leftEvent); err != nil {
