@@ -379,6 +379,14 @@ func (m *MockPOIService) CreatePOI(ctx context.Context, mapID, name, description
 	return args.Get(0).(*models.POI), args.Error(1)
 }
 
+func (m *MockPOIService) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile []byte, imageFilename string) (*models.POI, error) {
+	args := m.Called(ctx, mapID, name, description, position, createdBy, maxParticipants, imageFile, imageFilename)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.POI), args.Error(1)
+}
+
 func (m *MockPOIService) GetPOI(ctx context.Context, poiID string) (*models.POI, error) {
 	args := m.Called(ctx, poiID)
 	if args.Get(0) == nil {
