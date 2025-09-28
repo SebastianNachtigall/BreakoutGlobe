@@ -16,6 +16,7 @@ import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
+import { SessionService } from './services/session-service'
 import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, getPOIs } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
 
@@ -50,6 +51,7 @@ function App() {
 
   // Local component state
   const [wsClient, setWsClient] = useState<WebSocketClient | null>(null)
+  const [sessionService, setSessionService] = useState<SessionService | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<WSConnectionStatus>(WSConnectionStatus.DISCONNECTED)
   const [isInitialized, setIsInitialized] = useState(false)
   const [selectedPOI, setSelectedPOI] = useState<POIData | null>(null)
@@ -133,7 +135,45 @@ function App() {
         // Create or restore session
         let sessionId = sessionState.sessionId
 
+        // Get the current profile from the store (more reliable than state)
+        const currentProfile = userProfileStore.getState().getProfileOffline()
+        console.log('🔍 Session creation - currentProfile:', currentProfile?.id, currentProfile?.displayName)
+        
+        // First, check if we have an existing session for this user
+        if (currentProfile?.id) {
+          try {
+            console.log('🔍 Checking for existing sessions for user:', currentProfile.id)
+            const mapResponse = await fetch(`http://localhost:8080/api/maps/default-map/sessions`)
+            if (mapResponse.ok) {
+              const mapData = await mapResponse.json()
+              console.log('📋 Map sessions:', mapData.sessions?.length || 0)
+              const existingSession = mapData.sessions?.find((s: any) => s.userId === currentProfile.id)
+              if (existingSession) {
+                console.log('✅ Found existing session for user:', existingSession.sessionId)
+                sessionId = existingSession.sessionId
+                // Update session store with existing session
+                sessionStore.getState().createSession(sessionId, existingSession.avatarPosition || mockSession.position)
+              } else {
+                console.log('❌ No existing session found for user:', currentProfile.id)
+              }
+            } else {
+              console.warn('⚠️ Failed to fetch map sessions:', mapResponse.status)
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to check existing sessions:', error)
+          }
+        } else {
+          console.warn('⚠️ No user profile available for session creation')
+        }
+
         if (!sessionId) {
+          // Ensure we have a user profile before creating session
+          if (!currentProfile?.id) {
+            throw new Error('Cannot create session: User profile not loaded')
+          }
+          
+          console.log('🔄 Creating new session for user:', currentProfile.id)
+          
           // Create new session via API
           const response = await fetch('http://localhost:8080/api/sessions', {
             method: 'POST',
@@ -141,22 +181,50 @@ function App() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              userId: userProfile?.id || `user-${Date.now()}`, // Use profile ID if available
-              mapId: 'default-map', // Use a default map ID for now
+              userId: currentProfile.id,
+              mapId: 'default-map',
               avatarPosition: mockSession.position
             }),
           })
 
+          let position = mockSession.position
+          
           if (!response.ok) {
-            throw new Error('Failed to create session')
+            if (response.status === 409) {
+              // User already has an active session, get existing sessions for this map
+              console.log('🔄 User already has active session, fetching existing sessions')
+              const mapResponse = await fetch(`http://localhost:8080/api/maps/default-map/sessions`)
+              if (mapResponse.ok) {
+                const mapData = await mapResponse.json()
+                const userSession = mapData.sessions?.find((s: any) => s.userId === currentProfile.id)
+                if (userSession) {
+                  sessionId = userSession.sessionId
+                  position = userSession.avatarPosition || mockSession.position
+                  console.log('✅ Using existing session:', sessionId)
+                } else {
+                  throw new Error('User has active session but could not find it')
+                }
+              } else {
+                throw new Error('Failed to get existing sessions')
+              }
+            } else {
+              throw new Error('Failed to create session')
+            }
+          } else {
+            // New session created successfully
+            const sessionData = await response.json()
+            sessionId = sessionData.sessionId || sessionData.id
+            position = sessionData.position || mockSession.position
           }
 
-          const sessionData = await response.json()
-          sessionId = sessionData.sessionId || sessionData.id
-
           // Update session store
-          sessionStore.getState().createSession(sessionId!, sessionData.position || mockSession.position)
+          sessionStore.getState().createSession(sessionId!, position)
         }
+
+        // Initialize session service for heartbeats (for both new and existing sessions)
+        const sessionSvc = new SessionService(sessionId!);
+        setSessionService(sessionSvc);
+        sessionSvc.startHeartbeat();
 
         // Initialize WebSocket connection
         const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`;
@@ -196,7 +264,7 @@ function App() {
           }
         })
 
-        // Connect WebSocket (non-blocking for POC)
+        // Connect WebSocket with session recovery
         try {
           await client.connect()
           setWsClient(client)
@@ -208,8 +276,21 @@ function App() {
           client.requestInitialUsers()
           console.log('✅ WebSocket connected successfully')
         } catch (wsError) {
-          console.warn('⚠️ WebSocket connection failed, continuing without real-time features:', wsError)
-          // Continue without WebSocket for POC testing
+          console.warn('⚠️ WebSocket connection failed, attempting session recovery:', wsError)
+          
+          // If WebSocket fails, it might be due to invalid session
+          // Clear the session and try to create a new one
+          console.log('🔄 Clearing invalid session and creating new one...')
+          sessionStore.getState().reset()
+          
+          // Retry initialization with fresh session
+          try {
+            await initializeApp()
+            return // Exit current initialization attempt
+          } catch (retryError) {
+            console.error('❌ Session recovery failed:', retryError)
+            // Continue without WebSocket for POC testing
+          }
         }
 
         // Load initial POIs
@@ -239,6 +320,9 @@ function App() {
     return () => {
       if (wsClient) {
         wsClient.disconnect()
+      }
+      if (sessionService) {
+        sessionService.stopHeartbeat()
       }
     }
   }, [])
@@ -504,7 +588,7 @@ function App() {
               videoCallStore.getState().addGroupCallParticipant(participant.id, {
                 userId: participant.id,
                 displayName: participant.name || 'Unknown User',
-                avatarURL: participant.avatarUrl
+                avatarURL: participant.avatarUrl || undefined
               })
               
               // Add peer connection for the participant

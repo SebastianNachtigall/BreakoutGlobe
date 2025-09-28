@@ -7,11 +7,13 @@ This design extends the existing peer-to-peer video calling system to support gr
 ## Architecture
 
 ### High-Level Flow
-1. User joins a POI via existing `poi_join` websocket message
-2. Backend checks if POI has active group video call
-3. If active call exists, user is automatically added to the group call
-4. WebRTC mesh network is established between all participants in the POI
-5. When user leaves POI, they are automatically removed from group call
+1. User connects to WebSocket and session is persisted to database
+2. User joins a POI via existing `poi_join` websocket message
+3. Backend checks if POI has active group video call
+4. If active call exists, user is automatically added to the group call
+5. WebRTC mesh network is established between all participants in the POI
+6. Display names are resolved using persisted session and user data
+7. When user leaves POI, they are automatically removed from group call
 
 ### Component Integration
 - **Existing POI System**: Leverage current POI join/leave mechanics
@@ -69,6 +71,13 @@ type GroupCallMessage struct {
     POIId string `json:"poiId"`
     ParticipantId string `json:"participantId"`
     Data interface{} `json:"data"`
+}
+
+// Session persistence on WebSocket connection
+func (h *WebSocketHandler) HandleConnection(c *gin.Context) {
+    // Ensure session exists in database before allowing WebSocket connection
+    // Create session if it doesn't exist
+    // Associate session with user for display name resolution
 }
 ```
 

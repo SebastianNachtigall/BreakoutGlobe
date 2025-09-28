@@ -150,12 +150,30 @@ export const GroupCallModal: React.FC<GroupCallModalProps> = ({
     return null;
   };
 
+  // Calculate optimal grid layout based on participant count
+  const getGridLayout = (participantCount: number) => {
+    if (participantCount <= 1) return { cols: 1, rows: 1, gridClass: 'grid-cols-1', height: 'h-80' };
+    if (participantCount <= 2) return { cols: 2, rows: 1, gridClass: 'grid-cols-2', height: 'h-80' };
+    if (participantCount <= 4) return { cols: 2, rows: 2, gridClass: 'grid-cols-2', height: 'h-96' };
+    if (participantCount <= 6) return { cols: 3, rows: 2, gridClass: 'grid-cols-3', height: 'h-96' };
+    // For more than 6, still use 3x2 but some will be hidden/scrollable
+    return { cols: 3, rows: 2, gridClass: 'grid-cols-3', height: 'h-96' };
+  };
+
   const renderVideoArea = () => {
     if (participants.size > 0) {
+      console.log('🎥 GroupCallModal: Rendering participants:', Array.from(participants.entries()).map(([userId, participant]) => ({
+        userId,
+        displayName: participant.displayName,
+        avatarUrl: participant.avatarUrl
+      })));
+      
+      const layout = getGridLayout(participants.size);
+      
       return (
-        <div className="relative bg-gray-900 h-80 rounded-lg overflow-hidden mb-6">
+        <div className={`relative bg-gray-900 ${layout.height} rounded-lg overflow-hidden mb-6`}>
           {/* Remote video grid */}
-          <div className="grid grid-cols-2 gap-2 h-full p-2">
+          <div className={`grid ${layout.gridClass} gap-2 h-full p-2`}>
             {Array.from(participants.entries()).map(([userId, participant]) => {
               const stream = remoteStreams.get(userId);
               return (

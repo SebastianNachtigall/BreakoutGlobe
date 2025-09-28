@@ -54,7 +54,7 @@ describe('GroupWebRTCService', () => {
       await service.addPeer(userId);
       
       expect(service.peerConnections.has(userId)).toBe(true);
-      expect(RTCPeerConnection).toHaveBeenCalledTimes(2); // Initial + new peer
+      expect(RTCPeerConnection).toHaveBeenCalledTimes(1); // Only new peer (no initial peer connection)
     });
 
     it('should remove peer connection for user', async () => {
@@ -169,3 +169,82 @@ describe('GroupWebRTCService', () => {
     });
   });
 });
+
+describe('multiple participants (3+)', () => {
+    it('should handle 3 peer connections simultaneously', async () => {
+      const service = new GroupWebRTCService();
+      
+      // Add 3 peers
+      await service.addPeer('user-1');
+      await service.addPeer('user-2');
+      await service.addPeer('user-3');
+      
+      expect(service.peerConnections.size).toBe(3);
+      expect(service.peerConnections.has('user-1')).toBe(true);
+      expect(service.peerConnections.has('user-2')).toBe(true);
+      expect(service.peerConnections.has('user-3')).toBe(true);
+    });
+
+    it('should handle 6 peer connections (maximum)', async () => {
+      const service = new GroupWebRTCService();
+      
+      // Add 6 peers
+      for (let i = 1; i <= 6; i++) {
+        await service.addPeer(`user-${i}`);
+      }
+      
+      expect(service.peerConnections.size).toBe(6);
+      
+      // All peers should be tracked
+      for (let i = 1; i <= 6; i++) {
+        expect(service.peerConnections.has(`user-${i}`)).toBe(true);
+      }
+    });
+
+    it('should create offers for all peers when adding multiple', async () => {
+      const service = new GroupWebRTCService();
+      const mockCallbacks = {
+        onLocalStream: vi.fn(),
+        onRemoteStreamForUser: vi.fn(),
+        onIceCandidate: vi.fn(),
+        onPeerConnectionStateChange: vi.fn(),
+        onError: vi.fn()
+      };
+      
+      service.setCallbacks(mockCallbacks);
+      
+      // Add 3 peers
+      await service.addPeer('user-1');
+      await service.addPeer('user-2');
+      await service.addPeer('user-3');
+      
+      // Should create offers for all 3 peers
+      expect(service.peerConnections.size).toBe(3);
+      
+      // Create offers for all peers
+      await service.createOfferForPeer('user-1');
+      await service.createOfferForPeer('user-2');
+      await service.createOfferForPeer('user-3');
+      
+      // All should succeed without errors
+      expect(mockCallbacks.onError).not.toHaveBeenCalled();
+    });
+
+    it('should clean up all peer connections when disposing', async () => {
+      const service = new GroupWebRTCService();
+      
+      // Add multiple peers
+      await service.addPeer('user-1');
+      await service.addPeer('user-2');
+      await service.addPeer('user-3');
+      await service.addPeer('user-4');
+      
+      expect(service.peerConnections.size).toBe(4);
+      
+      // Clean up
+      service.cleanup();
+      
+      expect(service.peerConnections.size).toBe(0);
+      expect(service.remoteStreams.size).toBe(0);
+    });
+  });

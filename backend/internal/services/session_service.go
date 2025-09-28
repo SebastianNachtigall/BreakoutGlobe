@@ -16,6 +16,7 @@ import (
 type SessionRepository interface {
 	Create(session *models.Session) error
 	GetByID(id string) (*models.Session, error)
+	GetByIDWithUser(id string) (*models.Session, error)
 	GetByUserAndMap(userID, mapID string) (*models.Session, error)
 	Update(session *models.Session) error
 	UpdateAvatarPosition(sessionID string, position models.LatLng) error
@@ -126,7 +127,7 @@ func (s *SessionService) GetSession(ctx context.Context, sessionID string) (*mod
 		return nil, fmt.Errorf("session ID is required")
 	}
 
-	session, err := s.repo.GetByID(sessionID)
+	session, err := s.repo.GetByIDWithUser(sessionID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("session not found")

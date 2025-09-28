@@ -27,3 +27,14 @@ This feature extends the existing user-to-user video functionality to support gr
 3. WHEN a user leaves my POI THEN the system SHALL remove their video feed from my call interface
 4. WHEN no other users are in my POI THEN the system SHALL show only my own video feed
 
+### Requirement 3
+
+**User Story:** As a user, I want to see proper display names for other participants in group video calls, so that I can identify who I'm talking to.
+
+#### Acceptance Criteria
+
+1. WHEN I join a POI group call THEN the system SHALL display the correct display names for all participants
+2. WHEN a user connects to the system THEN the system SHALL persist their session information to the database
+3. WHEN resolving display names for video calls THEN the system SHALL successfully retrieve user and session information from the database
+4. WHEN session lookup fails THEN the system SHALL gracefully fallback to using the user ID as display name
+

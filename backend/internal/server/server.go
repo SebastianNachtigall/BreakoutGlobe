@@ -119,10 +119,8 @@ func (s *Server) setupRoutes() {
 			})
 		})
 		
-		// Simple session endpoints for testing
-		api.POST("/sessions", s.createSession)
-		api.GET("/sessions/:sessionId", s.getSession)
-		api.PUT("/sessions/:sessionId/avatar", s.updateAvatarPosition)
+		// Setup session routes with proper handlers
+		s.setupSessionRoutes(api)
 		
 		// Setup POI routes with proper handlers
 		s.setupPOIRoutes(api)
@@ -140,6 +138,38 @@ func (s *Server) setupRoutes() {
 	}
 	
 	// WebSocket handler setup removed during phantom debugging
+}
+
+func (s *Server) setupSessionRoutes(api *gin.RouterGroup) {
+	log.Printf("🔧 setupSessionRoutes called, db is nil: %v, redis is nil: %v", s.db == nil, s.redis == nil)
+	
+	// Only setup session routes if database and Redis are available (not in test mode)
+	if s.db != nil && s.redis != nil {
+		log.Println("📊 Database and Redis available, setting up session routes with proper handlers")
+		
+		// Setup dependencies
+		sessionRepo := repository.NewSessionRepository(s.db)
+		sessionPresence := redis.NewSessionPresence(s.redis)
+		pubsub := redis.NewPubSub(s.redis) // Add the missing pubsub parameter
+		sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
+		
+		// Create rate limiter (simple in-memory for now)
+		rateLimiter := &SimpleRateLimiter{}
+		
+		// Create session handler
+		sessionHandler := handlers.NewSessionHandler(sessionService, rateLimiter)
+		
+		// Register session routes (this includes the heartbeat endpoint)
+		sessionHandler.RegisterRoutes(s.router)
+		
+		log.Println("✅ Session routes setup complete with proper handlers including heartbeat")
+	} else {
+		log.Println("⚠️ Database or Redis not available, using simple session endpoints for testing")
+		// Fallback to simple session endpoints for testing
+		api.POST("/sessions", s.createSession)
+		api.GET("/sessions/:sessionId", s.getSession)
+		api.PUT("/sessions/:sessionId/avatar", s.updateAvatarPosition)
+	}
 }
 
 func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
@@ -216,11 +246,11 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 func (s *Server) setupWebSocketHandler(userService *services.UserService, rateLimiter services.RateLimiterInterface, poiService *services.POIService) {
 	log.Println("🔧 Setting up WebSocket handler...")
 	
-	// Create a simple session service adapter for the WebSocket handler
-	sessionService := &SimpleSessionService{
-		server:    s,
-		positions: make(map[string]models.LatLng),
-	}
+	// Use the proper session service with database validation
+	sessionRepo := repository.NewSessionRepository(s.db)
+	sessionPresence := redis.NewSessionPresence(s.redis)
+	pubsub := redis.NewPubSub(s.redis)
+	sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
 	
 	// Create WebSocket handler
 	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService, poiService)

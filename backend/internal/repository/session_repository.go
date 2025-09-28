@@ -14,6 +14,7 @@ import (
 type SessionRepository interface {
 	Create(session *models.Session) error
 	GetByID(id string) (*models.Session, error)
+	GetByIDWithUser(id string) (*models.Session, error)
 	GetByUserAndMap(userID, mapID string) (*models.Session, error)
 	Update(session *models.Session) error
 	UpdateAvatarPosition(sessionID string, position models.LatLng) error
@@ -86,6 +87,29 @@ func (r *sessionRepository) GetByID(id string) (*models.Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	return &session, nil
+}
+
+// GetByIDWithUser retrieves a session by its ID with User relationship preloaded
+func (r *sessionRepository) GetByIDWithUser(id string) (*models.Session, error) {
+	ctx := context.Background()
+	var session models.Session
+	
+	// Debug: Log the query
+	fmt.Printf("🔍 GetByIDWithUser: Looking for session ID: %s\n", id)
+	
+	err := r.db.WithContext(ctx).Preload("User").Where("id = ?", id).First(&session).Error
+	if err != nil {
+		fmt.Printf("❌ GetByIDWithUser: Error finding session: %v\n", err)
+		return nil, err
+	}
+	
+	// Debug: Log what we found
+	fmt.Printf("✅ GetByIDWithUser: Found session, User loaded: %t\n", session.User != nil)
+	if session.User != nil {
+		fmt.Printf("👤 GetByIDWithUser: User display name: %s\n", session.User.DisplayName)
+	}
+	
 	return &session, nil
 }
 

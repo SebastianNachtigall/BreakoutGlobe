@@ -431,11 +431,21 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   },
 
   addGroupCallParticipant: (userId: string, participant: GroupCallParticipant) => {
-    console.log('👥 Adding group call participant:', participant.displayName);
+    console.log('👥 Adding group call participant:', {
+      userId,
+      displayName: participant.displayName,
+      avatarUrl: participant.avatarUrl,
+      participant
+    });
     const { groupCallParticipants } = get();
     const newParticipants = new Map(groupCallParticipants);
     newParticipants.set(userId, participant);
     set({ groupCallParticipants: newParticipants });
+    
+    console.log('👥 Group call participants after adding:', Array.from(newParticipants.entries()).map(([id, p]) => ({
+      userId: id,
+      displayName: p.displayName
+    })));
   },
 
   removeGroupCallParticipant: (userId: string) => {

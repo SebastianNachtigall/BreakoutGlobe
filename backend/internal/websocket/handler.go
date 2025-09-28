@@ -851,6 +851,25 @@ func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message
 		h.logger.Warn("Failed to send POI join acknowledgment", "sessionId", client.SessionID)
 	}
 	
+	// Get user display name for the broadcast
+	session, err := h.sessionService.GetSession(ctx, client.SessionID)
+	var displayName string
+	if err != nil || session == nil || session.User == nil {
+		displayName = client.UserID // Fallback to user ID
+	} else {
+		displayName = session.User.DisplayName
+		if displayName == "" {
+			displayName = client.UserID // Fallback if display name is empty
+		}
+	}
+	
+	h.logger.Info("🏷️ POI join display name resolved", 
+		"sessionId", client.SessionID,
+		"userId", client.UserID,
+		"displayName", displayName,
+		"hasSession", session != nil,
+		"hasUser", session != nil && session.User != nil)
+
 	// Broadcast POI join event to other clients in the same map
 	broadcastMsg := Message{
 		Type: "poi_joined",
@@ -859,6 +878,13 @@ func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message
 			"sessionId": client.SessionID,
 			"userId": client.UserID,
 			"poiId": poiID,
+			"participants": []map[string]interface{}{
+				{
+					"id": client.UserID,
+					"name": displayName,
+					"avatarUrl": nil, // TODO: Add avatar URL if available
+				},
+			},
 		},
 	}
 	
@@ -933,6 +959,18 @@ func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Messag
 		h.logger.Warn("Failed to send POI leave acknowledgment", "sessionId", client.SessionID)
 	}
 	
+	// Get user display name for the broadcast
+	session, err := h.sessionService.GetSession(ctx, client.SessionID)
+	var displayName string
+	if err != nil || session == nil || session.User == nil {
+		displayName = client.UserID // Fallback to user ID
+	} else {
+		displayName = session.User.DisplayName
+		if displayName == "" {
+			displayName = client.UserID // Fallback if display name is empty
+		}
+	}
+
 	// Broadcast POI leave event to other clients in the same map
 	broadcastMsg := Message{
 		Type: "poi_left",
@@ -941,6 +979,13 @@ func (h *Handler) handlePOILeave(ctx context.Context, client *Client, msg Messag
 			"sessionId": client.SessionID,
 			"userId": client.UserID,
 			"poiId": poiID,
+			"participants": []map[string]interface{}{
+				{
+					"id": client.UserID,
+					"name": displayName,
+					"avatarUrl": nil, // TODO: Add avatar URL if available
+				},
+			},
 		},
 	}
 	
@@ -1661,13 +1706,36 @@ func (h *Handler) handlePOICallOffer(ctx context.Context, client *Client, msg Me
 		return
 	}
 	
+	// Get user display name for the offer
+	session, err := h.sessionService.GetSession(ctx, client.SessionID)
+	var displayName string
+	if err != nil || session == nil {
+		h.logger.Warn("Failed to get session for display name", "sessionId", client.SessionID, "error", err)
+		displayName = client.UserID // Fallback to user ID
+	} else if session.User != nil {
+		displayName = session.User.DisplayName
+		if displayName == "" {
+			displayName = client.UserID // Fallback if display name is empty
+		}
+	} else {
+		displayName = client.UserID // Fallback if user not loaded
+	}
+	
+	h.logger.Info("🏷️ POI call offer display name resolved", 
+		"sessionId", client.SessionID,
+		"userId", client.UserID,
+		"displayName", displayName,
+		"hasSession", session != nil,
+		"hasUser", session != nil && session.User != nil)
+
 	// Create POI call offer message for target user
 	offerMsg := Message{
 		Type: "poi_call_offer",
 		Data: map[string]interface{}{
-			"poiId":      poiID,
-			"fromUserId": client.UserID,
-			"sdp":        sdp,
+			"poiId":       poiID,
+			"fromUserId":  client.UserID,
+			"displayName": displayName,
+			"sdp":         sdp,
 		},
 		Timestamp: time.Now(),
 	}
@@ -1678,6 +1746,7 @@ func (h *Handler) handlePOICallOffer(ctx context.Context, client *Client, msg Me
 	h.logger.Info("📞 POI call offer sent to target user", 
 		"poiId", poiID,
 		"from", client.UserID,
+		"fromDisplayName", displayName,
 		"to", targetUserId)
 }
 

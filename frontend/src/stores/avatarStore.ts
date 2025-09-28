@@ -24,6 +24,7 @@ interface AvatarState {
   getOtherUsersAvatars: () => AvatarData[];
   getAvatarsForCurrentMap: () => AvatarData[];
   getAvatarBySessionId: (sessionId: string) => AvatarData | undefined;
+  getAvatarByUserId: (userId: string) => AvatarData | undefined;
 }
 
 export const avatarStore = create<AvatarState>((set, get) => ({
@@ -167,5 +168,15 @@ export const avatarStore = create<AvatarState>((set, get) => ({
   getAvatarBySessionId: (sessionId: string) => {
     const state = get();
     return state.avatars.get(sessionId);
+  },
+  
+  getAvatarByUserId: (userId: string) => {
+    const state = get();
+    for (const avatar of state.avatars.values()) {
+      if (avatar.userId === userId) {
+        return avatar;
+      }
+    }
+    return undefined;
   }
 }));
