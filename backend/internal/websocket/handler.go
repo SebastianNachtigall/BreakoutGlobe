@@ -367,6 +367,12 @@ func (h *Handler) handleMessage(client *Client, msg Message) {
 		h.handleWebRTCAnswer(ctx, client, msg)
 	case "ice_candidate":
 		h.handleICECandidate(ctx, client, msg)
+	case "poi_call_offer":
+		h.handlePOICallOffer(ctx, client, msg)
+	case "poi_call_answer":
+		h.handlePOICallAnswer(ctx, client, msg)
+	case "poi_call_ice_candidate":
+		h.handlePOICallICECandidate(ctx, client, msg)
 	default:
 		errorMsg := Message{
 			Type: "error",
@@ -728,6 +734,48 @@ func validateMessage(msg Message) error {
 		
 		if _, ok := data["candidate"]; !ok {
 			return errors.New("candidate is required for ICE candidate")
+		}
+		
+		return nil
+		
+	case "poi_call_offer", "poi_call_answer":
+		// Validate POI call offer/answer messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["poiId"].(string); !ok {
+			return errors.New("poiId is required for POI call offer/answer")
+		}
+		
+		if _, ok := data["targetUserId"].(string); !ok {
+			return errors.New("targetUserId is required for POI call offer/answer")
+		}
+		
+		if _, ok := data["sdp"]; !ok {
+			return errors.New("sdp is required for POI call offer/answer")
+		}
+		
+		return nil
+		
+	case "poi_call_ice_candidate":
+		// Validate POI call ICE candidate messages
+		data, ok := msg.Data.(map[string]interface{})
+		if !ok {
+			return errors.New("invalid data format")
+		}
+		
+		if _, ok := data["poiId"].(string); !ok {
+			return errors.New("poiId is required for POI call ICE candidate")
+		}
+		
+		if _, ok := data["targetUserId"].(string); !ok {
+			return errors.New("targetUserId is required for POI call ICE candidate")
+		}
+		
+		if _, ok := data["candidate"]; !ok {
+			return errors.New("candidate is required for POI call ICE candidate")
 		}
 		
 		return nil
@@ -1580,3 +1628,156 @@ func (h *Handler) handlePOIUpdatedEvent(data interface{}) {
 	
 	h.logger.Info("📢 Broadcasted POI updated event", "mapId", mapID, "poiId", poiData["poiId"])
 }
+
+// POI Call Handlers
+
+// handlePOICallOffer processes POI-based WebRTC offers
+func (h *Handler) handlePOICallOffer(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("📞 POI call offer received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid POI call offer data format")
+		return
+	}
+	
+	poiID, ok := data["poiId"].(string)
+	if !ok || poiID == "" {
+		h.sendErrorMessage(client, "POI ID is required for POI call offer")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for POI call offer")
+		return
+	}
+	
+	sdp, ok := data["sdp"]
+	if !ok {
+		h.sendErrorMessage(client, "SDP is required for POI call offer")
+		return
+	}
+	
+	// Create POI call offer message for target user
+	offerMsg := Message{
+		Type: "poi_call_offer",
+		Data: map[string]interface{}{
+			"poiId":      poiID,
+			"fromUserId": client.UserID,
+			"sdp":        sdp,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send offer to target user
+	h.manager.BroadcastToUser(targetUserId, offerMsg, client.SessionID)
+	
+	h.logger.Info("📞 POI call offer sent to target user", 
+		"poiId", poiID,
+		"from", client.UserID,
+		"to", targetUserId)
+}
+
+// handlePOICallAnswer processes POI-based WebRTC answers
+func (h *Handler) handlePOICallAnswer(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("✅ POI call answer received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid POI call answer data format")
+		return
+	}
+	
+	poiID, ok := data["poiId"].(string)
+	if !ok || poiID == "" {
+		h.sendErrorMessage(client, "POI ID is required for POI call answer")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for POI call answer")
+		return
+	}
+	
+	sdp, ok := data["sdp"]
+	if !ok {
+		h.sendErrorMessage(client, "SDP is required for POI call answer")
+		return
+	}
+	
+	// Create POI call answer message for target user
+	answerMsg := Message{
+		Type: "poi_call_answer",
+		Data: map[string]interface{}{
+			"poiId":      poiID,
+			"fromUserId": client.UserID,
+			"sdp":        sdp,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send answer to target user
+	h.manager.BroadcastToUser(targetUserId, answerMsg, client.SessionID)
+	
+	h.logger.Info("✅ POI call answer sent to target user", 
+		"poiId", poiID,
+		"from", client.UserID,
+		"to", targetUserId)
+}
+
+// handlePOICallICECandidate processes POI-based ICE candidates
+func (h *Handler) handlePOICallICECandidate(ctx context.Context, client *Client, msg Message) {
+	h.logger.Info("🧊 POI call ICE candidate received", 
+		"sessionId", client.SessionID, 
+		"userId", client.UserID)
+	
+	data, ok := msg.Data.(map[string]interface{})
+	if !ok {
+		h.sendErrorMessage(client, "Invalid POI call ICE candidate data format")
+		return
+	}
+	
+	poiID, ok := data["poiId"].(string)
+	if !ok || poiID == "" {
+		h.sendErrorMessage(client, "POI ID is required for POI call ICE candidate")
+		return
+	}
+	
+	targetUserId, ok := data["targetUserId"].(string)
+	if !ok || targetUserId == "" {
+		h.sendErrorMessage(client, "Target user ID is required for POI call ICE candidate")
+		return
+	}
+	
+	candidate, ok := data["candidate"]
+	if !ok {
+		h.sendErrorMessage(client, "Candidate is required for POI call ICE candidate")
+		return
+	}
+	
+	// Create POI call ICE candidate message for target user
+	candidateMsg := Message{
+		Type: "poi_call_ice_candidate",
+		Data: map[string]interface{}{
+			"poiId":      poiID,
+			"fromUserId": client.UserID,
+			"candidate":  candidate,
+		},
+		Timestamp: time.Now(),
+	}
+	
+	// Send ICE candidate to target user
+	h.manager.BroadcastToUser(targetUserId, candidateMsg, client.SessionID)
+	
+	h.logger.Info("🧊 POI call ICE candidate sent to target user", 
+		"poiId", poiID,
+		"from", client.UserID,
+		"to", targetUserId)
+}
+

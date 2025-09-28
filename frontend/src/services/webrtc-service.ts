@@ -20,7 +20,7 @@ export class WebRTCService {
   private localStream: MediaStream | null = null;
   private callbacks: PeerConnectionCallbacks = {};
   
-  private readonly defaultConfig: WebRTCConfig = {
+  protected readonly defaultConfig: WebRTCConfig = {
     iceServers: [
       // STUN servers for NAT discovery
       { urls: 'stun:stun.l.google.com:19302' },
@@ -56,7 +56,7 @@ export class WebRTCService {
     this.initializePeerConnection(finalConfig);
   }
 
-  private initializePeerConnection(config: WebRTCConfig): void {
+  protected initializePeerConnection(config: WebRTCConfig): void {
     try {
       this.peerConnection = new RTCPeerConnection(config);
       this.setupPeerConnectionHandlers();
@@ -320,5 +320,248 @@ export class WebRTCService {
     this.callbacks = {};
 
     console.log('✅ WebRTC: Cleanup completed');
+  }
+}
+
+export interface GroupPeerConnectionCallbacks extends PeerConnectionCallbacks {
+  onRemoteStreamForUser?: (userId: string, stream: MediaStream) => void;
+  onPeerConnectionStateChange?: (userId: string, state: RTCPeerConnectionState) => void;
+}
+
+export class GroupWebRTCService extends WebRTCService {
+  public peerConnections: Map<string, RTCPeerConnection> = new Map();
+  public remoteStreams: Map<string, MediaStream> = new Map();
+  private groupCallbacks: GroupPeerConnectionCallbacks = {};
+
+  constructor(config?: Partial<WebRTCConfig>) {
+    super(config);
+  }
+
+  // Override to prevent parent class from creating a main peer connection
+  protected initializePeerConnection(config: WebRTCConfig): void {
+    // Don't create the main peer connection for group calls
+    // We'll create individual peer connections as needed
+    console.log('🔗 WebRTC: Group service initialized (no main peer connection)');
+  }
+
+  public setCallbacks(callbacks: GroupPeerConnectionCallbacks): void {
+    super.setCallbacks(callbacks);
+    this.groupCallbacks = { ...this.groupCallbacks, ...callbacks };
+  }
+
+  public setWebSocketClient(wsClient: any): void {
+    this.wsClient = wsClient;
+  }
+
+  private wsClient: any = null;
+
+  public async addPeer(userId: string): Promise<void> {
+    if (this.peerConnections.has(userId)) {
+      console.warn(`⚠️ WebRTC: Peer connection already exists for user: ${userId}`);
+      return;
+    }
+
+    console.log(`🔗 WebRTC: Adding peer connection for user: ${userId}`);
+    
+    try {
+      const peerConnection = new RTCPeerConnection(this.defaultConfig);
+      this.setupPeerConnectionHandlers(peerConnection, userId);
+      
+      // Add local stream tracks if available
+      const localStream = this.getLocalStream();
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          peerConnection.addTrack(track, localStream);
+        });
+        console.log(`📤 WebRTC: Local tracks added to peer connection for user: ${userId}`);
+      }
+      
+      this.peerConnections.set(userId, peerConnection);
+      console.log(`✅ WebRTC: Peer connection created for user: ${userId}`);
+      
+      // Automatically create and send offer for the new peer
+      this.createOfferForPeer(userId).then((offer) => {
+        console.log(`📝 WebRTC: Offer created for user: ${userId}, sending via WebSocket`);
+        
+        // Send offer via WebSocket for POI group calls
+        if (this.wsClient && this.wsClient.isConnected()) {
+          import('../stores/videoCallStore').then(({ videoCallStore }) => {
+            const currentPOI = videoCallStore.getState().currentPOI;
+            if (currentPOI) {
+              this.wsClient.sendPOICallOffer(currentPOI, userId, offer);
+            }
+          });
+        }
+      }).catch((error) => {
+        console.error(`❌ WebRTC: Failed to create offer for user ${userId}:`, error);
+      });
+      
+    } catch (error) {
+      console.error(`❌ WebRTC: Failed to create peer connection for user ${userId}:`, error);
+      this.groupCallbacks.onError?.(error as Error);
+      throw error;
+    }
+  }
+
+  public removePeer(userId: string): void {
+    console.log(`🗑️ WebRTC: Removing peer connection for user: ${userId}`);
+    
+    const peerConnection = this.peerConnections.get(userId);
+    if (peerConnection) {
+      // Clean up event handlers
+      peerConnection.onicecandidate = null;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.oniceconnectionstatechange = null;
+      peerConnection.onicegatheringstatechange = null;
+      
+      // Close connection
+      peerConnection.close();
+      this.peerConnections.delete(userId);
+    }
+    
+    // Remove remote stream
+    this.remoteStreams.delete(userId);
+    
+    console.log(`✅ WebRTC: Peer connection removed for user: ${userId}`);
+  }
+
+  public async createOfferForPeer(userId: string): Promise<RTCSessionDescriptionInit> {
+    const peerConnection = this.peerConnections.get(userId);
+    if (!peerConnection) {
+      throw new Error(`Peer connection not found for user: ${userId}`);
+    }
+
+    try {
+      console.log(`📝 WebRTC: Creating offer for user: ${userId}`);
+      const offer = await peerConnection.createOffer();
+      await peerConnection.setLocalDescription(offer);
+      console.log(`✅ WebRTC: Offer created for user: ${userId}`);
+      return offer;
+    } catch (error) {
+      console.error(`❌ WebRTC: Failed to create offer for user ${userId}:`, error);
+      this.groupCallbacks.onError?.(error as Error);
+      throw error;
+    }
+  }
+
+  public async handleAnswerFromPeer(userId: string, answer: RTCSessionDescriptionInit): Promise<void> {
+    const peerConnection = this.peerConnections.get(userId);
+    if (!peerConnection) {
+      throw new Error(`Peer connection not found for user: ${userId}`);
+    }
+
+    try {
+      console.log(`📥 WebRTC: Setting remote description (answer) for user: ${userId}`);
+      await peerConnection.setRemoteDescription(answer);
+      console.log(`✅ WebRTC: Answer processed for user: ${userId}`);
+    } catch (error) {
+      console.error(`❌ WebRTC: Failed to handle answer for user ${userId}:`, error);
+      this.groupCallbacks.onError?.(error as Error);
+      throw error;
+    }
+  }
+
+  private setupPeerConnectionHandlers(peerConnection: RTCPeerConnection, userId: string): void {
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        const candidate = event.candidate;
+        const candidateType = candidate.candidate.includes('typ relay') ? 'TURN' : 
+                             candidate.candidate.includes('typ srflx') ? 'STUN' : 
+                             candidate.candidate.includes('typ host') ? 'HOST' : 'UNKNOWN';
+        console.log(`🧊 WebRTC: ICE candidate generated for user ${userId} (${candidateType}):`, candidate.candidate.substring(0, 50) + '...');
+        
+        // Send ICE candidate via WebSocket for POI group calls
+        if (this.wsClient && this.wsClient.isConnected()) {
+          // Get current POI from video call store
+          import('../stores/videoCallStore').then(({ videoCallStore }) => {
+            const currentPOI = videoCallStore.getState().currentPOI;
+            if (currentPOI) {
+              this.wsClient.sendPOICallICECandidate(currentPOI, userId, event.candidate);
+            }
+          });
+        }
+        
+        this.groupCallbacks.onIceCandidate?.(event.candidate);
+      }
+    };
+
+    // Handle remote stream
+    peerConnection.ontrack = (event) => {
+      console.log(`📺 WebRTC: Remote stream received from user: ${userId}`);
+      const [remoteStream] = event.streams;
+      this.remoteStreams.set(userId, remoteStream);
+      this.groupCallbacks.onRemoteStreamForUser?.(userId, remoteStream);
+    };
+
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+      const state = peerConnection.connectionState;
+      console.log(`🔄 WebRTC: Connection state changed for user ${userId}:`, state);
+      
+      if (state === 'connected') {
+        console.log(`🎉 WebRTC: Peer connection established with user: ${userId}`);
+      } else if (state === 'disconnected') {
+        console.warn(`⚠️ WebRTC: Peer connection disconnected from user: ${userId}`);
+      } else if (state === 'failed') {
+        console.error(`❌ WebRTC: Peer connection failed with user: ${userId}`);
+        this.groupCallbacks.onError?.(new Error(`Peer connection failed with user: ${userId}`));
+      }
+      
+      this.groupCallbacks.onPeerConnectionStateChange?.(userId, state);
+    };
+
+    // Handle ICE connection state changes
+    peerConnection.oniceconnectionstatechange = () => {
+      const state = peerConnection.iceConnectionState;
+      console.log(`🧊 WebRTC: ICE connection state changed for user ${userId}:`, state);
+      
+      if (state === 'failed') {
+        console.error(`❌ WebRTC: ICE connection failed with user: ${userId}`);
+        this.groupCallbacks.onError?.(new Error(`ICE connection failed with user: ${userId}`));
+      } else if (state === 'connected') {
+        console.log(`✅ WebRTC: ICE connection established with user: ${userId}`);
+      } else if (state === 'completed') {
+        console.log(`🎉 WebRTC: ICE connection completed with user: ${userId}`);
+      }
+    };
+
+    // Handle ICE gathering state changes
+    peerConnection.onicegatheringstatechange = () => {
+      const state = peerConnection.iceGatheringState;
+      console.log(`🧊 WebRTC: ICE gathering state changed for user ${userId}:`, state);
+    };
+  }
+
+  public override cleanup(): void {
+    console.log('🧹 WebRTC: Cleaning up group call resources...');
+
+    // Clean up all peer connections
+    for (const [userId, peerConnection] of this.peerConnections) {
+      console.log(`🛑 Closing peer connection for user: ${userId}`);
+      
+      // Remove event listeners
+      peerConnection.onicecandidate = null;
+      peerConnection.ontrack = null;
+      peerConnection.onconnectionstatechange = null;
+      peerConnection.oniceconnectionstatechange = null;
+      peerConnection.onicegatheringstatechange = null;
+      
+      // Close connection
+      peerConnection.close();
+    }
+
+    // Clear collections
+    this.peerConnections.clear();
+    this.remoteStreams.clear();
+
+    // Clear callbacks
+    this.groupCallbacks = {};
+
+    // Call parent cleanup for local stream and main peer connection
+    super.cleanup();
+
+    console.log('✅ WebRTC: Group call cleanup completed');
   }
 }

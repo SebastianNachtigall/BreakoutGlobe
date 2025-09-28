@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { WebRTCService, MediaConstraints } from '../services/webrtc-service';
+import { WebRTCService, GroupWebRTCService, MediaConstraints } from '../services/webrtc-service';
 import { avatarStore } from './avatarStore';
 
 // Get WebSocket client instance (will be set by App.tsx)
@@ -20,13 +20,26 @@ interface CallInfo {
   createdAt: Date;
 }
 
+interface GroupCallParticipant {
+  userId: string;
+  displayName: string;
+  avatarURL?: string;
+}
+
 interface VideoCallState {
   // Current call state
   callState: CallState;
   currentCall: CallInfo | null;
   
+  // Group call state
+  currentPOI: string | null;
+  isGroupCallActive: boolean;
+  groupCallParticipants: Map<string, GroupCallParticipant>;
+  remoteStreams: Map<string, MediaStream>;
+  
   // WebRTC state
   webrtcService: WebRTCService | null;
+  groupWebRTCService: GroupWebRTCService | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isAudioEnabled: boolean;
@@ -41,6 +54,16 @@ interface VideoCallState {
   setCallState: (state: CallState) => void;
   clearCall: () => void;
   
+  // Group call actions
+  joinPOICall: (poiId: string) => void;
+  leavePOICall: () => void;
+  addGroupCallParticipant: (userId: string, participant: GroupCallParticipant) => void;
+  removeGroupCallParticipant: (userId: string) => void;
+  setRemoteStreamForUser: (userId: string, stream: MediaStream) => void;
+  initializeGroupWebRTC: () => Promise<void>;
+  addPeerToGroupCall: (userId: string) => Promise<void>;
+  removePeerFromGroupCall: (userId: string) => void;
+  
   // WebRTC actions
   toggleAudio: () => void;
   toggleVideo: () => void;
@@ -53,8 +76,15 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   callState: 'idle',
   currentCall: null,
   
+  // Group call initial state
+  currentPOI: null,
+  isGroupCallActive: false,
+  groupCallParticipants: new Map(),
+  remoteStreams: new Map(),
+  
   // WebRTC initial state
   webrtcService: null,
+  groupWebRTCService: null,
   localStream: null,
   remoteStream: null,
   isAudioEnabled: true,
@@ -347,18 +377,192 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     });
   },
   
+  // Group call actions
+  joinPOICall: (poiId: string) => {
+    console.log('🏢 Joining POI group call:', poiId);
+    
+    // Clean up any existing call first
+    const { webrtcService } = get();
+    if (webrtcService) {
+      webrtcService.cleanup();
+    }
+    
+    // Set the group call state
+    set({
+      currentPOI: poiId,
+      isGroupCallActive: true,
+      callState: 'connecting',
+      webrtcService: null,
+      groupWebRTCService: null,
+      localStream: null,
+      remoteStream: null,
+      groupCallParticipants: new Map(),
+      remoteStreams: new Map(),
+      isAudioEnabled: true,
+      isVideoEnabled: true
+    });
+  },
+  
+  leavePOICall: () => {
+    console.log('🚪 Leaving POI group call');
+    const { webrtcService, groupWebRTCService } = get();
+    
+    // Clean up WebRTC resources
+    if (webrtcService) {
+      webrtcService.cleanup();
+    }
+    if (groupWebRTCService) {
+      groupWebRTCService.cleanup();
+    }
+    
+    set({
+      currentPOI: null,
+      isGroupCallActive: false,
+      callState: 'idle',
+      webrtcService: null,
+      groupWebRTCService: null,
+      localStream: null,
+      remoteStream: null,
+      groupCallParticipants: new Map(),
+      remoteStreams: new Map(),
+      isAudioEnabled: true,
+      isVideoEnabled: true
+    });
+  },
+
+  addGroupCallParticipant: (userId: string, participant: GroupCallParticipant) => {
+    console.log('👥 Adding group call participant:', participant.displayName);
+    const { groupCallParticipants } = get();
+    const newParticipants = new Map(groupCallParticipants);
+    newParticipants.set(userId, participant);
+    set({ groupCallParticipants: newParticipants });
+  },
+
+  removeGroupCallParticipant: (userId: string) => {
+    console.log('👋 Removing group call participant:', userId);
+    const { groupCallParticipants, remoteStreams } = get();
+    
+    // Remove participant
+    const newParticipants = new Map(groupCallParticipants);
+    newParticipants.delete(userId);
+    
+    // Remove associated stream
+    const newStreams = new Map(remoteStreams);
+    newStreams.delete(userId);
+    
+    set({ 
+      groupCallParticipants: newParticipants,
+      remoteStreams: newStreams
+    });
+  },
+
+  setRemoteStreamForUser: (userId: string, stream: MediaStream) => {
+    console.log('📺 Setting remote stream for user:', userId);
+    const { remoteStreams } = get();
+    const newStreams = new Map(remoteStreams);
+    newStreams.set(userId, stream);
+    set({ remoteStreams: newStreams });
+  },
+
+  initializeGroupWebRTC: async () => {
+    console.log('🔗 Initializing group WebRTC service');
+    try {
+      const groupWebRTCService = new GroupWebRTCService();
+      
+      groupWebRTCService.setCallbacks({
+        onLocalStream: (stream) => {
+          console.log('📹 Group call local stream received');
+          get().setLocalStream(stream);
+        },
+        onRemoteStreamForUser: (userId, stream) => {
+          console.log('📺 Group call remote stream received from user:', userId);
+          get().setRemoteStreamForUser(userId, stream);
+        },
+        onIceCandidate: (candidate) => {
+          console.log('🧊 Group call ICE candidate generated:', candidate);
+          // TODO: Send ICE candidate via websocket
+        },
+        onPeerConnectionStateChange: (userId, state) => {
+          console.log(`🔄 Group call peer connection state changed for user ${userId}:`, state);
+          if (state === 'connected') {
+            set({ callState: 'connected' });
+          }
+        },
+        onError: (error) => {
+          console.error('❌ Group call WebRTC error:', error);
+          // TODO: Handle error appropriately
+        }
+      });
+
+      // Initialize local media
+      await groupWebRTCService.initializeLocalMedia({ video: true, audio: true });
+      
+      // Set WebSocket client for signaling
+      const wsClient = (window as any).wsClient;
+      if (wsClient) {
+        groupWebRTCService.setWebSocketClient(wsClient);
+      }
+      
+      set({ groupWebRTCService });
+      console.log('✅ Group WebRTC service initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize group WebRTC service:', error);
+      throw error;
+    }
+  },
+
+  addPeerToGroupCall: async (userId: string) => {
+    console.log('👥 Adding peer to group call:', userId);
+    const { groupWebRTCService } = get();
+    
+    if (!groupWebRTCService) {
+      throw new Error('Group WebRTC service not initialized');
+    }
+
+    try {
+      await groupWebRTCService.addPeer(userId);
+      console.log('✅ Peer added to group call:', userId);
+    } catch (error) {
+      console.error('❌ Failed to add peer to group call:', error);
+      throw error;
+    }
+  },
+
+  removePeerFromGroupCall: (userId: string) => {
+    console.log('👋 Removing peer from group call:', userId);
+    const { groupWebRTCService } = get();
+    
+    if (groupWebRTCService) {
+      groupWebRTCService.removePeer(userId);
+    }
+    
+    // Also remove from participants and streams
+    get().removeGroupCallParticipant(userId);
+    console.log('✅ Peer removed from group call:', userId);
+  },
+  
   // WebRTC actions
   toggleAudio: () => {
-    const { webrtcService, isAudioEnabled } = get();
-    if (webrtcService) {
+    const { webrtcService, groupWebRTCService, isGroupCallActive, isAudioEnabled } = get();
+    if (isGroupCallActive && groupWebRTCService) {
+      // For group calls, use groupWebRTCService
+      const newState = groupWebRTCService.toggleAudio();
+      set({ isAudioEnabled: newState });
+    } else if (webrtcService) {
+      // For regular calls, use webrtcService
       const newState = webrtcService.toggleAudio();
       set({ isAudioEnabled: newState });
     }
   },
   
   toggleVideo: () => {
-    const { webrtcService, isVideoEnabled } = get();
-    if (webrtcService) {
+    const { webrtcService, groupWebRTCService, isGroupCallActive, isVideoEnabled } = get();
+    if (isGroupCallActive && groupWebRTCService) {
+      // For group calls, use groupWebRTCService
+      const newState = groupWebRTCService.toggleVideo();
+      set({ isVideoEnabled: newState });
+    } else if (webrtcService) {
+      // For regular calls, use webrtcService
       const newState = webrtcService.toggleVideo();
       set({ isVideoEnabled: newState });
     }

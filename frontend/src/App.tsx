@@ -6,6 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
 import { VideoCallModal } from './components/VideoCallModal'
+import { GroupCallModal } from './components/GroupCallModal'
 import { AvatarTooltip } from './components/AvatarTooltip'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
@@ -255,6 +256,7 @@ function App() {
       // Transform API responses to frontend format
       const transformedPOIs = apiPOIs.map(transformFromPOIResponse)
       console.log('🔄 Transformed POIs with images:', transformedPOIs.filter(poi => poi.imageUrl).map(poi => ({ name: poi.name, imageUrl: poi.imageUrl })))
+
       poiStore.getState().setPOIs(transformedPOIs)
 
     } catch (error) {
@@ -469,6 +471,57 @@ function App() {
       // Refresh POI data to get updated participant list
       await loadPOIs()
 
+      // Check if POI has other participants and trigger group call
+      // Get fresh state from store (not the stale poiState from function start)
+      const freshPOIState = poiStore.getState()
+      const updatedPOI = freshPOIState.pois.find(p => p.id === poiId)
+      if (updatedPOI && updatedPOI.participantCount > 1) {
+        console.log('🏢 POI has multiple participants, joining group call')
+        
+        // Initialize group call
+        videoCallStore.getState().joinPOICall(poiId)
+        
+        // Initialize WebRTC service for group call
+        try {
+          await videoCallStore.getState().initializeGroupWebRTC()
+          console.log('✅ Group WebRTC initialized')
+          
+          // Add existing participants from the POI to the group call
+          // Get the participant list from the POI data
+          const poiParticipants = updatedPOI.participants || []
+          const currentUserId = userProfile.id
+          
+          console.log('🔍 POI participants data:', poiParticipants)
+          console.log('🔍 Current user ID:', currentUserId)
+          
+          // Add all other participants (excluding current user)
+          for (const participant of poiParticipants) {
+            console.log('🔍 Processing participant:', participant)
+            
+            if (participant.id !== currentUserId) {
+              console.log('👥 Adding existing participant to group call:', participant.name)
+              
+              videoCallStore.getState().addGroupCallParticipant(participant.id, {
+                userId: participant.id,
+                displayName: participant.name || 'Unknown User',
+                avatarURL: participant.avatarUrl
+              })
+              
+              // Add peer connection for the participant
+              try {
+                await videoCallStore.getState().addPeerToGroupCall(participant.id)
+              } catch (error) {
+                console.error('❌ Failed to add peer for participant:', participant.id, error)
+              }
+            }
+          }
+          
+        } catch (error) {
+          console.error('❌ Failed to initialize group WebRTC:', error)
+          // Fall back to basic group call UI without video
+        }
+      }
+
     } catch (error) {
       console.error('❌ Failed to join POI:', error)
 
@@ -511,6 +564,13 @@ function App() {
       // Call API to leave POI
       await leavePOI(poiId, userProfile.id)
       console.log('✅ Successfully left POI:', poiId)
+
+      // Leave group call if user was in one for this POI
+      const videoState = videoCallStore.getState()
+      if (videoState.currentPOI === poiId && videoState.isGroupCallActive) {
+        console.log('🚪 Leaving group call for POI:', poiId)
+        videoState.leavePOICall()
+      }
 
       // Refresh POI data to get updated participant list
       await loadPOIs()
@@ -936,6 +996,25 @@ function App() {
             onEndCall={handleEndCall}
             onToggleAudio={handleToggleAudio}
             onToggleVideo={handleToggleVideo}
+          />
+        )}
+
+        {/* Group Call Modal */}
+        {videoCallState.isGroupCallActive && videoCallState.currentPOI && (
+          <GroupCallModal
+            isOpen={true}
+            onClose={() => videoCallStore.getState().leavePOICall()}
+            callState={videoCallState.callState}
+            poiId={videoCallState.currentPOI}
+            poiName={poiState.pois.find(p => p.id === videoCallState.currentPOI)?.name}
+            participants={videoCallState.groupCallParticipants}
+            remoteStreams={videoCallState.remoteStreams}
+            localStream={videoCallState.localStream}
+            isAudioEnabled={videoCallState.isAudioEnabled}
+            isVideoEnabled={videoCallState.isVideoEnabled}
+            onEndCall={() => videoCallStore.getState().leavePOICall()}
+            onToggleAudio={() => videoCallStore.getState().toggleAudio()}
+            onToggleVideo={() => videoCallStore.getState().toggleVideo()}
           />
         )}
 

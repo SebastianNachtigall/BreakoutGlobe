@@ -367,6 +367,15 @@ export class WebSocketClient {
       case 'ice_candidate':
         this.handleICECandidate(message.data);
         break;
+      case 'poi_call_offer':
+        this.handlePOICallOffer(message.data);
+        break;
+      case 'poi_call_answer':
+        this.handlePOICallAnswer(message.data);
+        break;
+      case 'poi_call_ice_candidate':
+        this.handlePOICallICECandidate(message.data);
+        break;
       case 'user_call_status':
         this.handleUserCallStatus(message.data);
         break;
@@ -512,6 +521,59 @@ export class WebSocketClient {
       avatarStore.getState().hideAvatarForPOI(userId, poiId);
     }
     
+    // Check if current user is already in this POI and should join group call
+    const currentUserPOI = poiStore.getState().getCurrentUserPOI();
+    if (currentUserPOI === poiId && currentCount > 1 && userId !== this.sessionId) {
+      console.log('🏢 Current user is in POI with new participant, starting group call');
+      
+      // Import videoCallStore dynamically to avoid circular dependencies
+      import('../stores/videoCallStore').then(({ videoCallStore }) => {
+        const videoStore = videoCallStore.getState();
+        
+        // Only start group call if not already active
+        if (!videoStore.isGroupCallActive) {
+          videoStore.joinPOICall(poiId);
+          
+          // Initialize WebRTC service
+          videoStore.initializeGroupWebRTC().then(() => {
+            console.log('✅ Group WebRTC initialized for existing user');
+            
+            // Add the new participant to the group call
+            const newParticipant = participants.find((p: any) => p.id === userId);
+            if (newParticipant) {
+              videoStore.addGroupCallParticipant(userId, {
+                userId: newParticipant.id,
+                displayName: newParticipant.name || 'Unknown User',
+                avatarURL: newParticipant.avatarUrl
+              });
+              
+              // Add peer connection for the new participant
+              videoStore.addPeerToGroupCall(userId).catch((error) => {
+                console.error('❌ Failed to add peer to group call:', error);
+              });
+            }
+          }).catch((error) => {
+            console.error('❌ Failed to initialize group WebRTC for existing user:', error);
+          });
+        } else {
+          // Group call already active, just add the new participant
+          const newParticipant = participants.find((p: any) => p.id === userId);
+          if (newParticipant) {
+            videoStore.addGroupCallParticipant(userId, {
+              userId: newParticipant.id,
+              displayName: newParticipant.name || 'Unknown User',
+              avatarURL: newParticipant.avatarUrl
+            });
+            
+            // Add peer connection for the new participant
+            videoStore.addPeerToGroupCall(userId).catch((error) => {
+              console.error('❌ Failed to add peer to group call:', error);
+            });
+          }
+        }
+      });
+    }
+    
     // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
@@ -535,6 +597,28 @@ export class WebSocketClient {
     // Show the avatar for the user who left the POI
     if (userId) {
       avatarStore.getState().showAvatarForPOI(userId, poiId);
+    }
+    
+    // Handle group call cleanup if current user is in this POI
+    const currentUserPOI = poiStore.getState().getCurrentUserPOI();
+    if (currentUserPOI === poiId && userId !== this.sessionId) {
+      console.log('🏢 Participant left POI, updating group call');
+      
+      // Import videoCallStore dynamically to avoid circular dependencies
+      import('../stores/videoCallStore').then(({ videoCallStore }) => {
+        const videoStore = videoCallStore.getState();
+        
+        // Remove participant from group call if active
+        if (videoStore.isGroupCallActive && videoStore.currentPOI === poiId) {
+          videoStore.removePeerFromGroupCall(userId);
+          
+          // If only one participant left (current user), end the group call
+          if (currentCount <= 1) {
+            console.log('🏢 Only one participant left, ending group call');
+            videoStore.leavePOICall();
+          }
+        }
+      });
     }
     
     // Emit state sync event that includes a refresh request
@@ -914,6 +998,50 @@ export class WebSocketClient {
     });
   }
 
+  // POI Group Call WebRTC Signaling Methods
+  sendPOICallOffer(poiId: string, targetUserId: string, sdp: RTCSessionDescriptionInit): void {
+    console.log('📝 WebSocket: Sending POI call offer', { poiId, targetUserId });
+    this.send({
+      type: 'poi_call_offer',
+      data: {
+        poiId,
+        targetUserId,
+        sdp
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendPOICallAnswer(poiId: string, targetUserId: string, sdp: RTCSessionDescriptionInit): void {
+    console.log('📋 WebSocket: Sending POI call answer', { poiId, targetUserId });
+    this.send({
+      type: 'poi_call_answer',
+      data: {
+        poiId,
+        targetUserId,
+        sdp
+      },
+      timestamp: new Date()
+    });
+  }
+
+  sendPOICallICECandidate(poiId: string, targetUserId: string, candidate: RTCIceCandidate): void {
+    console.log('🧊 WebSocket: Sending POI call ICE candidate', { poiId, targetUserId });
+    this.send({
+      type: 'poi_call_ice_candidate',
+      data: {
+        poiId,
+        targetUserId,
+        candidate: {
+          candidate: candidate.candidate,
+          sdpMLineIndex: candidate.sdpMLineIndex,
+          sdpMid: candidate.sdpMid
+        }
+      },
+      timestamp: new Date()
+    });
+  }
+
   // Video Call Message Handlers
   private handleCallRequest(data: any): void {
     console.log('📞 WebSocket: Received call request', data);
@@ -1087,6 +1215,105 @@ export class WebSocketClient {
         state.webrtcService.addIceCandidate(candidate).catch((error) => {
           console.error('❌ Failed to handle ICE candidate:', error);
         });
+      }
+    });
+  }
+
+  // POI Group Call WebRTC Signaling Handlers
+  private handlePOICallOffer(data: any): void {
+    console.log('📝 WebSocket: Received POI call offer', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { poiId, fromUserId, sdp } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentPOI === poiId && state.groupWebRTCService) {
+        console.log('📝 Processing POI call offer from user:', fromUserId);
+
+        // Get or create peer connection for this user
+        let peerConnection = state.groupWebRTCService.peerConnections.get(fromUserId);
+        if (!peerConnection) {
+          console.log('🔗 Creating new peer connection for incoming offer from user:', fromUserId);
+          // Add the user as a participant first
+          videoCallStore.getState().addGroupCallParticipant(fromUserId, {
+            displayName: fromUserId.substring(0, 8), // Fallback name
+            avatarUrl: null
+          });
+          // Create peer connection
+          state.groupWebRTCService.addPeer(fromUserId);
+          peerConnection = state.groupWebRTCService.peerConnections.get(fromUserId);
+        }
+
+        if (peerConnection) {
+          peerConnection.setRemoteDescription(sdp).then(() => {
+            console.log('✅ Remote description set for peer:', fromUserId);
+            return peerConnection.createAnswer();
+          }).then((answer) => {
+            console.log('✅ Answer created for peer:', fromUserId);
+            return peerConnection.setLocalDescription(answer);
+          }).then(() => {
+            console.log('📤 Sending POI call answer to:', fromUserId);
+            this.sendPOICallAnswer(poiId, fromUserId, peerConnection.localDescription!);
+          }).catch((error) => {
+            console.error('❌ Failed to handle POI call offer:', error);
+          });
+        } else {
+          console.error('❌ Failed to create peer connection for user:', fromUserId);
+        }
+      } else {
+        console.warn('⚠️ Received POI call offer but not in matching POI or no group WebRTC service');
+      }
+    });
+  }
+
+  private handlePOICallAnswer(data: any): void {
+    console.log('📋 WebSocket: Received POI call answer', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { poiId, fromUserId, sdp } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentPOI === poiId && state.groupWebRTCService) {
+        console.log('📋 Processing POI call answer from user:', fromUserId);
+
+        const peerConnection = state.groupWebRTCService.peerConnections.get(fromUserId);
+        if (peerConnection) {
+          peerConnection.setRemoteDescription(sdp).then(() => {
+            console.log('✅ Remote description (answer) set for peer:', fromUserId);
+          }).catch((error) => {
+            console.error('❌ Failed to handle POI call answer:', error);
+          });
+        } else {
+          console.warn('⚠️ No peer connection found for user:', fromUserId);
+        }
+      } else {
+        console.warn('⚠️ Received POI call answer but not in matching POI or no group WebRTC service');
+      }
+    });
+  }
+
+  private handlePOICallICECandidate(data: any): void {
+    console.log('🧊 WebSocket: Received POI call ICE candidate', data);
+
+    import('../stores/videoCallStore').then(({ videoCallStore }) => {
+      const { poiId, fromUserId, candidate } = data;
+      const state = videoCallStore.getState();
+
+      if (state.currentPOI === poiId && state.groupWebRTCService) {
+        console.log('🧊 Processing POI call ICE candidate from user:', fromUserId);
+
+        const peerConnection = state.groupWebRTCService.peerConnections.get(fromUserId);
+        if (peerConnection) {
+          peerConnection.addIceCandidate(candidate).catch((error) => {
+            console.error('❌ Failed to handle POI call ICE candidate:', error);
+          });
+        } else {
+          console.warn('⚠️ No peer connection found for user:', fromUserId, '- ICE candidate will be ignored');
+          // Note: ICE candidates received before peer connection is established are ignored
+          // This is normal behavior - the peer connection will be created when we receive the offer
+        }
+      } else {
+        console.warn('⚠️ Received POI call ICE candidate but not in matching POI or no group WebRTC service');
       }
     });
   }
