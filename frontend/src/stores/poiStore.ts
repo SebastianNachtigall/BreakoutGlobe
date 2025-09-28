@@ -134,7 +134,18 @@ export const poiStore = create<POIState>()(
         const state = get();
         const poi = state.pois.find(p => p.id === poiId);
         
+        // Always clear currentUserPOI if user is trying to leave this POI
+        // This handles edge cases where POI was deleted but user still thinks they're in it
+        const shouldClearCurrentPOI = state.currentUserPOI === poiId;
+        
         if (!poi || poi.participantCount <= 0) {
+          // POI doesn't exist or has no participants, but still clear currentUserPOI if needed
+          if (shouldClearCurrentPOI) {
+            set((state) => ({
+              ...state,
+              currentUserPOI: null,
+            }));
+          }
           return false;
         }
         
@@ -152,7 +163,7 @@ export const poiStore = create<POIState>()(
                 }
               : p
           ),
-          currentUserPOI: state.currentUserPOI === poiId ? null : state.currentUserPOI,
+          currentUserPOI: shouldClearCurrentPOI ? null : state.currentUserPOI,
         }));
         
         return true;
@@ -383,6 +394,7 @@ export const poiStore = create<POIState>()(
       name: 'breakout-globe-pois',
       partialize: (state) => ({
         pois: state.pois,
+        currentUserPOI: state.currentUserPOI, // Persist user's current POI membership
       }),
     }
   )
