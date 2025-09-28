@@ -77,16 +77,16 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 	rateLimiter := &MockRateLimiter{}
 
 	// Create services
-	poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub)
-	sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
 	userService := services.NewUserService(userRepo)
+	poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub, userService)
+	sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
 
 	// Create handlers
-	poiHandler := handlers.NewPOIHandler(poiService, rateLimiter)
+	poiHandler := handlers.NewPOIHandler(poiService, userService, rateLimiter)
 	sessionHandler := handlers.NewSessionHandler(sessionService, rateLimiter)
 
 	// Create WebSocket handler
-	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService)
+	wsHandler := websocket.NewHandler(sessionService, rateLimiter, userService, poiService)
 
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)

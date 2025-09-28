@@ -3,6 +3,7 @@ package testdata
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"time"
 
 	"breakoutglobe/internal/models"
@@ -379,8 +380,8 @@ func (m *MockPOIService) CreatePOI(ctx context.Context, mapID, name, description
 	return args.Get(0).(*models.POI), args.Error(1)
 }
 
-func (m *MockPOIService) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile []byte, imageFilename string) (*models.POI, error) {
-	args := m.Called(ctx, mapID, name, description, position, createdBy, maxParticipants, imageFile, imageFilename)
+func (m *MockPOIService) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile *multipart.FileHeader) (*models.POI, error) {
+	args := m.Called(ctx, mapID, name, description, position, createdBy, maxParticipants, imageFile)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -423,6 +424,11 @@ func (m *MockPOIService) GetPOIParticipants(ctx context.Context, poiID string) (
 func (m *MockPOIService) GetPOIParticipantCount(ctx context.Context, poiID string) (int, error) {
 	args := m.Called(ctx, poiID)
 	return args.Get(0).(int), args.Error(1)
+}
+
+func (m *MockPOIService) GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error) {
+	args := m.Called(ctx, poiID)
+	return args.Get(0).([]services.POIParticipantInfo), args.Error(1)
 }
 
 func (m *MockPOIService) GetUserPOIs(ctx context.Context, userID string) ([]string, error) {

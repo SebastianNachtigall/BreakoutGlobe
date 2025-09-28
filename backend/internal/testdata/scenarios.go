@@ -131,6 +131,7 @@ func NewPOITestScenario(t TestingT) *POITestScenario {
 	// Create handler with mocks
 	scenario.handler = handlers.NewPOIHandler(
 		mockSetup.POIService.Mock(),
+		mockSetup.UserService.Mock(),
 		mockSetup.RateLimiter.Mock(),
 	)
 	
@@ -955,6 +956,7 @@ func NewWebSocketTestScenario() *WebSocketTestScenario {
 		mockSetup.SessionService.Mock(),
 		mockSetup.RateLimiter.Mock(),
 		mockSetup.UserService.Mock(),
+		mockSetup.POIService.Mock(),
 	)
 	
 	// Setup HTTP server with WebSocket endpoint

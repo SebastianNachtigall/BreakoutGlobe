@@ -14,7 +14,17 @@ export interface POIDetailsPanelProps {
 
 // Helper function to calculate discussion duration from start time
 const calculateDiscussionDuration = (poi: POIData): number => {
-  if (!poi.isDiscussionActive || !poi.discussionStartTime) {
+  if (!poi.isDiscussionActive) {
+    return 0;
+  }
+  
+  // If discussionDuration is provided directly, use it (for testing)
+  if (typeof poi.discussionDuration === 'number') {
+    return poi.discussionDuration;
+  }
+  
+  // Otherwise calculate from discussionStartTime
+  if (!poi.discussionStartTime) {
     return 0;
   }
   

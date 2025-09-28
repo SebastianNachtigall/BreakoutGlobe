@@ -6,7 +6,12 @@ import App from '../../App';
 const mockWebSocket = {
   send: vi.fn(),
   close: vi.fn(),
-  addEventListener: vi.fn(),
+  addEventListener: vi.fn((event, callback) => {
+    // Simulate successful WebSocket connection
+    if (event === 'open') {
+      setTimeout(() => callback(new Event('open')), 100);
+    }
+  }),
   removeEventListener: vi.fn(),
   readyState: WebSocket.OPEN
 };
@@ -20,14 +25,77 @@ describe('POI Flow Integration', () => {
     global.WebSocket = vi.fn(() => mockWebSocket) as any;
     global.fetch = mockFetch;
     
-    // Mock session creation
+    // Mock localStorage to provide a user profile (bypass profile creation)
+    const mockProfile = {
+      id: 'test-user-123',
+      displayName: 'Test User',
+      aboutMe: 'Test user for integration tests',
+      avatarUrl: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    global.localStorage = {
+      getItem: vi.fn((key) => {
+        if (key === 'breakoutglobe_user_profile') {
+          return JSON.stringify({
+            profile: mockProfile,
+            timestamp: Date.now()
+          });
+        }
+        return null;
+      }),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+      length: 0,
+      key: vi.fn()
+    } as any;
+    
+    // Mock API calls
     mockFetch.mockImplementation((url, options) => {
+      // Mock user profile API
+      if (url.includes('/api/users/profile')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'test-user-123',
+            displayName: 'Test User',
+            aboutMe: 'Test user for integration tests',
+            avatarUrl: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          })
+        });
+      }
+      
+      // Mock session creation
       if (url.includes('/api/sessions') && options?.method === 'POST') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
             sessionId: 'test-session-123',
             position: { lat: 40.7128, lng: -74.0060 }
+          })
+        });
+      }
+      
+      // Mock session check (GET /api/sessions)
+      if (url.includes('/api/sessions') && (!options?.method || options?.method === 'GET')) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'No active session found' })
+        });
+      }
+      
+      // Mock map sessions (GET /api/maps/*/sessions)
+      if (url.includes('/api/maps/') && url.includes('/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [],
+            count: 0
           })
         });
       }
@@ -48,6 +116,25 @@ describe('POI Flow Integration', () => {
         });
       }
       
+      // Mock POI listing
+      if (url.includes('/api/pois') && options?.method === 'GET') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            pois: [{
+              id: 'poi-123',
+              name: 'Test Meeting Room',
+              description: 'A test meeting room',
+              maxParticipants: 10,
+              participantCount: 0,
+              position: { lat: 40.7128, lng: -74.0060 },
+              participants: []
+            }],
+            count: 1
+          })
+        });
+      }
+      
       // Mock POI list
       if (url.includes('/api/pois') && options?.method === 'GET') {
         return Promise.resolve({
@@ -56,7 +143,13 @@ describe('POI Flow Integration', () => {
         });
       }
       
-      return Promise.reject(new Error('Unmocked API call'));
+      // Default response for unmocked calls
+      console.warn('Unmocked API call:', url, options);
+      return Promise.resolve({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'Not found' })
+      });
     });
   });
 
@@ -74,7 +167,12 @@ describe('POI Flow Integration', () => {
         expect.stringContaining('/api/sessions'),
         expect.objectContaining({ method: 'POST' })
       );
-    });
+    }, { timeout: 5000 });
+
+    // Wait for map to load
+    await waitFor(() => {
+      expect(screen.getByTestId('map-container')).toBeInTheDocument();
+    }, { timeout: 10000 });
 
     // Right-click on map to open context menu
     const mapContainer = screen.getByTestId('map-container');

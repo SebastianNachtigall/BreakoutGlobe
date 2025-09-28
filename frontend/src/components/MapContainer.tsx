@@ -45,6 +45,7 @@ export interface POIData {
   // Discussion timer fields - backend only tracks when 2+ users are present
   discussionStartTime?: Date | null;
   isDiscussionActive?: boolean;
+  discussionDuration?: number; // Duration in seconds (for testing or when provided directly)
 }
 
 export interface MapContainerProps {

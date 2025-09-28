@@ -92,6 +92,11 @@ func (m *MockPOIService) GetPOIParticipantCount(ctx context.Context, poiID strin
 	return args.Get(0).(int), args.Error(1)
 }
 
+func (m *MockPOIService) GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error) {
+	args := m.Called(ctx, poiID)
+	return args.Get(0).([]services.POIParticipantInfo), args.Error(1)
+}
+
 func (m *MockPOIService) GetUserPOIs(ctx context.Context, userID string) ([]string, error) {
 	args := m.Called(ctx, userID)
 	return args.Get(0).([]string), args.Error(1)
@@ -164,11 +169,13 @@ func (suite *POIHandlerTestSuite) TestGetPOIs() {
 	// Mock participant information for each POI
 	for _, poi := range expectedPOIs {
 		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(2, nil)
-		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1", "session-2"}, nil)
 		
-		// Mock user service calls for participant names
-		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-1").Return(&models.User{DisplayName: "User-session-1"}, nil)
-		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-2").Return(&models.User{DisplayName: "User-session-2"}, nil)
+		// Mock GetPOIParticipantsWithInfo to return participant info directly
+		participantsInfo := []services.POIParticipantInfo{
+			{ID: "session-1", Name: "User-session-1", AvatarURL: "avatar1.jpg"},
+			{ID: "session-2", Name: "User-session-2", AvatarURL: "avatar2.jpg"},
+		}
+		suite.mockPOIService.On("GetPOIParticipantsWithInfo", mock.AnythingOfType("*gin.Context"), poi.ID).Return(participantsInfo, nil)
 	}
 	
 	// Create request
@@ -226,10 +233,12 @@ func (suite *POIHandlerTestSuite) TestGetPOIsWithBounds() {
 	// Mock participant information for each POI
 	for _, poi := range expectedPOIs {
 		suite.mockPOIService.On("GetPOIParticipantCount", mock.AnythingOfType("*gin.Context"), poi.ID).Return(1, nil)
-		suite.mockPOIService.On("GetPOIParticipants", mock.AnythingOfType("*gin.Context"), poi.ID).Return([]string{"session-1"}, nil)
 		
-		// Mock user service calls for participant names
-		suite.mockUserService.On("GetUser", mock.AnythingOfType("*gin.Context"), "session-1").Return(&models.User{DisplayName: "User-session-1"}, nil)
+		// Mock GetPOIParticipantsWithInfo to return participant info directly
+		participantsInfo := []services.POIParticipantInfo{
+			{ID: "session-1", Name: "User-session-1", AvatarURL: "avatar1.jpg"},
+		}
+		suite.mockPOIService.On("GetPOIParticipantsWithInfo", mock.AnythingOfType("*gin.Context"), poi.ID).Return(participantsInfo, nil)
 	}
 	
 	// Create request with bounds query parameters

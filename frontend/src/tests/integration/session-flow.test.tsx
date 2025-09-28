@@ -24,13 +24,76 @@ describe('Session Flow Integration', () => {
     // Mock fetch for API calls
     global.fetch = mockFetch;
     
-    // Mock successful session creation response
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        sessionId: 'test-session-123',
-        position: { lat: 40.7128, lng: -74.0060 }
-      })
+    // Mock localStorage to provide a user profile (bypass profile creation)
+    const mockProfile = {
+      id: 'test-user-123',
+      displayName: 'Test User',
+      aboutMe: 'Test user for integration tests',
+      avatarUrl: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    global.localStorage = {
+      getItem: vi.fn((key) => {
+        if (key === 'breakoutglobe_user_profile') {
+          return JSON.stringify({
+            profile: mockProfile,
+            timestamp: Date.now()
+          });
+        }
+        if (key === 'breakoutglobe-session') {
+          return JSON.stringify({
+            sessionId: 'test-session-123',
+            position: { lat: 40.7128, lng: -74.0060 }
+          });
+        }
+        return null;
+      }),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+      length: 0,
+      key: vi.fn()
+    } as any;
+    
+    // Mock API responses
+    mockFetch.mockImplementation((url, options) => {
+      // Mock user profile API
+      if (url.includes('/api/users/profile')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => mockProfile
+        });
+      }
+      
+      // Mock session creation
+      if (url.includes('/api/sessions')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessionId: 'test-session-123',
+            position: { lat: 40.7128, lng: -74.0060 }
+          })
+        });
+      }
+      
+      // Mock POI listing
+      if (url.includes('/api/pois')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            pois: [],
+            count: 0
+          })
+        });
+      }
+      
+      // Default response
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({})
+      });
     });
   });
 

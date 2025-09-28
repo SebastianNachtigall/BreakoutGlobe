@@ -13,26 +13,29 @@ import (
 
 // POI Discussion Timer Test Scenario
 type poiDiscussionTimerScenario struct {
-	t         *testing.T
-	mockRepo  *MockPOIRepository
-	mockParts *MockPOIParticipants
-	mockPubsub *MockPubSub
-	service   *POIService
+	t               *testing.T
+	mockRepo        *MockPOIRepository
+	mockParts       *MockPOIParticipants
+	mockPubsub      *MockPubSub
+	mockUserService *MockUserService
+	service         *POIService
 }
 
 func newPOIDiscussionTimerScenario(t *testing.T) *poiDiscussionTimerScenario {
 	mockRepo := new(MockPOIRepository)
 	mockParts := new(MockPOIParticipants)
 	mockPubsub := new(MockPubSub)
+	mockUserService := new(MockUserService)
 	
-	service := NewPOIService(mockRepo, mockParts, mockPubsub)
+	service := NewPOIService(mockRepo, mockParts, mockPubsub, mockUserService)
 	
 	return &poiDiscussionTimerScenario{
-		t:         t,
-		mockRepo:  mockRepo,
-		mockParts: mockParts,
-		mockPubsub: mockPubsub,
-		service:   service,
+		t:               t,
+		mockRepo:        mockRepo,
+		mockParts:       mockParts,
+		mockPubsub:      mockPubsub,
+		mockUserService: mockUserService,
+		service:         service,
 	}
 }
 
@@ -40,6 +43,7 @@ func (s *poiDiscussionTimerScenario) cleanup() {
 	s.mockRepo.AssertExpectations(s.t)
 	s.mockParts.AssertExpectations(s.t)
 	s.mockPubsub.AssertExpectations(s.t)
+	s.mockUserService.AssertExpectations(s.t)
 }
 
 func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
@@ -73,7 +77,9 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	// Should not update POI since discussion should remain inactive (no Update call expected)
 	
 	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
-	scenario.mockPubsub.On("PublishPOIJoined", mock.Anything, mock.AnythingOfType("redis.POIJoinedEvent")).Return(nil).Once()
+	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
 
 	err := scenario.service.JoinPOI(context.Background(), poiID, user1ID)
 	require.NoError(t, err)
@@ -104,7 +110,10 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	})).Return(nil).Once()
 	
 	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(2, nil).Once()
-	scenario.mockPubsub.On("PublishPOIJoined", mock.Anything, mock.AnythingOfType("redis.POIJoinedEvent")).Return(nil).Once()
+	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID, user2ID}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user2ID).Return(&models.User{ID: user2ID, DisplayName: "User 2"}, nil).Once()
+	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
 
 	beforeJoin := time.Now()
 	err = scenario.service.JoinPOI(context.Background(), poiID, user2ID)
@@ -135,7 +144,9 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	})).Return(nil).Once()
 	
 	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
-	scenario.mockPubsub.On("PublishPOILeft", mock.Anything, mock.AnythingOfType("redis.POILeftEvent")).Return(nil).Once()
+	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockPubsub.On("PublishPOILeftWithParticipants", mock.Anything, mock.AnythingOfType("redis.POILeftEventWithParticipants")).Return(nil).Once()
 
 	err = scenario.service.LeavePOI(context.Background(), poiID, user2ID)
 	require.NoError(t, err)

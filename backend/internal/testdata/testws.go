@@ -3,6 +3,7 @@ package testdata
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/services"
 	"breakoutglobe/internal/websocket"
 
 	"github.com/gin-gonic/gin"
@@ -44,11 +46,14 @@ type TestWSClient struct {
 func SetupWebSocket(t TestingT) *TestWebSocket {
 	t.Helper()
 
-	// Create mock session service for testing
+	// Create mock services for testing
 	sessionService := &MockSessionServiceForWS{}
+	rateLimiter := &MockRateLimiterForWS{}
+	userService := &MockUserServiceForWS{}
+	poiService := &MockPOIServiceForWS{}
 
 	// Create WebSocket handler (it creates its own manager internally)
-	handler := websocket.NewHandler(sessionService, nil, nil)
+	handler := websocket.NewHandler(sessionService, rateLimiter, userService, poiService)
 
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
@@ -531,4 +536,137 @@ func (m *MockSessionServiceForWS) SessionHeartbeat(ctx context.Context, sessionI
 
 func (m *MockSessionServiceForWS) UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) error {
 	return nil
+}
+
+// MockRateLimiterForWS provides a mock rate limiter for WebSocket testing
+type MockRateLimiterForWS struct{}
+
+func (m *MockRateLimiterForWS) IsAllowed(ctx context.Context, userID string, action services.ActionType) (bool, error) {
+	return true, nil
+}
+
+func (m *MockRateLimiterForWS) CheckRateLimit(ctx context.Context, userID string, action services.ActionType) error {
+	return nil
+}
+
+func (m *MockRateLimiterForWS) GetRemainingRequests(ctx context.Context, userID string, action services.ActionType) (int, error) {
+	return 100, nil
+}
+
+func (m *MockRateLimiterForWS) GetWindowResetTime(ctx context.Context, userID string, action services.ActionType) (time.Time, error) {
+	return time.Now().Add(time.Hour), nil
+}
+
+func (m *MockRateLimiterForWS) SetCustomLimit(userID string, action services.ActionType, limit services.RateLimit) {
+	// No-op for testing
+}
+
+func (m *MockRateLimiterForWS) ClearUserLimits(ctx context.Context, userID string) error {
+	return nil
+}
+
+func (m *MockRateLimiterForWS) GetUserStats(ctx context.Context, userID string) (*services.UserRateLimitStats, error) {
+	return &services.UserRateLimitStats{}, nil
+}
+
+func (m *MockRateLimiterForWS) GetRateLimitHeaders(ctx context.Context, userID string, action services.ActionType) (map[string]string, error) {
+	return map[string]string{}, nil
+}
+
+// MockUserServiceForWS provides a mock user service for WebSocket testing
+type MockUserServiceForWS struct{}
+
+func (m *MockUserServiceForWS) GetUser(ctx context.Context, userID string) (*models.User, error) {
+	return &models.User{
+		ID:          userID,
+		DisplayName: "Test User",
+	}, nil
+}
+
+func (m *MockUserServiceForWS) CreateGuestProfile(ctx context.Context, displayName string) (*models.User, error) {
+	return &models.User{
+		ID:          "user-" + displayName,
+		DisplayName: displayName,
+	}, nil
+}
+
+func (m *MockUserServiceForWS) CreateGuestProfileWithAboutMe(ctx context.Context, displayName, aboutMe string) (*models.User, error) {
+	return &models.User{
+		ID:          "user-" + displayName,
+		DisplayName: displayName,
+		AboutMe:     &aboutMe,
+	}, nil
+}
+
+func (m *MockUserServiceForWS) UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error) {
+	return &models.User{
+		ID:          userID,
+		DisplayName: "Test User",
+	}, nil
+}
+
+func (m *MockUserServiceForWS) UpdateProfile(ctx context.Context, userID string, req *services.UpdateProfileRequest) (*models.User, error) {
+	return &models.User{
+		ID:          userID,
+		DisplayName: "Test User",
+	}, nil
+}
+
+// MockPOIServiceForWS provides a mock POI service for WebSocket testing
+type MockPOIServiceForWS struct{}
+
+func (m *MockPOIServiceForWS) CreatePOI(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int) (*models.POI, error) {
+	return &models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) CreatePOIWithImage(ctx context.Context, mapID, name, description string, position models.LatLng, createdBy string, maxParticipants int, imageFile *multipart.FileHeader) (*models.POI, error) {
+	return &models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) GetPOI(ctx context.Context, poiID string) (*models.POI, error) {
+	return &models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) GetPOIsForMap(ctx context.Context, mapID string) ([]*models.POI, error) {
+	return []*models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) GetPOIsInBounds(ctx context.Context, mapID string, bounds services.POIBounds) ([]*models.POI, error) {
+	return []*models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) UpdatePOI(ctx context.Context, poiID string, updateData services.POIUpdateData) (*models.POI, error) {
+	return &models.POI{}, nil
+}
+
+func (m *MockPOIServiceForWS) DeletePOI(ctx context.Context, poiID string) error {
+	return nil
+}
+
+func (m *MockPOIServiceForWS) JoinPOI(ctx context.Context, poiID, userID string) error {
+	return nil
+}
+
+func (m *MockPOIServiceForWS) LeavePOI(ctx context.Context, poiID, userID string) error {
+	return nil
+}
+
+func (m *MockPOIServiceForWS) GetPOIParticipants(ctx context.Context, poiID string) ([]string, error) {
+	return []string{}, nil
+}
+
+func (m *MockPOIServiceForWS) GetPOIParticipantCount(ctx context.Context, poiID string) (int, error) {
+	return 0, nil
+}
+
+func (m *MockPOIServiceForWS) GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error) {
+	return []services.POIParticipantInfo{}, nil
+}
+
+func (m *MockPOIServiceForWS) GetUserPOIs(ctx context.Context, userID string) ([]string, error) {
+	return []string{}, nil
+}
+
+func (m *MockPOIServiceForWS) ValidatePOI(ctx context.Context, poiID string) (*models.POI, error) {
+	return &models.POI{}, nil
 }

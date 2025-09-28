@@ -30,6 +30,7 @@ func TestHandler_POIJoin_Success(t *testing.T) {
 	}
 
 	// Setup expectations
+	mockSessionService.On("GetSession", mock.Anything, "session-123").Return(nil, nil) // Session not needed for this test
 	mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionJoinPOI).Return(nil)
 	mockPOIService.On("JoinPOI", mock.Anything, "poi-123", "user-456").Return(nil)
 
@@ -81,6 +82,7 @@ func TestHandler_POILeave_Success(t *testing.T) {
 	}
 
 	// Setup expectations
+	mockSessionService.On("GetSession", mock.Anything, "session-123").Return(nil, nil) // Session not needed for this test
 	mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionLeavePOI).Return(nil)
 	mockPOIService.On("LeavePOI", mock.Anything, "poi-123", "user-456").Return(nil)
 

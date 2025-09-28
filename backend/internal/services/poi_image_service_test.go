@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"breakoutglobe/internal/models"
-	"breakoutglobe/internal/redis"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -14,12 +13,13 @@ import (
 
 // POI Image Service Test Scenario
 type poiImageServiceScenario struct {
-	t            *testing.T
-	mockRepo     *MockPOIRepository
-	mockParts    *MockPOIParticipants
-	mockPubsub   *MockPubSub
-	mockUploader *MockImageUploader
-	service      *POIService
+	t               *testing.T
+	mockRepo        *MockPOIRepository
+	mockParts       *MockPOIParticipants
+	mockPubsub      *MockPubSub
+	mockUploader    *MockImageUploader
+	mockUserService *MockUserService
+	service         *POIService
 }
 
 func newPOIImageServiceScenario(t *testing.T) *poiImageServiceScenario {
@@ -27,16 +27,18 @@ func newPOIImageServiceScenario(t *testing.T) *poiImageServiceScenario {
 	mockParts := new(MockPOIParticipants)
 	mockPubsub := new(MockPubSub)
 	mockUploader := new(MockImageUploader)
+	mockUserService := new(MockUserService)
 	
-	service := NewPOIServiceWithImageUploader(mockRepo, mockParts, mockPubsub, mockUploader)
+	service := NewPOIServiceWithImageUploader(mockRepo, mockParts, mockPubsub, mockUploader, mockUserService)
 	
 	return &poiImageServiceScenario{
-		t:            t,
-		mockRepo:     mockRepo,
-		mockParts:    mockParts,
-		mockPubsub:   mockPubsub,
-		mockUploader: mockUploader,
-		service:      service,
+		t:               t,
+		mockRepo:        mockRepo,
+		mockParts:       mockParts,
+		mockPubsub:      mockPubsub,
+		mockUploader:    mockUploader,
+		mockUserService: mockUserService,
+		service:         service,
 	}
 }
 
@@ -73,6 +75,7 @@ func (s *poiImageServiceScenario) cleanup() {
 	s.mockParts.AssertExpectations(s.t)
 	s.mockPubsub.AssertExpectations(s.t)
 	s.mockUploader.AssertExpectations(s.t)
+	s.mockUserService.AssertExpectations(s.t)
 }
 
 func TestCreatePOIWithImage_Success(t *testing.T) {
@@ -235,32 +238,4 @@ func (m *MockPOIParticipants) GetPOIsForParticipant(ctx context.Context, userID 
 	return args.Get(0).([]string), args.Error(1)
 }
 
-// Mock PubSub
-type MockPubSub struct {
-	mock.Mock
-}
-
-func (m *MockPubSub) PublishPOICreated(ctx context.Context, event redis.POICreatedEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
-
-func (m *MockPubSub) PublishPOIUpdated(ctx context.Context, event redis.POIUpdatedEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
-
-func (m *MockPubSub) PublishPOIJoined(ctx context.Context, event redis.POIJoinedEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
-
-func (m *MockPubSub) PublishPOILeft(ctx context.Context, event redis.POILeftEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
-
-func (m *MockPubSub) PublishAvatarMovement(ctx context.Context, event redis.AvatarMovementEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
+// MockPubSub is now defined in mocks.go

@@ -90,8 +90,21 @@ func (suite *POICallTestSuite) TestPOICallOffer() {
 	suite.Require().NoError(err)
 	assert.Equal(suite.T(), "welcome", welcomeMsg2.Type)
 	
-	// Clear initial messages (user_joined, initial_users)
-	suite.clearInitialMessages(conn1, conn2)
+	// Read initial_users messages (sent automatically)
+	var initialUsersMsg1, initialUsersMsg2 Message
+	err = conn1.ReadJSON(&initialUsersMsg1)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg1.Type)
+	
+	err = conn2.ReadJSON(&initialUsersMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg2.Type)
+	
+	// Read user_joined message on conn1 (when user2 joins)
+	var userJoinedMsg Message
+	err = conn1.ReadJSON(&userJoinedMsg)
+	suite.Require().NoError(err)
+	suite.Require().Equal("user_joined", userJoinedMsg.Type)
 	
 	// Send POI call offer from user1 to user2
 	offerMsg := Message{
@@ -157,8 +170,31 @@ func (suite *POICallTestSuite) TestPOICallAnswer() {
 	suite.Require().NoError(err)
 	defer conn2.Close()
 	
-	// Clear initial messages
-	suite.clearInitialMessages(conn1, conn2)
+	// Read welcome messages
+	var welcomeMsg1, welcomeMsg2 Message
+	err = conn1.ReadJSON(&welcomeMsg1)
+	suite.Require().NoError(err)
+	suite.Require().Equal("welcome", welcomeMsg1.Type)
+	
+	err = conn2.ReadJSON(&welcomeMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("welcome", welcomeMsg2.Type)
+	
+	// Read initial_users messages (sent automatically)
+	var initialUsersMsg1, initialUsersMsg2 Message
+	err = conn1.ReadJSON(&initialUsersMsg1)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg1.Type)
+	
+	err = conn2.ReadJSON(&initialUsersMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg2.Type)
+	
+	// Read user_joined message on conn1 (when user2 joins)
+	var userJoinedMsg Message
+	err = conn1.ReadJSON(&userJoinedMsg)
+	suite.Require().NoError(err)
+	suite.Require().Equal("user_joined", userJoinedMsg.Type)
 	
 	// Send POI call answer from user2 to user1
 	answerMsg := Message{
@@ -220,8 +256,31 @@ func (suite *POICallTestSuite) TestPOICallICECandidate() {
 	suite.Require().NoError(err)
 	defer conn2.Close()
 	
-	// Clear initial messages
-	suite.clearInitialMessages(conn1, conn2)
+	// Read welcome messages
+	var welcomeMsg1, welcomeMsg2 Message
+	err = conn1.ReadJSON(&welcomeMsg1)
+	suite.Require().NoError(err)
+	suite.Require().Equal("welcome", welcomeMsg1.Type)
+	
+	err = conn2.ReadJSON(&welcomeMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("welcome", welcomeMsg2.Type)
+	
+	// Read initial_users messages (sent automatically)
+	var initialUsersMsg1, initialUsersMsg2 Message
+	err = conn1.ReadJSON(&initialUsersMsg1)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg1.Type)
+	
+	err = conn2.ReadJSON(&initialUsersMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("initial_users", initialUsersMsg2.Type)
+	
+	// Read user_joined message on conn1 (when user2 joins)
+	var userJoinedMsg Message
+	err = conn1.ReadJSON(&userJoinedMsg)
+	suite.Require().NoError(err)
+	suite.Require().Equal("user_joined", userJoinedMsg.Type)
 	
 	// Send POI call ICE candidate from user1 to user2
 	candidateMsg := Message{

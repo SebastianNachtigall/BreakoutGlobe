@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/redis"
 )
 
 // MockRateLimiter is a mock implementation of RateLimiterInterface for testing
@@ -105,4 +106,43 @@ func (m *MockUserService) UpdateProfile(ctx context.Context, userID string, req 
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.User), args.Error(1)
+}// MockPu
+// MockPubSub is a mock implementation of PubSub for testing
+type MockPubSub struct {
+	mock.Mock
+}
+
+func (m *MockPubSub) PublishPOICreated(ctx context.Context, event redis.POICreatedEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishPOIUpdated(ctx context.Context, event redis.POIUpdatedEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishPOIJoined(ctx context.Context, event redis.POIJoinedEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishPOILeft(ctx context.Context, event redis.POILeftEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishAvatarMovement(ctx context.Context, event redis.AvatarMovementEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishPOIJoinedWithParticipants(ctx context.Context, event redis.POIJoinedEventWithParticipants) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPubSub) PublishPOILeftWithParticipants(ctx context.Context, event redis.POILeftEventWithParticipants) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
 }
