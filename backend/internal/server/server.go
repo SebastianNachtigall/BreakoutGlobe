@@ -19,7 +19,6 @@ import (
 	"breakoutglobe/internal/config"
 	"breakoutglobe/internal/database"
 	"breakoutglobe/internal/handlers"
-	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
@@ -32,8 +31,6 @@ type Server struct {
 	router *gin.Engine
 	db     *gorm.DB
 	redis  *redislib.Client
-	// Simple in-memory storage for POI participants (for testing)
-	poiParticipants map[string]map[string]string // poiId -> sessionId -> username
 	// POI service for WebSocket handler
 	poiService *services.POIService
 }
@@ -91,7 +88,6 @@ func New(cfg *config.Config) *Server {
 		router: router,
 		db:     db,
 		redis:  redisClient,
-		poiParticipants: make(map[string]map[string]string),
 	}
 	
 	s.setupRoutes()
@@ -164,11 +160,8 @@ func (s *Server) setupSessionRoutes(api *gin.RouterGroup) {
 		
 		log.Println("✅ Session routes setup complete with proper handlers including heartbeat")
 	} else {
-		log.Println("⚠️ Database or Redis not available, using simple session endpoints for testing")
-		// Fallback to simple session endpoints for testing
-		api.POST("/sessions", s.createSession)
-		api.GET("/sessions/:sessionId", s.getSession)
-		api.PUT("/sessions/:sessionId/avatar", s.updateAvatarPosition)
+		log.Println("⚠️ Database or Redis not available, session endpoints not available in test mode")
+		// No fallback handlers - proper service-backed handlers only
 	}
 }
 
@@ -233,13 +226,8 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		
 		log.Println("✅ POI routes setup complete with database-backed handlers")
 	} else {
-		log.Println("⚠️ Database or Redis not available, using mock POI handlers")
-		
-		// Fallback to mock handlers for testing
-		api.GET("/pois", s.getPOIs)
-		api.POST("/pois", s.createPOI)
-		api.POST("/pois/:poiId/join", s.joinPOI)
-		api.POST("/pois/:poiId/leave", s.leavePOI)
+		log.Println("⚠️ Database or Redis not available, POI endpoints not available in test mode")
+		// No fallback handlers - proper service-backed handlers only
 	}
 }
 
@@ -406,205 +394,9 @@ func (r *SimpleRateLimiter) GetRateLimitHeaders(ctx context.Context, userID stri
 	}, nil
 }
 
-// Simple handlers for testing integration
+// Mock handlers removed - using proper service-backed handlers only
 
-func (s *Server) createSession(c *gin.Context) {
-	var req struct {
-		UserID         string `json:"userId"`
-		MapID          string `json:"mapId"`
-		AvatarPosition struct {
-			Lat float64 `json:"lat"`
-			Lng float64 `json:"lng"`
-		} `json:"avatarPosition"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	sessionID := "session-" + req.UserID + "-" + req.MapID
-	
-	c.JSON(http.StatusCreated, gin.H{
-		"sessionId":      sessionID,
-		"userId":         req.UserID,
-		"mapId":          req.MapID,
-		"avatarPosition": req.AvatarPosition,
-		"isActive":       true,
-	})
-}
-
-func (s *Server) getSession(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	
-	c.JSON(http.StatusOK, gin.H{
-		"sessionId":      sessionID,
-		"userId":         "test-user",
-		"mapId":          "default-map",
-		"avatarPosition": gin.H{"lat": 40.7128, "lng": -74.0060},
-		"isActive":       true,
-	})
-}
-
-func (s *Server) updateAvatarPosition(c *gin.Context) {
-	sessionID := c.Param("sessionId")
-	
-	var req struct {
-		Position struct {
-			Lat float64 `json:"lat"`
-			Lng float64 `json:"lng"`
-		} `json:"position"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	c.JSON(http.StatusOK, gin.H{
-		"success":   true,
-		"sessionId": sessionID,
-		"position":  req.Position,
-	})
-}
-
-func (s *Server) getPOIs(c *gin.Context) {
-	mapID := c.Query("mapId")
-	
-	// Helper function to get participant info for a POI
-	getParticipantInfo := func(poiID string) ([]gin.H, int) {
-		participants := []gin.H{}
-		if poiParticipants, exists := s.poiParticipants[poiID]; exists {
-			for sessionID, username := range poiParticipants {
-				participants = append(participants, gin.H{
-					"id":   sessionID,
-					"name": username,
-				})
-			}
-		}
-		return participants, len(participants)
-	}
-	
-	// Get participant info for each POI
-	poi1Participants, poi1Count := getParticipantInfo("poi-1")
-	poi2Participants, poi2Count := getParticipantInfo("poi-2")
-	
-	// Return some mock POIs with real participant information
-	pois := []gin.H{
-		{
-			"id":              "poi-1",
-			"mapId":           mapID,
-			"name":            "Meeting Room A",
-			"description":     "A comfortable meeting room",
-			"position":        gin.H{"lat": 40.7130, "lng": -74.0062},
-			"createdBy":       "user-1",
-			"maxParticipants": 10,
-			"participantCount": poi1Count,
-			"participants":     poi1Participants,
-		},
-		{
-			"id":              "poi-2",
-			"mapId":           mapID,
-			"name":            "Coffee Corner",
-			"description":     "Grab a coffee and chat",
-			"position":        gin.H{"lat": 40.7125, "lng": -74.0058},
-			"createdBy":       "user-2",
-			"maxParticipants": 5,
-			"participantCount": poi2Count,
-			"participants":     poi2Participants,
-		},
-	}
-	
-	c.JSON(http.StatusOK, gin.H{
-		"mapId": mapID,
-		"pois":  pois,
-		"count": len(pois),
-	})
-}
-
-func (s *Server) createPOI(c *gin.Context) {
-	var req struct {
-		MapID           string `json:"mapId"`
-		Name            string `json:"name"`
-		Description     string `json:"description"`
-		Position        struct {
-			Lat float64 `json:"lat"`
-			Lng float64 `json:"lng"`
-		} `json:"position"`
-		CreatedBy       string `json:"createdBy"`
-		MaxParticipants int    `json:"maxParticipants"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	poiID := "poi-" + req.Name + "-" + req.CreatedBy
-	
-	c.JSON(http.StatusCreated, gin.H{
-		"id":              poiID,
-		"mapId":           req.MapID,
-		"name":            req.Name,
-		"description":     req.Description,
-		"position":        req.Position,
-		"createdBy":       req.CreatedBy,
-		"maxParticipants": req.MaxParticipants,
-		"participantCount": 0,
-	})
-}
-
-func (s *Server) joinPOI(c *gin.Context) {
-	poiID := c.Param("poiId")
-	
-	var req struct {
-		SessionID string `json:"sessionId"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	// Initialize POI participants map if it doesn't exist
-	if s.poiParticipants[poiID] == nil {
-		s.poiParticipants[poiID] = make(map[string]string)
-	}
-	
-	// Add participant with a generated username
-	username := "User-" + req.SessionID
-	s.poiParticipants[poiID][req.SessionID] = username
-	
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"poiId":   poiID,
-		"userId":  req.SessionID,
-	})
-}
-
-func (s *Server) leavePOI(c *gin.Context) {
-	poiID := c.Param("poiId")
-	
-	var req struct {
-		SessionID string `json:"sessionId"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	// Remove participant if they exist
-	if s.poiParticipants[poiID] != nil {
-		delete(s.poiParticipants[poiID], req.SessionID)
-	}
-	
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"poiId":   poiID,
-		"userId":  req.SessionID,
-	})
-}
+// POI mock handlers removed - using proper service-backed handlers only
 
 
 
@@ -682,145 +474,7 @@ func (s *Server) serveAvatar(c *gin.Context) {
 	c.File(filePath)
 }
 
-// Simple user profile handlers for testing
+// User profile mock handlers removed - using proper service-backed handlers only
 
-func (s *Server) getUserProfile(c *gin.Context) {
-	// For testing, return 404 to trigger profile creation
-	c.JSON(http.StatusNotFound, gin.H{
-		"error": "Profile not found",
-	})
-}
-
-func (s *Server) createUserProfile(c *gin.Context) {
-	var req struct {
-		DisplayName string `json:"displayName"`
-		AboutMe     string `json:"aboutMe"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	// Generate a simple user profile response
-	profile := gin.H{
-		"id":            "user-" + req.DisplayName,
-		"displayName":   req.DisplayName,
-		"aboutMe":       req.AboutMe,
-		"accountType":   "guest",
-		"role":          "user",
-		"isActive":      true,
-		"emailVerified": false,
-		"createdAt":     "2024-01-01T00:00:00Z",
-	}
-	
-	c.JSON(http.StatusCreated, profile)
-}
-
-func (s *Server) updateUserProfile(c *gin.Context) {
-	var req struct {
-		DisplayName string `json:"displayName"`
-		AboutMe     string `json:"aboutMe"`
-	}
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	
-	// Return updated profile
-	profile := gin.H{
-		"id":            "user-" + req.DisplayName,
-		"displayName":   req.DisplayName,
-		"aboutMe":       req.AboutMe,
-		"accountType":   "guest",
-		"role":          "user",
-		"isActive":      true,
-		"emailVerified": false,
-		"createdAt":     "2024-01-01T00:00:00Z",
-	}
-	
-	c.JSON(http.StatusOK, profile)
-}
-
-func (s *Server) uploadAvatar(c *gin.Context) {
-	// For testing, just return success without actually handling the file
-	profile := gin.H{
-		"id":            "user-test",
-		"displayName":   "Test User",
-		"avatarURL":     "https://via.placeholder.com/128",
-		"accountType":   "guest",
-		"role":          "user",
-		"isActive":      true,
-		"emailVerified": false,
-		"createdAt":     "2024-01-01T00:00:00Z",
-	}
-	
-	c.JSON(http.StatusOK, profile)
-}
-
-// SimpleSessionService is an adapter that makes the server's session functions work with WebSocket handler
-type SimpleSessionService struct {
-	server *Server
-	// In-memory storage for session positions (in production, this would be in Redis/DB)
-	positions map[string]models.LatLng
-	mutex     sync.RWMutex
-}
-
-func (s *SimpleSessionService) GetSession(ctx context.Context, sessionID string) (*models.Session, error) {
-	// Parse the session ID to extract user ID and map ID
-	// Session ID format: "session-{userID}-{mapID}"
-	// Note: userID is a UUID with hyphens, so we need to be careful with parsing
-	
-	if !strings.HasPrefix(sessionID, "session-") {
-		return nil, fmt.Errorf("invalid session ID format: must start with 'session-'")
-	}
-	
-	// Remove "session-" prefix
-	remainder := sessionID[8:] // len("session-") = 8
-	
-	// Find the last occurrence of "-default-map" to extract the mapID
-	mapSuffix := "-default-map"
-	mapIndex := strings.LastIndex(remainder, mapSuffix)
-	if mapIndex == -1 {
-		return nil, fmt.Errorf("invalid session ID format: must end with '-default-map'")
-	}
-	
-	userID := remainder[:mapIndex]
-	mapID := remainder[mapIndex+1:] // Skip the "-" before "default-map"
-	
-	// Get stored position or use default
-	s.mutex.RLock()
-	position, exists := s.positions[sessionID]
-	s.mutex.RUnlock()
-	
-	if !exists {
-		position = models.LatLng{Lat: 40.7128, Lng: -74.0060} // Default position
-	}
-	
-	// Create a mock session for WebSocket handler
-	session := &models.Session{
-		ID:       sessionID,
-		UserID:   userID,
-		MapID:    mapID,
-		AvatarPos: position,
-		IsActive: true,
-	}
-	
-	return session, nil
-}
-
-func (s *SimpleSessionService) SessionHeartbeat(ctx context.Context, sessionID string) error {
-	// For now, just return success
-	return nil
-}
-
-func (s *SimpleSessionService) UpdateAvatarPosition(ctx context.Context, sessionID string, position models.LatLng) error {
-	// Store the position in memory
-	s.mutex.Lock()
-	s.positions[sessionID] = position
-	s.mutex.Unlock()
-	
-	return nil
-}
+// SimpleSessionService mock removed - using proper SessionService only
 
