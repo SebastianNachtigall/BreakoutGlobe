@@ -77,7 +77,10 @@ func New(cfg *config.Config) *Server {
 	
 	// CORS middleware
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowOrigins:     []string{
+			"http://localhost:3000",                                    // Local development
+			"https://frontend-production-0050.up.railway.app",         // Railway production
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID"},
 		AllowCredentials: true,
