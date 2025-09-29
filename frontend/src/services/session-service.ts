@@ -33,6 +33,11 @@ export class SessionService {
       console.log('🫀 SessionService: Sending heartbeat for session', this.sessionId);
       
       const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+      console.log('🔧 SessionService environment check:', {
+        VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+        API_BASE_URL,
+        heartbeatUrl: `${API_BASE_URL}/api/sessions/${this.sessionId}/heartbeat`
+      });
       const response = await fetch(`${API_BASE_URL}/api/sessions/${this.sessionId}/heartbeat`, {
         method: 'POST',
         headers: {
