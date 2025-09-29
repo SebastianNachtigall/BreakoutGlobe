@@ -1060,7 +1060,7 @@ function App() {
           {selectedPOI && (
             <POIDetailsPanel
               poi={selectedPOI}
-              currentUserId={sessionState.sessionId || ''}
+              currentUserId={userProfile?.id || ''}
               isUserParticipant={poiState.currentUserPOI === selectedPOI.id}
               onJoin={() => handleJoinPOI(selectedPOI.id)}
               onLeave={() => handleLeavePOI(selectedPOI.id)}
