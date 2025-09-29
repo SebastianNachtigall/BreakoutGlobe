@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,10 +58,9 @@ func New(cfg *config.Config) *Server {
 		
 		// Setup Redis connection
 		log.Printf("🔗 Attempting to connect to Redis: %s", cfg.RedisURL)
-		redisConfig := redis.Config{
-			Addr:     strings.TrimPrefix(cfg.RedisURL, "redis://"),
-			Password: "",
-			DB:       0,
+		redisConfig, err := parseRedisURL(cfg.RedisURL)
+		if err != nil {
+			log.Fatalf("❌ Failed to parse Redis URL: %v", err)
 		}
 		redisClient = redis.NewClient(redisConfig)
 		
@@ -478,3 +478,35 @@ func (s *Server) serveAvatar(c *gin.Context) {
 
 // SimpleSessionService mock removed - using proper SessionService only
 
+// parseRedisURL parses a Redis URL and returns a Redis config
+// Supports formats like: redis://user:password@host:port/db
+func parseRedisURL(redisURL string) (redis.Config, error) {
+	config := redis.Config{
+		Password: "",
+		DB:       0,
+	}
+	
+	// Handle simple localhost case
+	if redisURL == "redis://localhost:6379" {
+		config.Addr = "localhost:6379"
+		return config, nil
+	}
+	
+	// Parse the URL
+	u, err := url.Parse(redisURL)
+	if err != nil {
+		return config, fmt.Errorf("invalid Redis URL: %w", err)
+	}
+	
+	// Extract host and port
+	config.Addr = u.Host
+	
+	// Extract password if present
+	if u.User != nil {
+		if password, ok := u.User.Password(); ok {
+			config.Password = password
+		}
+	}
+	
+	return config, nil
+}
