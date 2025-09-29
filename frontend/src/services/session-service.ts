@@ -32,7 +32,8 @@ export class SessionService {
     try {
       console.log('🫀 SessionService: Sending heartbeat for session', this.sessionId);
       
-      const response = await fetch(`http://localhost:8080/api/sessions/${this.sessionId}/heartbeat`, {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+      const response = await fetch(`${API_BASE_URL}/api/sessions/${this.sessionId}/heartbeat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

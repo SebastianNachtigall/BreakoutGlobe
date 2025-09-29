@@ -139,11 +139,14 @@ function App() {
         const currentProfile = userProfileStore.getState().getProfileOffline()
         console.log('🔍 Session creation - currentProfile:', currentProfile?.id, currentProfile?.displayName)
         
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+        
         // First, check if we have an existing session for this user
         if (currentProfile?.id) {
           try {
             console.log('🔍 Checking for existing sessions for user:', currentProfile.id)
-            const mapResponse = await fetch(`http://localhost:8080/api/maps/default-map/sessions`)
+            const mapResponse = await fetch(`${API_BASE_URL}/api/maps/default-map/sessions`)
             if (mapResponse.ok) {
               const mapData = await mapResponse.json()
               console.log('📋 Map sessions:', mapData.sessions?.length || 0)
@@ -175,7 +178,7 @@ function App() {
           console.log('🔄 Creating new session for user:', currentProfile.id)
           
           // Create new session via API
-          const response = await fetch('http://localhost:8080/api/sessions', {
+          const response = await fetch(`${API_BASE_URL}/api/sessions`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -193,7 +196,7 @@ function App() {
             if (response.status === 409) {
               // User already has an active session, get existing sessions for this map
               console.log('🔄 User already has active session, fetching existing sessions')
-              const mapResponse = await fetch(`http://localhost:8080/api/maps/default-map/sessions`)
+              const mapResponse = await fetch(`${API_BASE_URL}/api/maps/default-map/sessions`)
               if (mapResponse.ok) {
                 const mapData = await mapResponse.json()
                 const userSession = mapData.sessions?.find((s: any) => s.userId === currentProfile.id)
@@ -227,7 +230,7 @@ function App() {
         sessionSvc.startHeartbeat();
 
         // Initialize WebSocket connection
-        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`;
+        const wsUrl = `${WS_BASE_URL}/ws?sessionId=${sessionId}`;
 
         // Initialize WebSocket connection
         const client = new WebSocketClient(wsUrl, sessionId!);
@@ -691,8 +694,11 @@ function App() {
     // Now initialize the app with the new profile
     const initializeWithProfile = async () => {
       try {
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+        
         // Create new session via API
-        const response = await fetch('http://localhost:8080/api/sessions', {
+        const response = await fetch(`${API_BASE_URL}/api/sessions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -715,7 +721,7 @@ function App() {
         sessionStore.getState().createSession(sessionId, sessionData.position || mockSession.position)
 
         // Initialize WebSocket connection
-        const wsUrl = `ws://localhost:8080/ws?sessionId=${sessionId}`;
+        const wsUrl = `${WS_BASE_URL}/ws?sessionId=${sessionId}`;
         const client = new WebSocketClient(wsUrl, sessionId);
 
         // Make WebSocket client globally accessible for WebRTC signaling
