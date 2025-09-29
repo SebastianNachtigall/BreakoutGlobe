@@ -24,11 +24,8 @@ WORKDIR /root/
 
 COPY --from=builder /app/main .
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/health || exit 1
-
-# Railway provides PORT environment variable
-EXPOSE $PORT
+# Railway provides PORT environment variable at runtime
+# We can't use $PORT in EXPOSE since it's not available at build time
+EXPOSE 8080
 
 CMD ["./main"]
