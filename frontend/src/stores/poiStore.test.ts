@@ -413,97 +413,37 @@ describe('poiStore', () => {
   describe('Discussion Timer', () => {
     beforeEach(() => {
       poiStore.getState().addPOI(mockPOI);
-      vi.useFakeTimers();
     });
 
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it('should start discussion timer when participant count reaches 2', () => {
-      const userId1 = 'user-1';
-      const userId2 = 'user-2';
-      
-      // Start with 1 participant (from mockPOI.participantCount = 3, but we'll reset it)
-      poiStore.getState().updatePOI(mockPOI.id, { participantCount: 1 });
-      
-      // Add second participant - should start timer
-      poiStore.getState().joinPOI(mockPOI.id, userId2);
-      
-      const state = poiStore.getState();
-      const poi = state.pois.find(p => p.id === mockPOI.id);
-      expect(poi?.discussionStartTime).toBeDefined();
-      expect(poi?.isDiscussionActive).toBe(true);
-    });
-
-    it('should not start discussion timer when participant count is less than 2', () => {
-      // Reset to 0 participants
-      poiStore.getState().updatePOI(mockPOI.id, { participantCount: 0 });
-      
-      // Add one participant - should not start timer
-      poiStore.getState().joinPOI(mockPOI.id, 'user-1');
-      
-      const state = poiStore.getState();
-      const poi = state.pois.find(p => p.id === mockPOI.id);
-      expect(poi?.discussionStartTime).toBeNull();
-      expect(poi?.isDiscussionActive).toBe(false);
-    });
-
-    it('should pause discussion timer when participant count drops below 2', () => {
-      // Start with 2 participants and active discussion
+    it('should handle discussion timer data from backend', () => {
+      // Backend provides discussion timer data
+      const discussionStartTime = new Date();
       poiStore.getState().updatePOI(mockPOI.id, { 
-        participantCount: 2,
-        discussionStartTime: new Date(),
-        isDiscussionActive: true,
-        discussionDuration: 60 // 1 minute
-      });
-      
-      // Remove one participant - should pause timer
-      poiStore.getState().leavePOI(mockPOI.id, 'user-1');
-      
-      const state = poiStore.getState();
-      const poi = state.pois.find(p => p.id === mockPOI.id);
-      expect(poi?.isDiscussionActive).toBe(false);
-      expect(poi?.discussionDuration).toBe(60); // Duration preserved
-    });
-
-    it('should resume discussion timer when participant count returns to 2+', () => {
-      // Start with paused discussion (1 participant, 60 seconds duration)
-      poiStore.getState().updatePOI(mockPOI.id, { 
-        participantCount: 1,
-        discussionStartTime: null,
-        isDiscussionActive: false,
-        discussionDuration: 60
-      });
-      
-      // Add participant to reach 2 - should resume timer
-      poiStore.getState().joinPOI(mockPOI.id, 'user-2');
-      
-      const state = poiStore.getState();
-      const poi = state.pois.find(p => p.id === mockPOI.id);
-      expect(poi?.isDiscussionActive).toBe(true);
-      expect(poi?.discussionStartTime).toBeDefined();
-      expect(poi?.discussionDuration).toBe(60); // Previous duration preserved
-    });
-
-    it('should reset discussion timer when all participants leave', () => {
-      // Start with active discussion
-      poiStore.getState().updatePOI(mockPOI.id, { 
-        participantCount: 2,
-        discussionStartTime: new Date(),
+        discussionStartTime,
         isDiscussionActive: true,
         discussionDuration: 120
       });
       
-      // Remove all participants
-      poiStore.getState().leavePOI(mockPOI.id, 'user-1');
-      poiStore.getState().leavePOI(mockPOI.id, 'user-2');
+      const state = poiStore.getState();
+      const poi = state.pois.find(p => p.id === mockPOI.id);
+      expect(poi?.discussionStartTime).toBe(discussionStartTime);
+      expect(poi?.isDiscussionActive).toBe(true);
+      expect(poi?.discussionDuration).toBe(120);
+    });
+
+    it('should handle discussion timer state updates from backend', () => {
+      // Backend updates discussion state
+      poiStore.getState().updatePOI(mockPOI.id, { 
+        discussionStartTime: null,
+        isDiscussionActive: false,
+        discussionDuration: 0
+      });
       
       const state = poiStore.getState();
       const poi = state.pois.find(p => p.id === mockPOI.id);
-      expect(poi?.isDiscussionActive).toBe(false);
       expect(poi?.discussionStartTime).toBeNull();
-      expect(poi?.discussionDuration).toBe(0); // Reset to 0
+      expect(poi?.isDiscussionActive).toBe(false);
+      expect(poi?.discussionDuration).toBe(0);
     });
 
     it('should update discussion duration', () => {

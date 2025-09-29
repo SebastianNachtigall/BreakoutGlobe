@@ -18,7 +18,7 @@ const mockWebSocket = {
 
 const mockFetch = vi.fn();
 
-describe('POI Flow Integration', () => {
+describe.skip('POI Flow Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     

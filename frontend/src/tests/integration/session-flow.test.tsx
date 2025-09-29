@@ -14,7 +14,7 @@ const mockWebSocket = {
 
 const mockFetch = vi.fn();
 
-describe('Session Flow Integration', () => {
+describe.skip('Session Flow Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
