@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -157,8 +158,10 @@ func (h *SessionHandler) CreateSession(c *gin.Context) {
 	}
 	
 	// Create session
+	log.Printf("🔄 CreateSession: Creating session for user %s on map %s at position %+v", req.UserID, req.MapID, req.AvatarPosition)
 	session, err := h.sessionService.CreateSession(c, req.UserID, req.MapID, req.AvatarPosition)
 	if err != nil {
+		log.Printf("❌ CreateSession: Failed to create session: %v", err)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, ErrorResponse{
 				Code:    "MAP_NOT_FOUND",
