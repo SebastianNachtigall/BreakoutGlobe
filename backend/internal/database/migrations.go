@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 
 	"breakoutglobe/internal/models"
 	"gorm.io/gorm"
@@ -68,6 +69,42 @@ func CreateIndexes(db *gorm.DB) error {
 	// Map indexes
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_maps_created_by ON maps (created_by)").Error; err != nil {
 		return fmt.Errorf("failed to create maps created_by index: %w", err)
+	}
+
+	// Create default map if it doesn't exist
+	if err := CreateDefaultMapIfNotExists(db); err != nil {
+		return fmt.Errorf("failed to create default map: %w", err)
+	}
+
+	return nil
+}
+
+// CreateDefaultMapIfNotExists creates the default map if it doesn't exist
+func CreateDefaultMapIfNotExists(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+
+	// Check if default map already exists
+	var count int64
+	if err := db.Model(&models.Map{}).Where("id = ?", "default-map").Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for default map: %w", err)
+	}
+
+	// If default map doesn't exist, create it
+	if count == 0 {
+		defaultMap := &models.Map{
+			ID:          "default-map",
+			Name:        "Default Map",
+			Description: "The default map for BreakoutGlobe sessions",
+			CreatedBy:   "system", // System-created map
+		}
+
+		if err := db.Create(defaultMap).Error; err != nil {
+			return fmt.Errorf("failed to create default map: %w", err)
+		}
+
+		log.Printf("✅ Created default map: %s", defaultMap.ID)
 	}
 
 	return nil
