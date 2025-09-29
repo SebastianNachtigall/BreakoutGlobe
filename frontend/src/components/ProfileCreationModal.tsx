@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types/models';
 import { createGuestProfile, APIError } from '../services/api';
+import { AvatarImageUpload } from './AvatarImageUpload';
 
 interface ProfileCreationModalProps {
   isOpen: boolean;
@@ -17,7 +18,7 @@ interface FormData {
 interface FormErrors {
   displayName?: string;
   aboutMe?: string;
-  avatarFile?: string;
+  avatar?: string;
   general?: string;
 }
 
@@ -50,15 +51,7 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
       newErrors.aboutMe = 'About me must be 500 characters or less';
     }
 
-    // Avatar file validation
-    if (formData.avatarFile) {
-      const allowedTypes = ['image/jpeg', 'image/png'];
-      if (!allowedTypes.includes(formData.avatarFile.type)) {
-        newErrors.avatarFile = 'Only JPG and PNG files are allowed';
-      } else if (formData.avatarFile.size > 2 * 1024 * 1024) { // 2MB
-        newErrors.avatarFile = 'File size must be less than 2MB';
-      }
-    }
+    // Avatar validation is now handled by AvatarImageUpload component
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -81,6 +74,11 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
         aboutMe: formData.aboutMe.trim(),
         aboutMeLength: formData.aboutMe.trim().length,
         aboutMeAfterProcessing: formData.aboutMe.trim() || undefined,
+        avatarFile: formData.avatarFile ? {
+          name: formData.avatarFile.name,
+          size: formData.avatarFile.size,
+          type: formData.avatarFile.type,
+        } : undefined,
       });
 
       const requestData = {
@@ -122,26 +120,19 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAvatarSelected = (file: File) => {
+    console.log('🖼️ ProfileCreationModal: Avatar selected:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
     setFormData(prev => ({ ...prev, avatarFile: file }));
-    
-    // Validate file immediately
-    if (file) {
-      const newErrors: FormErrors = {};
-      const allowedTypes = ['image/jpeg', 'image/png'];
-      
-      if (!allowedTypes.includes(file.type)) {
-        newErrors.avatarFile = 'Only JPG and PNG files are allowed';
-      } else if (file.size > 2 * 1024 * 1024) { // 2MB
-        newErrors.avatarFile = 'File size must be less than 2MB';
-      }
-      
-      setErrors(prev => ({ ...prev, avatarFile: newErrors.avatarFile }));
-    } else {
-      // Clear error when no file is selected
-      setErrors(prev => ({ ...prev, avatarFile: undefined }));
-    }
+    // Clear any avatar errors when a new file is selected
+    setErrors(prev => ({ ...prev, avatar: undefined }));
+  };
+
+  const handleAvatarError = (error: string) => {
+    setErrors(prev => ({ ...prev, avatar: error }));
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -222,25 +213,17 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
 
           {/* Avatar Upload */}
           <div>
-            <label htmlFor="avatarFile" className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Avatar Image
             </label>
-            <input
-              type="file"
-              id="avatarFile"
-              accept="image/jpeg,image/png"
-              onChange={handleFileChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.avatarFile ? 'border-red-500' : 'border-gray-300'
-              }`}
+            <AvatarImageUpload
+              onImageSelected={handleAvatarSelected}
+              onError={handleAvatarError}
               disabled={isLoading}
             />
-            {errors.avatarFile && (
-              <p className="mt-1 text-sm text-red-600">{errors.avatarFile}</p>
+            {errors.avatar && (
+              <p className="mt-2 text-sm text-red-600">{errors.avatar}</p>
             )}
-            <p className="mt-1 text-sm text-gray-500">
-              Optional. JPG or PNG, max 2MB
-            </p>
           </div>
 
           {/* General Error */}
