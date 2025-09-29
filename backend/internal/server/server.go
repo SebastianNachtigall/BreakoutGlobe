@@ -212,7 +212,10 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		
 		// Create image uploader
 		uploadDir := filepath.Join(".", "uploads")
-		baseURL := "http://localhost:8080" // TODO: Make this configurable
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:8080" // Fallback for local development
+		}
 		imageUploader := uploads.NewImageUploader(uploadDir, baseURL)
 		
 		// Create POI service with image uploader and user service
