@@ -17,7 +17,7 @@ import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { SessionService } from './services/session-service'
-import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, getPOIs } from './services/api'
+import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
 
 import type { UserProfile } from './types/models'
@@ -680,7 +680,53 @@ function App() {
     }
   }, [userProfile, poiState])
 
+  const handleDeletePOI = useCallback(async (poiId: string) => {
+    if (!userProfile) return
 
+    // Show confirmation dialog
+    if (!window.confirm('Are you sure you want to delete this POI? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      console.log('🗑️ Deleting POI:', poiId)
+      
+      // Call API to delete POI
+      await deletePOI(poiId)
+      console.log('✅ Successfully deleted POI:', poiId)
+      
+      // Remove POI from store
+      poiState.handleRealtimeDelete(poiId)
+      
+      // Close the POI details panel if it's open
+      setSelectedPOI(null)
+      
+      // If user was in a group call for this POI, leave it
+      const videoState = videoCallStore.getState()
+      if (videoState.currentPOI === poiId && videoState.isGroupCallActive) {
+        console.log('🚪 Leaving group call for deleted POI:', poiId)
+        videoState.leavePOICall()
+      }
+      
+      // Refresh POI data
+      await refreshPOIs()
+      
+    } catch (error) {
+      console.error('❌ Failed to delete POI:', error)
+      
+      // Show error notification
+      notificationStore.getState().addNotification({
+        id: `delete-poi-error-${Date.now()}`,
+        type: 'error',
+        title: 'Failed to Delete POI',
+        message: 'Unable to delete POI. Please try again.',
+        timestamp: new Date(),
+        retryable: true,
+        retryAction: () => handleDeletePOI(poiId),
+        autoRemoveAfter: 8000
+      })
+    }
+  }, [userProfile, poiState, refreshPOIs])
 
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
@@ -1018,6 +1064,7 @@ function App() {
               isUserParticipant={poiState.currentUserPOI === selectedPOI.id}
               onJoin={() => handleJoinPOI(selectedPOI.id)}
               onLeave={() => handleLeavePOI(selectedPOI.id)}
+              onDelete={() => handleDeletePOI(selectedPOI.id)}
               onClose={() => setSelectedPOI(null)}
             />
           )}

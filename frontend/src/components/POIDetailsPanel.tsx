@@ -7,6 +7,7 @@ export interface POIDetailsPanelProps {
   isUserParticipant: boolean;
   onJoin: (poiId: string) => void;
   onLeave: (poiId: string) => void;
+  onDelete?: (poiId: string) => void;
   onClose: () => void;
   isLoading?: boolean;
   position?: { x: number; y: number };
@@ -57,6 +58,7 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
   isUserParticipant,
   onJoin,
   onLeave,
+  onDelete,
   onClose,
   isLoading = false,
   position
@@ -219,7 +221,7 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         </div>
       </div>
 
-      <div className="poi-actions">
+      <div className="poi-actions space-y-2">
         <button
           onClick={isUserParticipant ? handleLeave : handleJoin}
           disabled={(!isUserParticipant && isFull) || isLoading}
@@ -232,6 +234,17 @@ export const POIDetailsPanel: React.FC<POIDetailsPanelProps> = ({
         >
           {getActionButtonText()}
         </button>
+        
+        {/* Delete button - only show if user created this POI and onDelete is provided */}
+        {onDelete && poi.createdBy === currentUserId && (
+          <button
+            onClick={() => onDelete(poi.id)}
+            disabled={isLoading}
+            className="w-full py-2 px-4 rounded-md font-medium text-sm transition-colors bg-red-600 hover:bg-red-700 text-white disabled:bg-red-400 border border-red-700"
+          >
+            🗑️ Delete POI
+          </button>
+        )}
       </div>
     </div>
   );
