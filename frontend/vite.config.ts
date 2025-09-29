@@ -11,6 +11,15 @@ export default defineConfig({
       usePolling: true
     }
   },
+  preview: {
+    host: true,
+    port: 8080,
+    allowedHosts: [
+      'localhost',
+      '.railway.app',
+      '.up.railway.app'
+    ]
+  },
   test: {
     globals: true,
     environment: 'jsdom',
