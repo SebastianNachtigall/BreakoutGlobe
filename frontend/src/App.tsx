@@ -709,7 +709,7 @@ function App() {
       }
       
       // Refresh POI data
-      await refreshPOIs()
+      await loadPOIs()
       
     } catch (error) {
       console.error('❌ Failed to delete POI:', error)
@@ -726,7 +726,7 @@ function App() {
         autoRemoveAfter: 8000
       })
     }
-  }, [userProfile, poiState, refreshPOIs])
+  }, [userProfile, poiState, loadPOIs])
 
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
