@@ -85,6 +85,11 @@ func CreateDefaultMapIfNotExists(db *gorm.DB) error {
 		return fmt.Errorf("database connection is nil")
 	}
 
+	// First, ensure system user exists
+	if err := CreateSystemUserIfNotExists(db); err != nil {
+		return fmt.Errorf("failed to create system user: %w", err)
+	}
+
 	// Check if default map already exists
 	var count int64
 	if err := db.Model(&models.Map{}).Where("id = ?", "default-map").Count(&count).Error; err != nil {
@@ -97,7 +102,7 @@ func CreateDefaultMapIfNotExists(db *gorm.DB) error {
 			ID:          "default-map",
 			Name:        "Default Map",
 			Description: "The default map for BreakoutGlobe sessions",
-			CreatedBy:   "system", // System-created map
+			CreatedBy:   "system", // References system user
 		}
 
 		if err := db.Create(defaultMap).Error; err != nil {
@@ -105,6 +110,36 @@ func CreateDefaultMapIfNotExists(db *gorm.DB) error {
 		}
 
 		log.Printf("✅ Created default map: %s", defaultMap.ID)
+	}
+
+	return nil
+}
+
+// CreateSystemUserIfNotExists creates the system user if it doesn't exist
+func CreateSystemUserIfNotExists(db *gorm.DB) error {
+	// Check if system user already exists
+	var count int64
+	if err := db.Model(&models.User{}).Where("id = ?", "system").Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for system user: %w", err)
+	}
+
+	// If system user doesn't exist, create it
+	if count == 0 {
+		email := "system@breakoutglobe.local"
+		systemUser := &models.User{
+			ID:          "system",
+			DisplayName: "System",
+			Email:       &email,
+			AccountType: "system",
+			Role:        "admin",
+			IsActive:    true,
+		}
+
+		if err := db.Create(systemUser).Error; err != nil {
+			return fmt.Errorf("failed to create system user: %w", err)
+		}
+
+		log.Printf("✅ Created system user: %s", systemUser.ID)
 	}
 
 	return nil
