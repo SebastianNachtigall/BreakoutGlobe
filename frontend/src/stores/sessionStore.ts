@@ -33,7 +33,7 @@ export interface SessionState {
 const initialState = {
   sessionId: null,
   isConnected: false,
-  avatarPosition: { lat: 0, lng: 0 },
+  avatarPosition: { lat: 52.5200, lng: 13.4050 }, // Berlin, Germany
   isMoving: false,
   lastHeartbeat: null,
   previousPosition: null,
