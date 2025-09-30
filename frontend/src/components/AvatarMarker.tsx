@@ -59,6 +59,7 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
         flex items-center justify-center text-white text-xs font-bold
         relative overflow-hidden
       `}
+      style={{ transform: 'scale(1.33)' }} // Scale to 2/3 of POI size (8 * 1.33 ≈ 10.67, which is 2/3 of 16)
       onClick={handleClick}
       title={avatar.displayName || avatar.sessionId}
     >
@@ -179,6 +180,9 @@ export const createAvatarMarkerElement = (
   markerElement.style.width = '32px';  // w-8
   markerElement.style.height = '32px'; // h-8
   markerElement.style.borderRadius = '50%'; // rounded-full
+  
+  // Scale avatar to 2/3 of POI size for better visual balance
+  markerElement.style.transform = 'scale(1.33) translateZ(0)'; // Combined with existing translateZ
 
   return markerElement;
 };
