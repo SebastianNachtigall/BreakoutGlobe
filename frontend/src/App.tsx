@@ -26,7 +26,7 @@ import type { UserProfile } from './types/models'
 const mockSession = {
   id: 'session-123',
   avatarId: 'avatar-456',
-  position: { lat: 52.5200, lng: 13.4050 } // Berlin, Germany
+  position: { lat: 52.5200, lng: 13.4050 } // Berlin, Germany (lat, lng for position objects)
 }
 
 function App() {
@@ -1068,7 +1068,7 @@ function App() {
         {/* Map Container */}
         <div className="flex-1 relative">
           <MapContainer
-            initialCenter={[52.5200, 13.4050]} // Berlin, Germany
+            initialCenter={[13.4050, 52.5200]} // Berlin, Germany (lng, lat)
             initialZoom={6}
             avatars={avatars}
             pois={poiState.pois || []}
