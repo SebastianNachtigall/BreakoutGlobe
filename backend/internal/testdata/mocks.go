@@ -457,6 +457,11 @@ func (m *MockPOIService) DeletePOI(ctx context.Context, poiID string) error {
 	return args.Error(0)
 }
 
+func (m *MockPOIService) ClearAllPOIs(ctx context.Context, mapID string) error {
+	args := m.Called(ctx, mapID)
+	return args.Error(0)
+}
+
 // MockRateLimiter is a mock implementation of rate limiter
 type MockRateLimiter struct {
 	mock.Mock

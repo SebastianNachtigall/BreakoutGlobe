@@ -110,6 +110,11 @@ func (m *MockPOIService) ValidatePOI(ctx context.Context, poiID string) (*models
 	return args.Get(0).(*models.POI), args.Error(1)
 }
 
+func (m *MockPOIService) ClearAllPOIs(ctx context.Context, mapID string) error {
+	args := m.Called(ctx, mapID)
+	return args.Error(0)
+}
+
 // POIHandlerTestSuite contains the test suite for POIHandler
 type POIHandlerTestSuite struct {
 	suite.Suite

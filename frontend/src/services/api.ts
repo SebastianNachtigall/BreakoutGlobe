@@ -423,4 +423,18 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
     discussionStartTime: apiResponse.discussionStartTime ? new Date(apiResponse.discussionStartTime) : null,
     isDiscussionActive: apiResponse.isDiscussionActive || false
   };
+}// D
+evelopment helper function to clear all POIs
+export async function clearAllPOIs(mapId: string = 'default-map'): Promise<void> {
+  console.log('🧹 API: clearAllPOIs called for mapId:', mapId);
+
+  const response = await fetch(`${API_BASE_URL}/api/pois/dev/clear-all?mapId=${encodeURIComponent(mapId)}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  await handleResponse<{ success: boolean; message: string; mapId: string }>(response);
+  console.log('🧹 API: All POIs cleared successfully');
 }

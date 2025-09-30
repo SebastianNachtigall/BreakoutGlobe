@@ -731,3 +731,25 @@ func (s *POIService) updateDiscussionTimer(ctx context.Context, poiID string) er
 	
 	return nil
 }
+
+// ClearAllPOIs removes all POIs from a map - Development helper method
+func (s *POIService) ClearAllPOIs(ctx context.Context, mapID string) error {
+	if mapID == "" {
+		return fmt.Errorf("map ID is required")
+	}
+	
+	// Get all POIs for the map
+	pois, err := s.poiRepo.GetByMapID(ctx, mapID)
+	if err != nil {
+		return fmt.Errorf("failed to get POIs for map: %w", err)
+	}
+	
+	// Delete each POI (this will also clean up participants via cascade)
+	for _, poi := range pois {
+		if err := s.poiRepo.Delete(ctx, poi.ID); err != nil {
+			return fmt.Errorf("failed to delete POI %s: %w", poi.ID, err)
+		}
+	}
+	
+	return nil
+}

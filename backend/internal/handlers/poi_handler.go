@@ -32,6 +32,7 @@ type POIServiceInterface interface {
 	GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error)
 	GetUserPOIs(ctx context.Context, userID string) ([]string, error)
 	ValidatePOI(ctx context.Context, poiID string) (*models.POI, error)
+	ClearAllPOIs(ctx context.Context, mapID string) error
 }
 
 // POIUserServiceInterface defines the interface for user service operations needed by POI handler
@@ -70,6 +71,9 @@ func (h *POIHandler) RegisterRoutes(router *gin.Engine) {
 		api.POST("/pois/:poiId/join", h.JoinPOI)
 		api.POST("/pois/:poiId/leave", h.LeavePOI)
 		api.GET("/pois/:poiId/participants", h.GetPOIParticipants)
+		
+		// Development endpoints (TODO: Remove in production)
+		api.DELETE("/pois/dev/clear-all", h.ClearAllPOIs)
 	}
 }
 
@@ -901,4 +905,27 @@ func isCapacityExceededError(err error) bool {
 // isAlreadyJoinedError checks if the error indicates user already joined
 func isAlreadyJoinedError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "already joined")
+}
+
+// ClearAllPOIs handles DELETE /api/pois/dev/clear-all - Development endpoint to clear all POIs
+func (h *POIHandler) ClearAllPOIs(c *gin.Context) {
+	// Get mapId from query parameter, default to "default-map"
+	mapID := c.DefaultQuery("mapId", "default-map")
+	
+	// Clear all POIs for the map
+	if err := h.poiService.ClearAllPOIs(c, mapID); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "INTERNAL_ERROR",
+			Message: "Failed to clear POIs",
+			Details: err.Error(),
+		})
+		return
+	}
+	
+	// Return success response
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "All POIs cleared successfully",
+		"mapId":   mapID,
+	})
 }

@@ -17,7 +17,7 @@ import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { SessionService } from './services/session-service'
-import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs } from './services/api'
+import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
 
 import type { UserProfile } from './types/models'
@@ -974,6 +974,29 @@ function App() {
     setAvatarTooltip({ isOpen: false, position: { x: 0, y: 0 }, avatar: null });
   }, [])
 
+  // Development helper: Clear all POIs
+  const handleNukePOIs = useCallback(async () => {
+    if (!confirm('⚠️ This will delete ALL POIs on the map. Are you sure?')) {
+      return;
+    }
+
+    try {
+      await clearAllPOIs('default-map');
+      // Reload POIs to update the UI
+      await loadPOIs();
+      console.log('🧹 All POIs cleared successfully');
+    } catch (error) {
+      console.error('Failed to clear POIs:', error);
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: 'Failed to clear POIs',
+        type: 'api',
+        severity: 'error',
+        timestamp: new Date()
+      });
+    }
+  }, [])
+
   // Show loading screen while checking for profile
   if (!profileCheckComplete) {
     return (
@@ -1075,6 +1098,14 @@ function App() {
           <div className="flex justify-between items-center">
             <span>Connected Users: {avatars.length}</span>
             <div className="flex items-center space-x-4">
+              {/* Development buttons */}
+              <button
+                onClick={handleNukePOIs}
+                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-medium"
+                title="Clear all POIs (Development only)"
+              >
+                🧹 Nuke POIs
+              </button>
               {/* Test buttons for video call POC */}
               <button
                 onClick={() => {

@@ -670,3 +670,7 @@ func (m *MockPOIServiceForWS) GetUserPOIs(ctx context.Context, userID string) ([
 func (m *MockPOIServiceForWS) ValidatePOI(ctx context.Context, poiID string) (*models.POI, error) {
 	return &models.POI{}, nil
 }
+
+func (m *MockPOIServiceForWS) ClearAllPOIs(ctx context.Context, mapID string) error {
+	return nil
+}
