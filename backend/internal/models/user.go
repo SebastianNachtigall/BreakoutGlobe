@@ -118,7 +118,7 @@ func ValidateDisplayName(displayName string) error {
 	}
 
 	// Check for invalid characters in display name
-	if strings.ContainsAny(displayName, `@#$%^&*()+={}[]|\:;"'<>?,./`) {
+	if strings.ContainsAny(displayName, `@#$%^&*()+={}[]|\:;"'<>?,/`) {
 		return fmt.Errorf("display name contains invalid characters")
 	}
 

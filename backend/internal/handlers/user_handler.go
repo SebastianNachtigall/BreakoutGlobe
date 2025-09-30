@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"breakoutglobe/internal/models"
@@ -122,6 +123,19 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 	user, err := h.userService.CreateGuestProfileWithAboutMe(c, req.DisplayName, req.AboutMe)
 	if err != nil {
 		fmt.Printf("❌ UserHandler: Failed to create profile: %v\n", err)
+		
+		// Check if this is a validation error
+		if strings.Contains(err.Error(), "user validation failed") || 
+		   strings.Contains(err.Error(), "display name") ||
+		   strings.Contains(err.Error(), "invalid characters") {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid profile data",
+				Details: err.Error(),
+			})
+			return
+		}
+		
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    "INTERNAL_ERROR",
 			Message: "Failed to create profile",
