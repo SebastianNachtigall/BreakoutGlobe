@@ -191,12 +191,20 @@ export async function updateUserProfile(updates: Partial<Pick<UserProfile, 'disp
   return transformUserProfileFromAPI(apiProfile);
 }
 
-export async function uploadAvatar(avatarFile: File): Promise<UserProfile> {
+export async function uploadAvatar(avatarFile: File, userId?: string): Promise<UserProfile> {
   const formData = new FormData();
   formData.append('avatar', avatarFile);
 
+  const headers: Record<string, string> = {};
+  
+  // Add user ID header if provided
+  if (userId) {
+    headers['X-User-ID'] = userId;
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/users/avatar`, {
     method: 'POST',
+    headers,
     credentials: 'include',
     body: formData,
   });

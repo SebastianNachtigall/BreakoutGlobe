@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { userProfileStore } from '../stores/userProfileStore';
-import { updateUserProfile } from '../services/api';
+import { updateUserProfile, uploadAvatar } from '../services/api';
+import { AvatarImageUpload } from './AvatarImageUpload';
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   // Initialize form values when profile changes or modal opens
   useEffect(() => {
@@ -33,6 +36,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
       
       setDisplayName(profile.displayName);
       setAboutMe(profile.aboutMe || '');
+      setAvatarFile(null);
       setHasChanges(false);
       setError(null);
       
@@ -49,9 +53,10 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
     if (profile) {
       const displayNameChanged = displayName !== profile.displayName;
       const aboutMeChanged = aboutMe !== (profile.aboutMe || '');
-      setHasChanges(displayNameChanged || aboutMeChanged);
+      const avatarChanged = !!avatarFile;
+      setHasChanges(displayNameChanged || aboutMeChanged || avatarChanged);
     }
-  }, [displayName, aboutMe, profile]);
+  }, [displayName, aboutMe, avatarFile, profile]);
 
   const validateForm = (): string | null => {
     // Validate display name for full accounts
@@ -72,6 +77,15 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
     return null;
   };
 
+  const handleAvatarSelected = (file: File) => {
+    setAvatarFile(file);
+    setError(null);
+  };
+
+  const handleAvatarError = (errorMessage: string) => {
+    setError(errorMessage);
+  };
+
   const handleSave = async () => {
     if (!profile) return;
 
@@ -85,6 +99,23 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
     setError(null);
 
     try {
+      // Upload avatar first if there's a new one
+      if (avatarFile) {
+        setIsUploadingAvatar(true);
+        try {
+          const updatedProfileWithAvatar = await uploadAvatar(avatarFile, profile.id);
+          setProfile(updatedProfileWithAvatar);
+          setAvatarFile(null); // Clear the pending avatar file
+        } catch (avatarError) {
+          console.error('Avatar upload failed:', avatarError);
+          setError('Failed to upload avatar. Please try again.');
+          return;
+        } finally {
+          setIsUploadingAvatar(false);
+        }
+      }
+
+      // Update other profile fields if they changed
       const updates: { displayName?: string; aboutMe?: string } = {};
 
       // For guest accounts, only allow aboutMe updates
@@ -102,8 +133,12 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
         }
       }
 
-      const updatedProfile = await updateUserProfile(updates, profile.id);
-      setProfile(updatedProfile);
+      // Only call updateUserProfile if there are field updates
+      if (Object.keys(updates).length > 0) {
+        const updatedProfile = await updateUserProfile(updates, profile.id);
+        setProfile(updatedProfile);
+      }
+
       onClose();
     } catch (err) {
       setError('Failed to update profile. Please try again.');
@@ -127,7 +162,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
   }
 
   const isGuestAccount = profile.accountType === 'guest';
-  const canSave = hasChanges && !isLoading;
+  const canSave = hasChanges && !isLoading && !isUploadingAvatar;
 
   return (
     <div 
@@ -139,7 +174,21 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
         <div className="p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Profile Settings</h2>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Avatar Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Avatar Image
+              </label>
+              <AvatarImageUpload
+                onImageSelected={handleAvatarSelected}
+                onError={handleAvatarError}
+                currentAvatarUrl={profile.avatarURL}
+                disabled={isLoading || isUploadingAvatar}
+                className="max-w-sm"
+              />
+            </div>
+
             {/* Display Name Field */}
             <div>
               <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -196,7 +245,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
             <button
               type="button"
               onClick={handleCancel}
-              disabled={isLoading}
+              disabled={isLoading || isUploadingAvatar}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
@@ -207,7 +256,7 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
               disabled={!canSave}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Saving...' : 'Save Changes'}
+              {isUploadingAvatar ? 'Uploading Avatar...' : isLoading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </div>

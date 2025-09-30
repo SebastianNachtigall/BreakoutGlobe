@@ -44,7 +44,7 @@
   - Update component tests to cover new upload functionality
   - _Requirements: 1.1, 1.4, 2.1, 2.2, 6.2, 6.3_
 
-- [ ] 7. Add avatar upload capability to ProfileSettingsModal
+- [-] 7. Add avatar upload capability to ProfileSettingsModal
   - Integrate AvatarImageUpload component into settings modal
   - Implement avatar change workflow with preview of current avatar
   - Add proper state management for avatar updates
