@@ -423,8 +423,9 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
     discussionStartTime: apiResponse.discussionStartTime ? new Date(apiResponse.discussionStartTime) : null,
     isDiscussionActive: apiResponse.isDiscussionActive || false
   };
-}// D
-evelopment helper function to clear all POIs
+}
+
+// Development helper function to clear all POIs
 export async function clearAllPOIs(mapId: string = 'default-map'): Promise<void> {
   console.log('🧹 API: clearAllPOIs called for mapId:', mapId);
 
