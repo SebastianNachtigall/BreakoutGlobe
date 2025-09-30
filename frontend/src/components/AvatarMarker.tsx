@@ -49,7 +49,7 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
     <div
       data-testid="avatar-marker"
       className={`
-        w-8 h-8 rounded-full border-2 
+        w-11 h-11 rounded-full border-2 
         ${avatar.isCurrentUser
           ? 'bg-blue-500 border-blue-600'
           : 'bg-gray-500 border-gray-600'
@@ -59,7 +59,6 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
         flex items-center justify-center text-white text-xs font-bold
         relative overflow-hidden
       `}
-      style={{ transform: 'scale(1.33)' }} // Scale to 2/3 of POI size (8 * 1.33 ≈ 10.67, which is 2/3 of 16)
       onClick={handleClick}
       title={avatar.displayName || avatar.sessionId}
     >
@@ -105,7 +104,7 @@ export const createAvatarMarkerElement = (
   };
 
   const baseClasses = `
-    w-8 h-8 rounded-full border-2 
+    w-11 h-11 rounded-full border-2 
     ${avatar.isCurrentUser
       ? 'bg-blue-500 border-blue-600'
       : 'bg-gray-500 border-gray-600'
@@ -177,12 +176,9 @@ export const createAvatarMarkerElement = (
   markerElement.style.zIndex = '1000';
   
   // Add explicit dimensions and styling as fallback for Tailwind classes
-  markerElement.style.width = '32px';  // w-8
-  markerElement.style.height = '32px'; // h-8
+  markerElement.style.width = '44px';  // w-11
+  markerElement.style.height = '44px'; // h-11
   markerElement.style.borderRadius = '50%'; // rounded-full
-  
-  // Scale avatar to 2/3 of POI size for better visual balance
-  markerElement.style.transform = 'scale(1.33) translateZ(0)'; // Combined with existing translateZ
 
   return markerElement;
 };
