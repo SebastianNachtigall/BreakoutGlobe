@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -210,11 +211,15 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 	}
 	
 	// Convert relative avatar URL to absolute URL
-	// TODO: Make base URL configurable instead of hardcoded localhost:8080
 	var fullAvatarURL *string
 	if avatarURL != nil && *avatarURL != "" {
+		// Get base URL from environment variable
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:8080" // Fallback for local development
+		}
 		// Convert relative path to full URL
-		fullURL := "http://localhost:8080" + *avatarURL
+		fullURL := baseURL + *avatarURL
 		fullAvatarURL = &fullURL
 	}
 	
@@ -1063,11 +1068,15 @@ func (h *Handler) handleRequestInitialUsers(ctx context.Context, client *Client,
 		}
 		
 		// Convert relative avatar URL to absolute URL
-		// TODO: Make base URL configurable instead of hardcoded localhost:8080
 		var fullAvatarURL *string
 		if avatarURL != nil && *avatarURL != "" {
+			// Get base URL from environment variable
+			baseURL := os.Getenv("BASE_URL")
+			if baseURL == "" {
+				baseURL = "http://localhost:8080" // Fallback for local development
+			}
 			// Convert relative path to full URL
-			fullURL := "http://localhost:8080" + *avatarURL
+			fullURL := baseURL + *avatarURL
 			fullAvatarURL = &fullURL
 		}
 		
