@@ -136,8 +136,11 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    // Prevent closing modal by clicking outside - profile creation is required
-    e.preventDefault();
+    // Only prevent closing if clicking on the backdrop itself, not child elements
+    if (e.target === e.currentTarget) {
+      // Don't close modal - profile creation is required
+      e.stopPropagation();
+    }
   };
 
   if (!isOpen) {
