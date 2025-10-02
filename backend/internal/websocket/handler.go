@@ -54,6 +54,8 @@ type UserServiceInterface interface {
 type POIServiceInterface interface {
 	JoinPOI(ctx context.Context, poiID, userID string) error
 	LeavePOI(ctx context.Context, poiID, userID string) error
+	GetPOIParticipantsWithInfo(ctx context.Context, poiID string) ([]services.POIParticipantInfo, error)
+	GetPOIParticipantCount(ctx context.Context, poiID string) (int, error)
 }
 
 // PubSubInterface defines the interface for PubSub operations
@@ -867,21 +869,39 @@ func (h *Handler) handlePOIJoin(ctx context.Context, client *Client, msg Message
 		"hasSession", session != nil,
 		"hasUser", session != nil && session.User != nil)
 
-	// Broadcast POI join event to other clients in the same map
+	// Get all participants for complete event data
+	participants, err := h.poiService.GetPOIParticipantsWithInfo(ctx, poiID)
+	if err != nil {
+		h.logger.Error("Failed to get POI participants", "poiId", poiID, "error", err)
+		participants = []services.POIParticipantInfo{} // Fallback to empty
+	}
+
+	// Convert to frontend format
+	var participantData []map[string]interface{}
+	for _, p := range participants {
+		participantData = append(participantData, map[string]interface{}{
+			"id":        p.ID,
+			"name":      p.Name,
+			"avatarUrl": p.AvatarURL,
+		})
+	}
+
+	// Get current count
+	currentCount, err := h.poiService.GetPOIParticipantCount(ctx, poiID)
+	if err != nil {
+		currentCount = len(participants) // Fallback
+	}
+
+	// Broadcast complete POI join event to other clients in the same map
 	broadcastMsg := Message{
 		Type: "poi_joined",
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
-			"sessionId": client.SessionID,
-			"userId": client.UserID,
-			"poiId": poiID,
-			"participants": []map[string]interface{}{
-				{
-					"id": client.UserID,
-					"name": displayName,
-					"avatarUrl": nil, // TODO: Add avatar URL if available
-				},
-			},
+			"sessionId":    client.SessionID,
+			"userId":       client.UserID,
+			"poiId":        poiID,
+			"currentCount": currentCount,
+			"participants": participantData,
 		},
 	}
 	

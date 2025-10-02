@@ -33,6 +33,13 @@ func TestHandler_POIJoin_Success(t *testing.T) {
 	mockSessionService.On("GetSession", mock.Anything, "session-123").Return(nil, nil) // Session not needed for this test
 	mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionJoinPOI).Return(nil)
 	mockPOIService.On("JoinPOI", mock.Anything, "poi-123", "user-456").Return(nil)
+	
+	// Mock the new methods for participant information
+	participantsInfo := []services.POIParticipantInfo{
+		{ID: "user-456", Name: "Test User", AvatarURL: ""},
+	}
+	mockPOIService.On("GetPOIParticipantsWithInfo", mock.Anything, "poi-123").Return(participantsInfo, nil)
+	mockPOIService.On("GetPOIParticipantCount", mock.Anything, "poi-123").Return(1, nil)
 
 	// Create test message
 	msg := Message{

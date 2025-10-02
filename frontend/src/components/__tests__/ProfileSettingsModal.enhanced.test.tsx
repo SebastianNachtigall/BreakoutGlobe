@@ -105,7 +105,7 @@ describe('ProfileSettingsModal - Enhanced with Avatar Upload', () => {
 
     // Should call uploadAvatar API
     await waitFor(() => {
-      expect(api.uploadAvatar).toHaveBeenCalledWith(expect.any(File));
+      expect(api.uploadAvatar).toHaveBeenCalledWith(expect.any(File), 'user-123');
     });
 
     // Should update profile store

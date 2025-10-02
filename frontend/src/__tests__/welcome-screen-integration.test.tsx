@@ -78,12 +78,33 @@ vi.mock('../stores/errorStore', () => ({
 }));
 
 vi.mock('../stores/avatarStore', () => ({
-  avatarStore: {
-    subscribe: vi.fn(() => vi.fn()),
-    getState: vi.fn(() => ({
+  avatarStore: Object.assign(
+    vi.fn(() => ({
+      avatars: new Map(),
+      currentMap: null,
+      hiddenAvatars: new Set(),
+      addOrUpdateAvatar: vi.fn(),
+      removeAvatar: vi.fn(),
+      updateAvatarPosition: vi.fn(),
+      updateAvatarCallStatus: vi.fn(),
+      loadInitialUsers: vi.fn(),
+      setCurrentMap: vi.fn(),
+      clearAllAvatars: vi.fn(),
+      hideAvatarForPOI: vi.fn(),
+      showAvatarForPOI: vi.fn(),
       getAvatarBySessionId: vi.fn(),
+      getAvatarsForCurrentMap: vi.fn().mockReturnValue([]),
     })),
-  },
+    {
+      subscribe: vi.fn(() => vi.fn()),
+      getState: vi.fn(() => ({
+        avatars: new Map(),
+        currentMap: null,
+        hiddenAvatars: new Set(),
+        getAvatarsForCurrentMap: vi.fn().mockReturnValue([]),
+      })),
+    }
+  ),
 }));
 
 vi.mock('../stores/videoCallStore', () => ({

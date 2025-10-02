@@ -457,45 +457,8 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 		// Discussion timer is not critical for POI functionality
 	}
 
-	// Get updated participant count
-	currentCount, err := s.participants.GetParticipantCount(ctx, poiID)
-	if err != nil {
-		currentCount = 0 // Fallback to 0 if we can't get the count
-	}
-
-	// Get updated participant information for the event
-	participantsInfo, err := s.GetPOIParticipantsWithInfo(ctx, poiID)
-	if err != nil {
-		// Log error but continue with basic event
-		fmt.Printf("Warning: failed to get participant info for POI joined event: %v\n", err)
-		participantsInfo = []POIParticipantInfo{}
-	}
-
-	// Convert to Redis participant format
-	var redisParticipants []redis.POIParticipant
-	for _, p := range participantsInfo {
-		redisParticipants = append(redisParticipants, redis.POIParticipant{
-			ID:        p.ID,
-			Name:      p.Name,
-			AvatarURL: p.AvatarURL,
-		})
-	}
-
-	// Publish enhanced POI joined event with participant information
-	joinedEventWithParticipants := redis.POIJoinedEventWithParticipants{
-		POIID:        poiID,
-		MapID:        poi.MapID,
-		UserID:       userID,
-		SessionID:    userID, // For now, use userID as sessionID
-		CurrentCount: currentCount,
-		Participants: redisParticipants,
-		Timestamp:    time.Now(),
-	}
-
-	if err := s.pubsub.PublishPOIJoinedWithParticipants(ctx, joinedEventWithParticipants); err != nil {
-		// Log error but don't fail the operation
-		fmt.Printf("Warning: failed to publish POI joined event with participants: %v\n", err)
-	}
+	// Note: POI join event is broadcast directly by WebSocket handler with complete participant info
+	// No need for separate Redis event - WebSocket handler has access to all participant data
 
 	return nil
 }

@@ -233,7 +233,7 @@ describe('ProfileCreationModal (Enhanced)', () => {
     expect(screen.getByText('Profile creation failed')).toBeInTheDocument();
   });
 
-  it('should close modal when backdrop is clicked', async () => {
+  it('should not close modal when backdrop is clicked (profile creation is required)', async () => {
     render(
       <ProfileCreationModal
         isOpen={true}
@@ -245,7 +245,8 @@ describe('ProfileCreationModal (Enhanced)', () => {
     const backdrop = screen.getByTestId('modal-backdrop');
     await userEvent.click(backdrop);
 
-    expect(mockOnClose).toHaveBeenCalledTimes(1);
+    // Profile creation is required, so modal should not close on backdrop click
+    expect(mockOnClose).not.toHaveBeenCalled();
   });
 
   it('should not render when closed', () => {

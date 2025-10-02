@@ -25,7 +25,7 @@ describe('sessionStore', () => {
       
       expect(state.sessionId).toBeNull();
       expect(state.isConnected).toBe(false);
-      expect(state.avatarPosition).toEqual({ lat: 0, lng: 0 });
+      expect(state.avatarPosition).toEqual({ lat: 52.5200, lng: 13.4050 });
       expect(state.isMoving).toBe(false);
       expect(state.lastHeartbeat).toBeNull();
     });
@@ -97,7 +97,7 @@ describe('sessionStore', () => {
       const state = sessionStore.getState();
       expect(state.sessionId).toBeNull();
       expect(state.isConnected).toBe(false);
-      expect(state.avatarPosition).toEqual({ lat: 0, lng: 0 });
+      expect(state.avatarPosition).toEqual({ lat: 52.5200, lng: 13.4050 });
       expect(state.isMoving).toBe(false);
       expect(state.lastHeartbeat).toBeNull();
     });

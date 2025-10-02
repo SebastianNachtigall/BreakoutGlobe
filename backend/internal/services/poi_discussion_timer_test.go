@@ -76,10 +76,7 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
 	// Should not update POI since discussion should remain inactive (no Update call expected)
 	
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
-	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID}, nil).Once()
-	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
-	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
+	// Note: POI join event is now broadcast directly by WebSocket handler, not via Redis
 
 	err := scenario.service.JoinPOI(context.Background(), poiID, user1ID)
 	require.NoError(t, err)
@@ -109,11 +106,7 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 		return poi.ID == poiID && poi.IsDiscussionActive && poi.DiscussionStartTime != nil
 	})).Return(nil).Once()
 	
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(2, nil).Once()
-	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID, user2ID}, nil).Once()
-	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
-	scenario.mockUserService.On("GetUser", mock.Anything, user2ID).Return(&models.User{ID: user2ID, DisplayName: "User 2"}, nil).Once()
-	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
+	// Note: POI join event is now broadcast directly by WebSocket handler, not via Redis
 
 	beforeJoin := time.Now()
 	err = scenario.service.JoinPOI(context.Background(), poiID, user2ID)

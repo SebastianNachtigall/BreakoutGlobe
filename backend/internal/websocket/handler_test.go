@@ -542,6 +542,13 @@ func (suite *WebSocketHandlerTestSuite) TestPOIJoin() {
 	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-456", services.ActionJoinPOI).Return(nil)
 	suite.mockPOIService.On("JoinPOI", mock.Anything, "poi-123", "user-456").Return(nil)
 	
+	// Mock the new methods for participant information
+	participantsInfo := []services.POIParticipantInfo{
+		{ID: "user-456", Name: "Test User", AvatarURL: ""},
+	}
+	suite.mockPOIService.On("GetPOIParticipantsWithInfo", mock.Anything, "poi-123").Return(participantsInfo, nil)
+	suite.mockPOIService.On("GetPOIParticipantCount", mock.Anything, "poi-123").Return(1, nil)
+	
 	// Connect to WebSocket
 	header := http.Header{}
 	header.Set("Authorization", "Bearer session-123")
@@ -657,6 +664,13 @@ func (suite *WebSocketHandlerTestSuite) TestPOIEventBroadcasting() {
 	suite.mockSessionService.On("GetSession", mock.Anything, "session-2").Return(session2, nil)
 	suite.mockRateLimiter.On("CheckRateLimit", mock.Anything, "user-1", services.ActionJoinPOI).Return(nil)
 	suite.mockPOIService.On("JoinPOI", mock.Anything, "poi-123", "user-1").Return(nil)
+	
+	// Mock the new methods for participant information
+	participantsInfo := []services.POIParticipantInfo{
+		{ID: "user-1", Name: "Test User", AvatarURL: ""},
+	}
+	suite.mockPOIService.On("GetPOIParticipantsWithInfo", mock.Anything, "poi-123").Return(participantsInfo, nil)
+	suite.mockPOIService.On("GetPOIParticipantCount", mock.Anything, "poi-123").Return(1, nil)
 	
 	// Connect first client
 	header1 := http.Header{}
