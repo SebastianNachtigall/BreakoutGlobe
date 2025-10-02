@@ -24,6 +24,7 @@ import (
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
 	"breakoutglobe/internal/services/uploads"
+	"breakoutglobe/internal/storage"
 	"breakoutglobe/internal/websocket"
 )
 
@@ -133,8 +134,8 @@ func (s *Server) setupRoutes() {
 		// Serve uploaded avatar files
 		api.GET("/users/avatar/:filename", s.serveAvatar)
 		
-		// Serve uploaded POI images
-		s.router.Static("/uploads", "./uploads")
+		// Setup file serving for uploads
+		s.setupFileServing()
 	}
 	
 	// WebSocket handler setup removed during phantom debugging
@@ -178,7 +179,15 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		
 		// Setup dependencies
 		userRepo := repository.NewUserRepository(s.db)
-		userService := services.NewUserService(userRepo)
+		
+		// Initialize storage configuration
+		storageConfig := storage.GetStorageConfig()
+		if err := storage.EnsureUploadDirectories(storageConfig); err != nil {
+			log.Printf("Warning: Failed to create upload directories: %v", err)
+		}
+		fileStorage := storage.NewFileStorage(storageConfig)
+		
+		userService := services.NewUserService(userRepo, fileStorage)
 		
 		// For now, create a simple in-memory rate limiter (TODO: use Redis in production)
 		rateLimiter := &SimpleRateLimiter{}
@@ -209,7 +218,15 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		
 		// Create user service for participant name resolution
 		userRepo := repository.NewUserRepository(s.db)
-		userService := services.NewUserService(userRepo)
+		
+		// Initialize storage configuration
+		storageConfig := storage.GetStorageConfig()
+		if err := storage.EnsureUploadDirectories(storageConfig); err != nil {
+			log.Printf("Warning: Failed to create upload directories: %v", err)
+		}
+		fileStorage := storage.NewFileStorage(storageConfig)
+		
+		userService := services.NewUserService(userRepo, fileStorage)
 		
 		// Create image uploader
 		uploadDir := filepath.Join(".", "uploads")
@@ -445,8 +462,9 @@ func (s *Server) serveAvatar(c *gin.Context) {
 		return
 	}
 	
-	// Construct file path (safe after validation)
-	filePath := filepath.Join("uploads", "avatars", filename)
+	// Get storage configuration and construct file path
+	storageConfig := storage.GetStorageConfig()
+	filePath := filepath.Join(storageConfig.UploadPath, "avatars", filename)
 	
 	// Check if file exists
 	fileInfo, err := os.Stat(filePath)
@@ -516,4 +534,14 @@ func parseRedisURL(redisURL string) (redis.Config, error) {
 	}
 	
 	return config, nil
+}
+
+// setupFileServing configures file serving based on storage configuration
+func (s *Server) setupFileServing() {
+	storageConfig := storage.GetStorageConfig()
+	
+	// Serve uploaded files
+	s.router.Static("/uploads", storageConfig.UploadPath)
+	
+	log.Printf("📁 File serving setup: /uploads -> %s", storageConfig.UploadPath)
 }

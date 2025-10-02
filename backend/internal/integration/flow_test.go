@@ -14,6 +14,7 @@ import (
 	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
+	"breakoutglobe/internal/storage"
 	"breakoutglobe/internal/testdata"
 	"breakoutglobe/internal/websocket"
 
@@ -77,7 +78,9 @@ func SetupFlowTest(t testing.TB) *FlowTestEnvironment {
 	rateLimiter := &MockRateLimiter{}
 
 	// Create services
-	userService := services.NewUserService(userRepo)
+	storageConfig := storage.GetStorageConfig()
+	fileStorage := storage.NewFileStorage(storageConfig)
+	userService := services.NewUserService(userRepo, fileStorage)
 	poiService := services.NewPOIService(poiRepo, poiParticipants, pubsub, userService)
 	sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
 

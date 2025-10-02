@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,17 +17,20 @@ type UserServiceTestScenario struct {
 	t            *testing.T
 	service      *UserService
 	mockUserRepo *MockUserRepository
+	mockStorage  *MockFileStorage
 }
 
 // newUserServiceTestScenario creates a new UserService test scenario using established patterns
 func newUserServiceTestScenario(t *testing.T) *UserServiceTestScenario {
 	mockUserRepo := &MockUserRepository{}
-	service := NewUserService(mockUserRepo)
+	mockStorage := &MockFileStorage{}
+	service := NewUserService(mockUserRepo, mockStorage)
 	
 	return &UserServiceTestScenario{
 		t:            t,
 		service:      service,
 		mockUserRepo: mockUserRepo,
+		mockStorage:  mockStorage,
 	}
 }
 
@@ -77,6 +81,34 @@ func (s *UserServiceTestScenario) expectUserUpdateSuccess() *UserServiceTestScen
 // expectUserUpdateError sets up the repository to return an error during user update
 func (s *UserServiceTestScenario) expectUserUpdateError(err error) *UserServiceTestScenario {
 	s.mockUserRepo.On("Update", mock.Anything, mock.AnythingOfType("*models.User")).Return(err)
+	
+	return s
+}
+
+// expectStorageUploadSuccess sets up the storage to successfully upload a file
+func (s *UserServiceTestScenario) expectStorageUploadSuccess(userID string, filename string, fileData []byte) *UserServiceTestScenario {
+	fileKey := fmt.Sprintf("avatars/%s_%d.jpg", userID, time.Now().Unix())
+	avatarURL := fmt.Sprintf("http://localhost:8080/uploads/%s", fileKey)
+	
+	s.mockStorage.On("GenerateUniqueKey", "avatars", userID, filename).Return(fileKey)
+	s.mockStorage.On("UploadFile", mock.Anything, fileKey, fileData, "image/jpeg").Return(avatarURL, nil)
+	
+	return s
+}
+
+// expectStorageUploadError sets up the storage to return an error during upload
+func (s *UserServiceTestScenario) expectStorageUploadError(userID string, filename string, fileData []byte, err error) *UserServiceTestScenario {
+	fileKey := fmt.Sprintf("avatars/%s_%d.jpg", userID, time.Now().Unix())
+	
+	s.mockStorage.On("GenerateUniqueKey", "avatars", userID, filename).Return(fileKey)
+	s.mockStorage.On("UploadFile", mock.Anything, fileKey, fileData, "image/jpeg").Return("", err)
+	
+	return s
+}
+
+// expectStorageDeleteOnFailure sets up the storage to handle cleanup on failure
+func (s *UserServiceTestScenario) expectStorageDeleteOnFailure() *UserServiceTestScenario {
+	s.mockStorage.On("DeleteFile", mock.Anything, mock.AnythingOfType("string")).Return(nil)
 	
 	return s
 }
@@ -197,6 +229,7 @@ func TestUserService_UploadAvatar_Success(t *testing.T) {
 	
 	// Configure expectations
 	scenario.expectUserRetrievalSuccess(userID, existingUser).
+		expectStorageUploadSuccess(userID, filename, fileData).
 		expectUserUpdateSuccess()
 
 	// Execute avatar upload
@@ -212,8 +245,8 @@ func TestUserService_UploadAvatar_Success(t *testing.T) {
 	if user.AvatarURL == nil || *user.AvatarURL == "" {
 		t.Errorf("Expected avatar URL to be set")
 	}
-	if user.AvatarURL != nil && !contains(*user.AvatarURL, "/api/users/avatar/") {
-		t.Errorf("Expected avatar URL to contain '/api/users/avatar/', got: %s", *user.AvatarURL)
+	if user.AvatarURL != nil && !contains(*user.AvatarURL, "/uploads/") {
+		t.Errorf("Expected avatar URL to contain '/uploads/', got: %s", *user.AvatarURL)
 	}
 	if user.AvatarURL != nil && !contains(*user.AvatarURL, ".jpg") {
 		t.Errorf("Expected avatar URL to contain file extension, got: %s", *user.AvatarURL)
@@ -269,6 +302,8 @@ func TestUserService_UploadAvatar_UpdateError(t *testing.T) {
 	
 	// Configure expectations
 	scenario.expectUserRetrievalSuccess(userID, existingUser).
+		expectStorageUploadSuccess(userID, filename, fileData).
+		expectStorageDeleteOnFailure().
 		expectUserUpdateError(updateError)
 
 	// Execute request expecting update error
@@ -448,4 +483,34 @@ func TestUserService_CreateGuestProfile_WithAboutMe(t *testing.T) {
 	if user.AboutMe == nil || *user.AboutMe != aboutMe {
 		t.Errorf("Expected aboutMe '%s', got %v", aboutMe, user.AboutMe)
 	}
+}
+
+// MockFileStorage provides a mock implementation of FileStorage for testing
+type MockFileStorage struct {
+	mock.Mock
+}
+
+func (m *MockFileStorage) UploadFile(ctx context.Context, key string, data []byte, contentType string) (string, error) {
+	args := m.Called(ctx, key, data, contentType)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockFileStorage) DeleteFile(ctx context.Context, key string) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *MockFileStorage) GetFileURL(key string) string {
+	args := m.Called(key)
+	return args.String(0)
+}
+
+func (m *MockFileStorage) FileExists(key string) bool {
+	args := m.Called(key)
+	return args.Bool(0)
+}
+
+func (m *MockFileStorage) GenerateUniqueKey(prefix, userID, originalFilename string) string {
+	args := m.Called(prefix, userID, originalFilename)
+	return args.String(0)
 }

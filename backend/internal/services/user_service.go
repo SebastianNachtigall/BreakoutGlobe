@@ -3,12 +3,13 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"breakoutglobe/internal/interfaces"
 	"breakoutglobe/internal/models"
+	"breakoutglobe/internal/storage"
 )
 
 // UpdateProfileRequest represents a request to update user profile
@@ -19,13 +20,15 @@ type UpdateProfileRequest struct {
 
 // UserService handles user-related business logic
 type UserService struct {
-	userRepo interfaces.UserRepositoryInterface
+	userRepo    interfaces.UserRepositoryInterface
+	fileStorage storage.FileStorage
 }
 
 // NewUserService creates a new UserService instance
-func NewUserService(userRepo interfaces.UserRepositoryInterface) *UserService {
+func NewUserService(userRepo interfaces.UserRepositoryInterface, fileStorage storage.FileStorage) *UserService {
 	return &UserService{
-		userRepo: userRepo,
+		userRepo:    userRepo,
+		fileStorage: fileStorage,
 	}
 }
 
@@ -101,31 +104,34 @@ func (s *UserService) UploadAvatar(ctx context.Context, userID string, filename 
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Generate unique filename
-	ext := filepath.Ext(filename)
-	uniqueFilename := fmt.Sprintf("%s_%d%s", userID, time.Now().Unix(), ext)
+	// Generate unique file key
+	fileKey := s.fileStorage.GenerateUniqueKey("avatars", userID, filename)
 	
-	// Create avatars directory if it doesn't exist
-	avatarDir := "uploads/avatars"
-	if err := os.MkdirAll(avatarDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create avatar directory: %w", err)
+	// Determine content type based on file extension
+	contentType := getContentTypeFromFilename(filename)
+	
+	// Upload file to storage
+	avatarURL, err := s.fileStorage.UploadFile(ctx, fileKey, fileData, contentType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload avatar: %w", err)
 	}
 	
-	// Save file to disk
-	filePath := filepath.Join(avatarDir, uniqueFilename)
-	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
-		return nil, fmt.Errorf("failed to save avatar file: %w", err)
+	// Delete old avatar if exists
+	if user.AvatarURL != nil && *user.AvatarURL != "" {
+		// Extract old file key from URL and delete
+		if oldKey := extractFileKeyFromURL(*user.AvatarURL); oldKey != "" {
+			s.fileStorage.DeleteFile(ctx, oldKey)
+		}
 	}
 	
 	// Update user's avatar URL
-	avatarURL := fmt.Sprintf("/api/users/avatar/%s", uniqueFilename)
 	user.AvatarURL = &avatarURL
 	user.UpdatedAt = time.Now()
 	
 	// Save updated user
 	if err := s.userRepo.Update(ctx, user); err != nil {
-		// Clean up file if database update fails
-		os.Remove(filePath)
+		// Clean up uploaded file if database update fails
+		s.fileStorage.DeleteFile(ctx, fileKey)
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -179,4 +185,30 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID string, req *Upd
 	}
 	
 	return user, nil
+}
+
+// getContentTypeFromFilename determines content type from file extension
+func getContentTypeFromFilename(filename string) string {
+	ext := filepath.Ext(filename)
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "image/jpeg" // Default fallback
+	}
+}
+
+// extractFileKeyFromURL extracts the file key from a full URL
+func extractFileKeyFromURL(url string) string {
+	// Extract the path after /uploads/
+	if idx := strings.Index(url, "/uploads/"); idx != -1 {
+		return url[idx+9:] // Skip "/uploads/"
+	}
+	return ""
 }

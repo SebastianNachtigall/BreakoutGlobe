@@ -56,4 +56,13 @@ vendor/
 
 # Temporary files
 tmp/
-temp/
+temp/# Up
+loaded files (keep directory structure but ignore contents)
+uploads/*
+!uploads/.gitkeep
+!uploads/avatars/
+!uploads/poi-images/
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+uploads/poi-images/*
+!uploads/poi-images/.gitkeep

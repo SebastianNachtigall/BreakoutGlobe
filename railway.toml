@@ -4,3 +4,8 @@ builder = "dockerfile"
 [deploy]
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+
+# Persistent volume for file uploads
+[[deploy.volumes]]
+name = "uploads"
+mountPath = "/app/uploads"

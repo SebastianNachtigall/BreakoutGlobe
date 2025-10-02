@@ -15,6 +15,7 @@ import (
 	"breakoutglobe/internal/models"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
+	"breakoutglobe/internal/storage"
 	"breakoutglobe/internal/testdata"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +46,9 @@ func SetupUserFlowTest(t testing.TB) *UserFlowTestEnvironment {
 	userRepo := repository.NewUserRepository(baseEnv.db.DB)
 
 	// Create user service
-	userService := services.NewUserService(userRepo)
+	storageConfig := storage.GetStorageConfig()
+	fileStorage := storage.NewFileStorage(storageConfig)
+	userService := services.NewUserService(userRepo, fileStorage)
 
 	// Create rate limiter (mock for testing)
 	rateLimiter := &MockRateLimiter{}
