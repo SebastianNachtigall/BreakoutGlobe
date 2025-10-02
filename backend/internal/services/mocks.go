@@ -106,6 +106,11 @@ func (m *MockUserService) UpdateProfile(ctx context.Context, userID string, req 
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.User), args.Error(1)
+}
+
+func (m *MockUserService) ClearAllUsers(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }// MockPu
 // MockPubSub is a mock implementation of PubSub for testing
 type MockPubSub struct {

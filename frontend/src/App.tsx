@@ -17,7 +17,7 @@ import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { SessionService } from './services/session-service'
-import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs } from './services/api'
+import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs, clearAllUsers } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
 
 import type { UserProfile } from './types/models'
@@ -997,6 +997,41 @@ function App() {
     }
   }, [])
 
+  // Development helper: Clear all users
+  const handleNukeUsers = useCallback(async () => {
+    if (!confirm('⚠️ This will delete ALL users from the database and clear local profiles. Are you sure?')) {
+      return;
+    }
+
+    try {
+      await clearAllUsers();
+      
+      // Clear local storage to avoid stale user references
+      localStorage.removeItem('userProfile');
+      localStorage.removeItem('sessionId');
+      
+      // Reset user profile store
+      userProfileStore.getState().clearProfile();
+      
+      // Reset session store
+      sessionStore.getState().reset();
+      
+      console.log('🧹 All users cleared successfully (database + localStorage)');
+      
+      // Reload the page to reset the app state
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to clear users:', error);
+      errorStore.getState().addError({
+        id: Date.now().toString(),
+        message: 'Failed to clear users',
+        type: 'api',
+        severity: 'error',
+        timestamp: new Date()
+      });
+    }
+  }, [])
+
   // Show loading screen while checking for profile
   if (!profileCheckComplete) {
     return (
@@ -1105,6 +1140,13 @@ function App() {
                 title="Clear all POIs (Development only)"
               >
                 🧹 Nuke POIs
+              </button>
+              <button
+                onClick={handleNukeUsers}
+                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-medium"
+                title="Clear all users from database and localStorage (Development only)"
+              >
+                👥 Nuke Users
               </button>
               {/* Test buttons for video call POC */}
               <button

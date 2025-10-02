@@ -439,3 +439,18 @@ export async function clearAllPOIs(mapId: string = 'default-map'): Promise<void>
   await handleResponse<{ success: boolean; message: string; mapId: string }>(response);
   console.log('🧹 API: All POIs cleared successfully');
 }
+
+// Development helper function to clear all users
+export async function clearAllUsers(): Promise<void> {
+  console.log('🧹 API: clearAllUsers called');
+
+  const response = await fetch(`${API_BASE_URL}/api/users/dev/clear-all`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  await handleResponse<{ success: boolean; message: string }>(response);
+  console.log('🧹 API: All users cleared successfully');
+}

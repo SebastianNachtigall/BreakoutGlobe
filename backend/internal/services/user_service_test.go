@@ -453,6 +453,11 @@ func (m *MockUserRepository) Update(ctx context.Context, user *models.User) erro
 	return args.Error(0)
 }
 
+func (m *MockUserRepository) ClearAllUsers(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func TestUserService_CreateGuestProfile_WithAboutMe(t *testing.T) {
 	// This test demonstrates the current limitation - aboutMe is not supported
 	// Following TDD, this test should fail first, then we implement the feature

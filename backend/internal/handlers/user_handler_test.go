@@ -545,6 +545,11 @@ func (m *MockUserService) UpdateProfile(ctx context.Context, userID string, req 
 	return args.Get(0).(*models.User), args.Error(1)
 }
 
+func (m *MockUserService) ClearAllUsers(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 // Profile Retrieval Tests - Task 7
 
 // ExpectProfileRetrievalSuccess sets up the user service to successfully retrieve a profile

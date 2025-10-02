@@ -212,3 +212,8 @@ func extractFileKeyFromURL(url string) string {
 	}
 	return ""
 }
+
+// ClearAllUsers removes all users from the database - Development helper method
+func (s *UserService) ClearAllUsers(ctx context.Context) error {
+	return s.userRepo.ClearAllUsers(ctx)
+}

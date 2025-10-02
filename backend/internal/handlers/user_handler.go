@@ -21,6 +21,7 @@ type UserServiceInterface interface {
 	GetUser(ctx context.Context, userID string) (*models.User, error)
 	UploadAvatar(ctx context.Context, userID string, filename string, fileData []byte) (*models.User, error)
 	UpdateProfile(ctx context.Context, userID string, req *services.UpdateProfileRequest) (*models.User, error)
+	ClearAllUsers(ctx context.Context) error
 }
 
 // UserHandler handles HTTP requests for user operations
@@ -46,6 +47,9 @@ func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
 		api.GET("/users/profile", h.GetProfile)
 		api.PUT("/users/profile", h.UpdateProfile)
 		api.POST("/users/avatar", h.UploadAvatar)
+		
+		// Development endpoints (TODO: Remove in production)
+		api.DELETE("/users/dev/clear-all", h.ClearAllUsers)
 	}
 }
 
@@ -475,4 +479,22 @@ func stringPtrToString(ptr *string) string {
 		return ""
 	}
 	return *ptr
+}
+
+// ClearAllUsers handles DELETE /api/users/dev/clear-all - Development endpoint to clear all users
+func (h *UserHandler) ClearAllUsers(c *gin.Context) {
+	// Clear all users
+	if err := h.userService.ClearAllUsers(c); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "INTERNAL_ERROR",
+			Message: "Failed to clear users",
+			Details: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "All users cleared successfully",
+	})
 }

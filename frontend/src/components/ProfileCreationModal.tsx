@@ -59,7 +59,7 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -101,7 +101,7 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
       onProfileCreated(profile);
     } catch (error) {
       console.error('❌ ProfileCreationModal: Failed to create profile:', error);
-      
+
       if (error instanceof APIError) {
         setErrors({ general: error.message });
       } else {
@@ -146,112 +146,112 @@ const ProfileCreationModal: React.FC<ProfileCreationModalProps> = ({
   }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]"
       data-testid="modal-backdrop"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Create Your Profile
-          </h2>
-          <p className="text-gray-600">
-            Set up your profile to join the map and collaborate with others.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Display Name */}
-          <div>
-            <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
-              Display Name *
-            </label>
-            <input
-              type="text"
-              id="displayName"
-              value={formData.displayName}
-              onChange={(e) => handleInputChange('displayName', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.displayName ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="Enter your display name"
-              maxLength={50}
-              disabled={isLoading}
-            />
-            {errors.displayName && (
-              <p className="mt-1 text-sm text-red-600">{errors.displayName}</p>
-            )}
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Create Your Profile
+            </h2>
+            <p className="text-gray-600">
+              Set up your profile to join the map and collaborate with others.
+            </p>
           </div>
 
-          {/* About Me */}
-          <div>
-            <label htmlFor="aboutMe" className="block text-sm font-medium text-gray-700 mb-1">
-              About Me
-            </label>
-            <textarea
-              id="aboutMe"
-              value={formData.aboutMe}
-              onChange={(e) => handleInputChange('aboutMe', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${
-                errors.aboutMe ? 'border-red-500' : 'border-gray-300'
-              }`}
-              placeholder="Tell others about yourself (optional)"
-              rows={3}
-              maxLength={500}
-              disabled={isLoading}
-            />
-            <div className="flex justify-between items-center mt-1">
-              {errors.aboutMe && (
-                <p className="text-sm text-red-600">{errors.aboutMe}</p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Display Name */}
+            <div>
+              <label htmlFor="displayName" className="block text-sm font-medium text-gray-700 mb-1">
+                Display Name *
+              </label>
+              <input
+                type="text"
+                id="displayName"
+                value={formData.displayName}
+                onChange={(e) => handleInputChange('displayName', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.displayName ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                placeholder="Enter your display name"
+                maxLength={50}
+                disabled={isLoading}
+              />
+              {errors.displayName && (
+                <p className="mt-1 text-sm text-red-600">{errors.displayName}</p>
               )}
-              <p className="text-sm text-gray-500 ml-auto">
-                {formData.aboutMe.length}/500
-              </p>
             </div>
-          </div>
 
-          {/* Avatar Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Avatar Image
-            </label>
-            <AvatarImageUpload
-              onImageSelected={handleAvatarSelected}
-              onError={handleAvatarError}
-              disabled={isLoading}
-            />
-            {errors.avatar && (
-              <p className="mt-2 text-sm text-red-600">{errors.avatar}</p>
+            {/* About Me */}
+            <div>
+              <label htmlFor="aboutMe" className="block text-sm font-medium text-gray-700 mb-1">
+                About Me
+              </label>
+              <textarea
+                id="aboutMe"
+                value={formData.aboutMe}
+                onChange={(e) => handleInputChange('aboutMe', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${errors.aboutMe ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                placeholder="Tell others about yourself (optional)"
+                rows={3}
+                maxLength={500}
+                disabled={isLoading}
+              />
+              <div className="flex justify-between items-center mt-1">
+                {errors.aboutMe && (
+                  <p className="text-sm text-red-600">{errors.aboutMe}</p>
+                )}
+                <p className="text-sm text-gray-500 ml-auto">
+                  {formData.aboutMe.length}/500
+                </p>
+              </div>
+            </div>
+
+            {/* Avatar Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Avatar Image
+              </label>
+              <AvatarImageUpload
+                onImageSelected={handleAvatarSelected}
+                onError={handleAvatarError}
+                disabled={isLoading}
+              />
+              {errors.avatar && (
+                <p className="mt-2 text-sm text-red-600">{errors.avatar}</p>
+              )}
+            </div>
+
+            {/* General Error */}
+            {errors.general && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{errors.general}</p>
+              </div>
             )}
-          </div>
 
-          {/* General Error */}
-          {errors.general && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600">{errors.general}</p>
+            {/* Buttons */}
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Creating Profile...' : 'Create Profile'}
+              </button>
             </div>
-          )}
-
-          {/* Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Creating Profile...' : 'Create Profile'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

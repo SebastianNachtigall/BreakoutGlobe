@@ -612,6 +612,10 @@ func (m *MockUserServiceForWS) UpdateProfile(ctx context.Context, userID string,
 	}, nil
 }
 
+func (m *MockUserServiceForWS) ClearAllUsers(ctx context.Context) error {
+	return nil
+}
+
 // MockPOIServiceForWS provides a mock POI service for WebSocket testing
 type MockPOIServiceForWS struct{}
 
