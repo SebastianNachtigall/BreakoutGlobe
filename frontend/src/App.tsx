@@ -99,6 +99,20 @@ function App() {
               userProfileStore.getState().setProfile(backendProfile)
               setUserProfile(backendProfile)
               console.info('🔄 Profile synced with backend')
+            } else if (backendProfile === null) {
+              // Backend returned null - user was deleted (e.g., via "nuke users")
+              console.warn('⚠️ Cached profile not found in backend - clearing stale data')
+              // Clear stale localStorage data
+              localStorage.removeItem('userProfile')
+              localStorage.removeItem('sessionId')
+              userProfileStore.getState().clearProfile()
+              sessionStore.getState().reset()
+              
+              // Show profile creation modal for fresh start
+              setUserProfile(null)
+              setShowProfileCreation(true)
+              setProfileCheckComplete(true)
+              return // Don't continue initialization
             }
           } catch (syncError) {
             console.info('ℹ️ Backend sync failed, using cached profile')
