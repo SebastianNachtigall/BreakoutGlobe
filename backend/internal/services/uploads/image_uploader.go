@@ -5,25 +5,23 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"breakoutglobe/internal/storage"
 	"github.com/google/uuid"
 )
 
 // ImageUploader handles POI image uploads
 type ImageUploader struct {
-	uploadDir string
-	baseURL   string
+	storage storage.FileStorage
 }
 
 // NewImageUploader creates a new ImageUploader instance
-func NewImageUploader(uploadDir, baseURL string) *ImageUploader {
+func NewImageUploader(fileStorage storage.FileStorage) *ImageUploader {
 	return &ImageUploader{
-		uploadDir: uploadDir,
-		baseURL:   baseURL,
+		storage: fileStorage,
 	}
 }
 
@@ -44,16 +42,10 @@ func (u *ImageUploader) UploadPOIImage(ctx context.Context, imageFile *multipart
 		return "", fmt.Errorf("image file too large: %d bytes (max 5MB)", imageFile.Size)
 	}
 
-	// Create upload directory if it doesn't exist
-	if err := os.MkdirAll(u.uploadDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create upload directory: %w", err)
-	}
-
 	// Generate unique filename
 	ext := getFileExtension(imageFile.Filename)
 	filename := fmt.Sprintf("poi-%s-%d%s", uuid.New().String(), time.Now().Unix(), ext)
-	filePath := filepath.Join(u.uploadDir, filename)
-
+	
 	// Open uploaded file
 	src, err := imageFile.Open()
 	if err != nil {
@@ -61,20 +53,18 @@ func (u *ImageUploader) UploadPOIImage(ctx context.Context, imageFile *multipart
 	}
 	defer src.Close()
 
-	// Create destination file
-	dst, err := os.Create(filePath)
+	// Read file data
+	fileData, err := io.ReadAll(src)
 	if err != nil {
-		return "", fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer dst.Close()
-
-	// Copy file contents
-	if _, err := io.Copy(dst, src); err != nil {
-		return "", fmt.Errorf("failed to save file: %w", err)
+		return "", fmt.Errorf("failed to read file data: %w", err)
 	}
 
-	// Return public URL
-	imageURL := fmt.Sprintf("%s/uploads/%s", u.baseURL, filename)
+	// Upload using storage system
+	imageURL, err := u.storage.UploadFile(ctx, filename, fileData, contentType)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload POI image: %w", err)
+	}
+
 	return imageURL, nil
 }
 

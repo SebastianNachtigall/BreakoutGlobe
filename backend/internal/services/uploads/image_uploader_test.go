@@ -4,44 +4,37 @@ import (
 	"bytes"
 	"context"
 	"mime/multipart"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestImageUploader_UploadPOIImage_Success(t *testing.T) {
-	// Create temporary directory for testing
-	tempDir := t.TempDir()
-	uploader := NewImageUploader(tempDir, "http://localhost:8080")
+	// Create mock storage
+	mockStorage := &MockFileStorage{}
+	uploader := NewImageUploader(mockStorage)
 
 	// Create a mock multipart file
 	fileHeader := createMockImageFile(t, "test-image.jpg", "image/jpeg", []byte("fake-image-data"))
+
+	// Setup mock expectations
+	expectedURL := "http://localhost:8080/uploads/poi-test.jpg"
+	mockStorage.On("UploadFile", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("[]uint8"), "image/jpeg").Return(expectedURL, nil)
 
 	// Upload the image
 	imageURL, err := uploader.UploadPOIImage(context.Background(), fileHeader)
 
 	// Verify success
 	assert.NoError(t, err)
-	assert.Contains(t, imageURL, "http://localhost:8080/uploads/poi-")
-	assert.Contains(t, imageURL, ".jpg")
+	assert.Equal(t, expectedURL, imageURL)
+	mockStorage.AssertExpectations(t)
 
-	// Verify file was created
-	filename := strings.TrimPrefix(imageURL, "http://localhost:8080/uploads/")
-	filePath := filepath.Join(tempDir, filename)
-	assert.FileExists(t, filePath)
-
-	// Verify file contents
-	content, err := os.ReadFile(filePath)
-	assert.NoError(t, err)
-	assert.Equal(t, []byte("fake-image-data"), content)
 }
 
 func TestImageUploader_UploadPOIImage_InvalidFileType(t *testing.T) {
-	tempDir := t.TempDir()
-	uploader := NewImageUploader(tempDir, "http://localhost:8080")
+	mockStorage := &MockFileStorage{}
+	uploader := NewImageUploader(mockStorage)
 
 	// Create a mock file with invalid type
 	fileHeader := createMockImageFile(t, "document.pdf", "application/pdf", []byte("fake-pdf-data"))
@@ -54,8 +47,8 @@ func TestImageUploader_UploadPOIImage_InvalidFileType(t *testing.T) {
 }
 
 func TestImageUploader_UploadPOIImage_FileTooLarge(t *testing.T) {
-	tempDir := t.TempDir()
-	uploader := NewImageUploader(tempDir, "http://localhost:8080")
+	mockStorage := &MockFileStorage{}
+	uploader := NewImageUploader(mockStorage)
 
 	// Create a mock file that's too large (6MB)
 	largeData := make([]byte, 6*1024*1024)
@@ -69,8 +62,8 @@ func TestImageUploader_UploadPOIImage_FileTooLarge(t *testing.T) {
 }
 
 func TestImageUploader_UploadPOIImage_NilFile(t *testing.T) {
-	tempDir := t.TempDir()
-	uploader := NewImageUploader(tempDir, "http://localhost:8080")
+	mockStorage := &MockFileStorage{}
+	uploader := NewImageUploader(mockStorage)
 
 	// Upload should fail with nil file
 	_, err := uploader.UploadPOIImage(context.Background(), nil)
@@ -115,4 +108,34 @@ func createMockImageFile(t *testing.T, filename, contentType string, data []byte
 	fileHeader.Header.Set("Content-Type", contentType)
 
 	return fileHeader
+}
+
+// MockFileStorage provides a mock implementation of FileStorage for testing
+type MockFileStorage struct {
+	mock.Mock
+}
+
+func (m *MockFileStorage) UploadFile(ctx context.Context, key string, data []byte, contentType string) (string, error) {
+	args := m.Called(ctx, key, data, contentType)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockFileStorage) DeleteFile(ctx context.Context, key string) error {
+	args := m.Called(ctx, key)
+	return args.Error(0)
+}
+
+func (m *MockFileStorage) GetFileURL(key string) string {
+	args := m.Called(key)
+	return args.String(0)
+}
+
+func (m *MockFileStorage) FileExists(key string) bool {
+	args := m.Called(key)
+	return args.Bool(0)
+}
+
+func (m *MockFileStorage) GenerateUniqueKey(prefix, userID, originalFilename string) string {
+	args := m.Called(prefix, userID, originalFilename)
+	return args.String(0)
 }
