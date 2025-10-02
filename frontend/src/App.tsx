@@ -10,6 +10,7 @@ import { GroupCallModal } from './components/GroupCallModal'
 import { AvatarTooltip } from './components/AvatarTooltip'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
+import WelcomeScreen from './components/WelcomeScreen'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
@@ -60,6 +61,7 @@ function App() {
 
   // Profile system state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [showWelcome, setShowWelcome] = useState(false)
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
 
@@ -107,10 +109,10 @@ function App() {
               localStorage.removeItem('sessionId')
               userProfileStore.getState().clearProfile()
               sessionStore.getState().reset()
-              
-              // Show profile creation modal for fresh start
+
+              // Show welcome screen for fresh start
               setUserProfile(null)
-              setShowProfileCreation(true)
+              setShowWelcome(true)
               setProfileCheckComplete(true)
               return // Don't continue initialization
             }
@@ -127,9 +129,9 @@ function App() {
               setUserProfile(backendProfile)
               setProfileCheckComplete(true)
             } else {
-              // No profile exists anywhere, show profile creation modal
-              console.info('ℹ️ No user profile found - showing profile creation modal')
-              setShowProfileCreation(true)
+              // No profile exists anywhere, show welcome screen first
+              console.info('ℹ️ No user profile found - showing welcome screen')
+              setShowWelcome(true)
               setProfileCheckComplete(true)
               return // Don't continue initialization until profile is created
             }
@@ -138,9 +140,9 @@ function App() {
             if (error instanceof Error && error.message.includes('404')) {
               console.info('ℹ️ New user detected - showing profile creation modal')
             } else {
-              console.info('ℹ️ No existing profile found - showing profile creation modal')
+              console.info('ℹ️ No existing profile found - showing welcome screen')
             }
-            setShowProfileCreation(true)
+            setShowWelcome(true)
             setProfileCheckComplete(true)
             return // Don't continue initialization until profile is created
           }
@@ -152,10 +154,10 @@ function App() {
         // Get the current profile from the store (more reliable than state)
         const currentProfile = userProfileStore.getState().getProfileOffline()
         console.log('🔍 Session creation - currentProfile:', currentProfile?.id, currentProfile?.displayName)
-        
+
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
         const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
-        
+
         // First, check if we have an existing session for this user
         if (currentProfile?.id) {
           try {
@@ -188,9 +190,9 @@ function App() {
           if (!currentProfile?.id) {
             throw new Error('Cannot create session: User profile not loaded')
           }
-          
+
           console.log('🔄 Creating new session for user:', currentProfile.id)
-          
+
           // Create new session via API
           const response = await fetch(`${API_BASE_URL}/api/sessions`, {
             method: 'POST',
@@ -205,7 +207,7 @@ function App() {
           })
 
           let position = mockSession.position
-          
+
           if (!response.ok) {
             if (response.status === 409) {
               // User already has an active session, get existing sessions for this map
@@ -294,12 +296,12 @@ function App() {
           console.log('✅ WebSocket connected successfully')
         } catch (wsError) {
           console.warn('⚠️ WebSocket connection failed, attempting session recovery:', wsError)
-          
+
           // If WebSocket fails, it might be due to invalid session
           // Clear the session and try to create a new one
           console.log('🔄 Clearing invalid session and creating new one...')
           sessionStore.getState().reset()
-          
+
           // Retry initialization with fresh session
           try {
             await initializeApp()
@@ -578,36 +580,36 @@ function App() {
       const updatedPOI = freshPOIState.pois.find(p => p.id === poiId)
       if (updatedPOI && updatedPOI.participantCount > 1) {
         console.log('🏢 POI has multiple participants, joining group call')
-        
+
         // Initialize group call
         videoCallStore.getState().joinPOICall(poiId)
-        
+
         // Initialize WebRTC service for group call
         try {
           await videoCallStore.getState().initializeGroupWebRTC()
           console.log('✅ Group WebRTC initialized')
-          
+
           // Add existing participants from the POI to the group call
           // Get the participant list from the POI data
           const poiParticipants = updatedPOI.participants || []
           const currentUserId = userProfile.id
-          
+
           console.log('🔍 POI participants data:', poiParticipants)
           console.log('🔍 Current user ID:', currentUserId)
-          
+
           // Add all other participants (excluding current user)
           for (const participant of poiParticipants) {
             console.log('🔍 Processing participant:', participant)
-            
+
             if (participant.id !== currentUserId) {
               console.log('👥 Adding existing participant to group call:', participant.name)
-              
+
               videoCallStore.getState().addGroupCallParticipant(participant.id, {
                 userId: participant.id,
                 displayName: participant.name || 'Unknown User',
                 avatarURL: participant.avatarUrl || undefined
               })
-              
+
               // Add peer connection for the participant
               try {
                 await videoCallStore.getState().addPeerToGroupCall(participant.id)
@@ -616,7 +618,7 @@ function App() {
               }
             }
           }
-          
+
         } catch (error) {
           console.error('❌ Failed to initialize group WebRTC:', error)
           // Fall back to basic group call UI without video
@@ -704,30 +706,30 @@ function App() {
 
     try {
       console.log('🗑️ Deleting POI:', poiId)
-      
+
       // Call API to delete POI
       await deletePOI(poiId)
       console.log('✅ Successfully deleted POI:', poiId)
-      
+
       // Remove POI from store
       poiState.handleRealtimeDelete(poiId)
-      
+
       // Close the POI details panel if it's open
       setSelectedPOI(null)
-      
+
       // If user was in a group call for this POI, leave it
       const videoState = videoCallStore.getState()
       if (videoState.currentPOI === poiId && videoState.isGroupCallActive) {
         console.log('🚪 Leaving group call for deleted POI:', poiId)
         videoState.leavePOICall()
       }
-      
+
       // Refresh POI data
       await loadPOIs()
-      
+
     } catch (error) {
       console.error('❌ Failed to delete POI:', error)
-      
+
       // Show error notification
       notificationStore.getState().addNotification({
         id: `delete-poi-error-${Date.now()}`,
@@ -741,6 +743,12 @@ function App() {
       })
     }
   }, [userProfile, poiState, loadPOIs])
+
+  // Handle welcome screen "Get Started" button
+  const handleGetStarted = useCallback(() => {
+    setShowWelcome(false)
+    setShowProfileCreation(true)
+  }, [])
 
   // Handle profile creation
   const handleProfileCreated = useCallback((profile: UserProfile) => {
@@ -756,7 +764,7 @@ function App() {
       try {
         const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
         const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
-        
+
         // Create new session via API
         const response = await fetch(`${API_BASE_URL}/api/sessions`, {
           method: 'POST',
@@ -1019,19 +1027,19 @@ function App() {
 
     try {
       await clearAllUsers();
-      
+
       // Clear local storage to avoid stale user references
       localStorage.removeItem('userProfile');
       localStorage.removeItem('sessionId');
-      
+
       // Reset user profile store
       userProfileStore.getState().clearProfile();
-      
+
       // Reset session store
       sessionStore.getState().reset();
-      
+
       console.log('🧹 All users cleared successfully (database + localStorage)');
-      
+
       // Reload the page to reset the app state
       window.location.reload();
     } catch (error) {
@@ -1058,7 +1066,19 @@ function App() {
     )
   }
 
-  // Show profile creation modal if no profile exists
+  // Show welcome screen if no profile exists
+  if (showWelcome) {
+    return (
+      <ErrorBoundary>
+        <WelcomeScreen
+          isOpen={true}
+          onGetStarted={handleGetStarted}
+        />
+      </ErrorBoundary>
+    )
+  }
+
+  // Show profile creation modal after welcome screen
   if (showProfileCreation) {
     return (
       <ErrorBoundary>
@@ -1149,16 +1169,30 @@ function App() {
             <div className="flex items-center space-x-4">
               {/* Development buttons */}
               <button
-                onClick={handleNukePOIs}
+                onClick={(e) => {
+                  e.preventDefault();
+
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  handleNukePOIs();
+                }}
                 className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-medium"
-                title="Clear all POIs (Development only)"
+                title="Right-click to clear all POIs (Development only)"
               >
                 🧹 Nuke POIs
               </button>
               <button
-                onClick={handleNukeUsers}
+                onClick={(e) => {
+                  e.preventDefault();
+
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  handleNukeUsers();
+                }}
                 className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-medium"
-                title="Clear all users from database and localStorage (Development only)"
+                title="Right-click to clear all users from database and localStorage (Development only)"
               >
                 👥 Nuke Users
               </button>
