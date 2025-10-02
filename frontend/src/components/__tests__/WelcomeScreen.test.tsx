@@ -61,7 +61,7 @@ describe('WelcomeScreen', () => {
     // Check for the BreakoutGlobe SVG image
     const mapImage = screen.getByAltText('BreakoutGlobe map illustration showing POIs and video call functionality');
     expect(mapImage).toBeInTheDocument();
-    expect(mapImage).toHaveAttribute('src', '/src/assets/BreakoutGlobe.svg');
+    expect(mapImage).toHaveAttribute('src', '/BreakoutGlobe.svg');
   });
 
   it('has proper styling and layout', () => {

@@ -16,13 +16,13 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted }) =
         <div className="max-w-md w-full text-center py-8 sm:py-12">
           {/* Welcome Title - Responsive sizing */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-6 sm:mb-8">
-            🌍 Welcome 🌍
+            Welcome
           </h1>
 
           {/* Map Illustration using BreakoutGlobe.svg - Mobile optimized */}
           <div className="relative rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 overflow-hidden border border-gray-200 bg-white">
             <img
-              src="/src/assets/BreakoutGlobe.svg"
+              src="/BreakoutGlobe.svg"
               alt="BreakoutGlobe map illustration showing POIs and video call functionality"
               className="w-full h-auto max-w-xs sm:max-w-sm mx-auto"
             />

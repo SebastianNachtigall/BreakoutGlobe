@@ -36,7 +36,7 @@ describe('Welcome Screen Manual Verification', () => {
     // Verify BreakoutGlobe SVG image exists
     const mapImage = screen.getByAltText('BreakoutGlobe map illustration showing POIs and video call functionality');
     expect(mapImage).toBeInTheDocument();
-    expect(mapImage).toHaveAttribute('src', '/src/assets/BreakoutGlobe.svg');
+    expect(mapImage).toHaveAttribute('src', '/BreakoutGlobe.svg');
   });
 
   it('handles Get Started button click correctly', () => {
@@ -112,7 +112,7 @@ describe('Welcome Screen Manual Verification', () => {
     const mapImage = screen.getByAltText('BreakoutGlobe map illustration showing POIs and video call functionality');
     expect(mapImage).toBeInTheDocument();
     expect(mapImage.tagName).toBe('IMG');
-    expect(mapImage).toHaveAttribute('src', '/src/assets/BreakoutGlobe.svg');
+    expect(mapImage).toHaveAttribute('src', '/BreakoutGlobe.svg');
     expect(mapImage).toHaveAttribute('alt', 'BreakoutGlobe map illustration showing POIs and video call functionality');
   });
 
