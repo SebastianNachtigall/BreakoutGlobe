@@ -22,7 +22,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted }) =
           {/* Map Illustration using BreakoutGlobe.svg - Mobile optimized */}
           <div className="relative rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 overflow-hidden border border-gray-200 bg-white">
             <img
-              src="/BreakoutGlobe.svg"
+              src="/BreakoutGlobe2.svg"
               alt="BreakoutGlobe map illustration showing POIs and video call functionality"
               className="w-full h-auto max-w-xs sm:max-w-sm mx-auto"
             />
