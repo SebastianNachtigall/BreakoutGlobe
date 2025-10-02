@@ -530,8 +530,14 @@ export class WebSocketClient {
       import('../stores/videoCallStore').then(({ videoCallStore }) => {
         const videoStore = videoCallStore.getState();
         
-        // Only start group call if not already active
-        if (!videoStore.isGroupCallActive) {
+        // Only start group call if not already active for this POI
+        if (!videoStore.isGroupCallActive || videoStore.currentPOI !== poiId) {
+          // If switching POIs, leave current call first
+          if (videoStore.isGroupCallActive && videoStore.currentPOI !== poiId) {
+            console.log('🔄 Switching POI group calls, leaving current call first');
+            videoStore.leavePOICall();
+          }
+          
           videoStore.joinPOICall(poiId);
           
           // Initialize WebRTC service
@@ -562,7 +568,8 @@ export class WebSocketClient {
             console.error('❌ Failed to initialize group WebRTC for existing user:', error);
           });
         } else {
-          // Group call already active, just add the new participant
+          // Group call already active for this POI, just add the new participant
+          console.log('🔄 Group call already active for this POI, adding new participant');
           const newParticipant = participants.find((p: any) => p.id === userId);
           console.log('🏷️ POI join (group call active) - looking for participant:', {
             userId,

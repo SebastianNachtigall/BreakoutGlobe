@@ -63,8 +63,8 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
       title={avatar.displayName || avatar.sessionId}
     >
       {avatar.avatarURL ? (
-        <img 
-          src={avatar.avatarURL} 
+        <img
+          src={avatar.avatarURL}
           alt={avatar.displayName || avatar.sessionId}
           className="w-full h-full object-cover rounded-full"
           onError={(e) => {
@@ -75,7 +75,7 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
           }}
         />
       ) : null}
-      
+
       {/* Initials - shown as fallback or when no avatar image */}
       <span className={avatar.avatarURL ? 'absolute inset-0 flex items-center justify-center' : ''}>
         {initials}
@@ -86,11 +86,11 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
 
 // Utility function to create a DOM element using the same logic as the React component
 export const createAvatarMarkerElement = (
-  avatar: AvatarData, 
+  avatar: AvatarData,
   onAvatarClick?: (userId: string, clickPosition: { x: number; y: number }) => void
 ): HTMLElement => {
   const markerElement = document.createElement('div');
-  
+
   // Determine role-based styling
   const getRoleRing = (role?: string) => {
     switch (role) {
@@ -123,24 +123,24 @@ export const createAvatarMarkerElement = (
   if (avatar.avatarURL) {
     // Show loading state initially
     markerElement.classList.add('animate-pulse');
-    
+
     const avatarImg = document.createElement('img');
     avatarImg.src = avatar.avatarURL;
     avatarImg.className = 'w-full h-full object-cover rounded-full';
     avatarImg.alt = avatar.displayName || avatar.sessionId;
-    
+
     avatarImg.onload = () => {
       markerElement.classList.remove('animate-pulse');
       markerElement.textContent = ''; // Clear any existing content
       markerElement.appendChild(avatarImg);
     };
-    
+
     avatarImg.onerror = () => {
       markerElement.classList.remove('animate-pulse');
       const initials = generateInitials(avatar.displayName, avatar.sessionId);
       markerElement.textContent = initials;
     };
-    
+
     // Set initial fallback while loading
     const initialInitials = generateInitials(avatar.displayName, avatar.sessionId);
     markerElement.textContent = initialInitials;
@@ -174,7 +174,7 @@ export const createAvatarMarkerElement = (
   // CRITICAL FIX: Add explicit positioning for MapLibre markers
   markerElement.style.position = 'absolute';
   markerElement.style.zIndex = '1000';
-  
+
   // Add explicit dimensions and styling as fallback for Tailwind classes
   markerElement.style.width = '44px';  // w-11
   markerElement.style.height = '44px'; // h-11

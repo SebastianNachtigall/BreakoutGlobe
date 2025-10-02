@@ -415,6 +415,7 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       groupWebRTCService.cleanup();
     }
     
+    const currentState = get() as any;
     set({
       currentPOI: null,
       isGroupCallActive: false,
@@ -426,7 +427,9 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       groupCallParticipants: new Map(),
       remoteStreams: new Map(),
       isAudioEnabled: true,
-      isVideoEnabled: true
+      isVideoEnabled: true,
+      // Clear initialization flag
+      _initializingGroupWebRTC: false
     });
   },
 
@@ -475,11 +478,41 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   },
 
   initializeGroupWebRTC: async () => {
+    const state = get();
+    
+    // Check if initialization is already in progress
+    if ((state as any)._initializingGroupWebRTC) {
+      console.log('🔗 Group WebRTC initialization already in progress, waiting...');
+      // Wait for the ongoing initialization to complete
+      while ((get() as any)._initializingGroupWebRTC) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+    
+    // Prevent duplicate initialization (only if we have a service AND are active)
+    if (state.groupWebRTCService && state.isGroupCallActive) {
+      console.log('🔗 Group WebRTC service already initialized, skipping');
+      return;
+    }
+    
     console.log('🔗 Initializing group WebRTC service');
+    
+    // Set initialization flag to prevent race conditions
+    const currentState = get() as any;
+    set({ ...currentState, _initializingGroupWebRTC: true });
+    
     try {
-      const groupWebRTCService = new GroupWebRTCService();
+      // Clean up any existing service first
+      const currentService = get().groupWebRTCService;
+      if (currentService) {
+        console.log('🧹 Cleaning up existing group WebRTC service before reinitializing');
+        currentService.cleanup();
+      }
       
-      groupWebRTCService.setCallbacks({
+      const newGroupWebRTCService = new GroupWebRTCService();
+      
+      newGroupWebRTCService.setCallbacks({
         onLocalStream: (stream) => {
           console.log('📹 Group call local stream received');
           get().setLocalStream(stream);
@@ -505,18 +538,26 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       });
 
       // Initialize local media
-      await groupWebRTCService.initializeLocalMedia({ video: true, audio: true });
+      await newGroupWebRTCService.initializeLocalMedia({ video: true, audio: true });
       
       // Set WebSocket client for signaling
       const wsClient = (window as any).wsClient;
       if (wsClient) {
-        groupWebRTCService.setWebSocketClient(wsClient);
+        newGroupWebRTCService.setWebSocketClient(wsClient);
       }
       
-      set({ groupWebRTCService });
+      const currentState = get() as any;
+      set({ 
+        ...currentState,
+        groupWebRTCService: newGroupWebRTCService,
+        _initializingGroupWebRTC: false
+      });
       console.log('✅ Group WebRTC service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize group WebRTC service:', error);
+      // Clear initialization flag on error
+      const errorState = get() as any;
+      set({ ...errorState, _initializingGroupWebRTC: false });
       throw error;
     }
   },
