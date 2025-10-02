@@ -35,6 +35,11 @@ func (m *MockRedisClient) Expire(ctx context.Context, key string, expiration tim
 	return args.Error(0)
 }
 
+func (m *MockRedisClient) ZRangeWithScores(ctx context.Context, key string, start, stop int64) ([]interface{}, error) {
+	args := m.Called(ctx, key, start, stop)
+	return args.Get(0).([]interface{}), args.Error(1)
+}
+
 func (m *MockRedisClient) Pipeline() PipelineInterface {
 	args := m.Called()
 	return args.Get(0).(PipelineInterface)
@@ -297,13 +302,15 @@ func (suite *RateLimiterTestSuite) TestGetWindowResetTime() {
 	userID := "user-123"
 	action := ActionCreateSession
 	
+	// Mock empty window (no entries)
+	suite.mockRedis.On("ZRangeWithScores", ctx, "rate_limit:user-123:create_session", int64(0), int64(0)).Return([]interface{}{}, nil)
+	
 	// Execute
 	resetTime, err := suite.rateLimiter.GetWindowResetTime(ctx, userID, action)
 	
 	// Assert
 	suite.NoError(err)
-	suite.True(resetTime.After(time.Now()))
-	suite.True(resetTime.Before(time.Now().Add(time.Minute + time.Second)))
+	suite.True(resetTime.Before(time.Now().Add(time.Second)), "Empty window should reset immediately")
 }
 
 func (suite *RateLimiterTestSuite) TestClearUserLimits() {

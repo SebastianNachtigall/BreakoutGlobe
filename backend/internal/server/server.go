@@ -35,6 +35,8 @@ type Server struct {
 	redis  *redislib.Client
 	// POI service for WebSocket handler
 	poiService *services.POIService
+	// Shared rate limiter for all handlers
+	rateLimiter services.RateLimiterInterface
 }
 
 func New(cfg *config.Config) *Server {
@@ -88,11 +90,16 @@ func New(cfg *config.Config) *Server {
 		AllowCredentials: true,
 	}))
 	
+	// Initialize shared rate limiter
+	// TODO: Replace with Redis-based rate limiter in production
+	var rateLimiter services.RateLimiterInterface = &SimpleRateLimiter{}
+	
 	s := &Server{
-		config: cfg,
-		router: router,
-		db:     db,
-		redis:  redisClient,
+		config:      cfg,
+		router:      router,
+		db:          db,
+		redis:       redisClient,
+		rateLimiter: rateLimiter,
 	}
 	
 	s.setupRoutes()
@@ -154,11 +161,8 @@ func (s *Server) setupSessionRoutes(api *gin.RouterGroup) {
 		pubsub := redis.NewPubSub(s.redis) // Add the missing pubsub parameter
 		sessionService := services.NewSessionService(sessionRepo, sessionPresence, pubsub)
 		
-		// Create rate limiter (simple in-memory for now)
-		rateLimiter := &SimpleRateLimiter{}
-		
-		// Create session handler
-		sessionHandler := handlers.NewSessionHandler(sessionService, rateLimiter)
+		// Create session handler with shared rate limiter
+		sessionHandler := handlers.NewSessionHandler(sessionService, s.rateLimiter)
 		
 		// Register session routes (this includes the heartbeat endpoint)
 		sessionHandler.RegisterRoutes(s.router)
@@ -189,16 +193,14 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		
 		userService := services.NewUserService(userRepo, fileStorage)
 		
-		// For now, create a simple in-memory rate limiter (TODO: use Redis in production)
-		rateLimiter := &SimpleRateLimiter{}
-		
-		userHandler := handlers.NewUserHandler(userService, rateLimiter)
+		// Use the shared rate limiter instance
+		userHandler := handlers.NewUserHandler(userService, s.rateLimiter)
 		
 		// Register user routes
 		userHandler.RegisterRoutes(s.router)
 		
 		// Setup WebSocket handler for multi-user functionality
-		s.setupWebSocketHandler(userService, rateLimiter, s.poiService)
+		s.setupWebSocketHandler(userService, s.rateLimiter, s.poiService)
 	} else {
 		log.Println("⚠️ Database not available, skipping user routes and WebSocket handler setup")
 	}
@@ -234,11 +236,8 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		// Create POI service with image uploader and user service
 		s.poiService = services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader, userService)
 		
-		// Create rate limiter (simple in-memory for now)
-		rateLimiter := &SimpleRateLimiter{}
-		
 		// Create POI handler with user service for participant names
-		poiHandler := handlers.NewPOIHandler(s.poiService, userService, rateLimiter)
+		poiHandler := handlers.NewPOIHandler(s.poiService, userService, s.rateLimiter)
 		
 		// Register POI routes
 		poiHandler.RegisterRoutes(s.router)
@@ -318,8 +317,28 @@ func (r *SimpleRateLimiter) checkLimit(userID string, action services.ActionType
 	
 	key := fmt.Sprintf("%s:%s", userID, action)
 	now := time.Now()
-	window := 1 * time.Hour // Simple 1-hour window
-	limit := 100 // Simple limit of 100 requests per hour
+	
+	// Get appropriate limits for each action type
+	var window time.Duration
+	var limit int
+	
+	switch action {
+	case services.ActionUpdateAvatar:
+		window = 1 * time.Minute
+		limit = 60 // 60 avatar updates per minute (1 per second)
+	case services.ActionCreateSession:
+		window = 1 * time.Minute
+		limit = 10 // 10 sessions per minute
+	case services.ActionCreatePOI, services.ActionJoinPOI, services.ActionLeavePOI, services.ActionUpdatePOI, services.ActionDeletePOI:
+		window = 1 * time.Minute
+		limit = 30 // 30 POI operations per minute
+	case services.ActionUpdateProfile:
+		window = 1 * time.Minute
+		limit = 5 // 5 profile updates per minute
+	default:
+		window = 1 * time.Hour
+		limit = 100 // Default: 100 requests per hour
+	}
 	
 	// Clean old requests
 	var validRequests []time.Time
@@ -372,7 +391,46 @@ func (r *SimpleRateLimiter) GetRemainingRequests(ctx context.Context, userID str
 }
 
 func (r *SimpleRateLimiter) GetWindowResetTime(ctx context.Context, userID string, action services.ActionType) (time.Time, error) {
-	return time.Now().Add(1 * time.Hour), nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	if r.requests == nil {
+		return time.Now(), nil
+	}
+	
+	key := fmt.Sprintf("%s:%s", userID, action)
+	requests := r.requests[key]
+	
+	// If no requests, window can reset immediately
+	if len(requests) == 0 {
+		return time.Now(), nil
+	}
+	
+	// Get the same window duration as used in checkLimit
+	var window time.Duration
+	switch action {
+	case services.ActionUpdateAvatar:
+		window = 1 * time.Minute
+	case services.ActionCreateSession:
+		window = 1 * time.Minute
+	case services.ActionCreatePOI, services.ActionJoinPOI, services.ActionLeavePOI, services.ActionUpdatePOI, services.ActionDeletePOI:
+		window = 1 * time.Minute
+	case services.ActionUpdateProfile:
+		window = 1 * time.Minute
+	default:
+		window = 1 * time.Hour
+	}
+	
+	// Find the oldest request and calculate when it will expire
+	oldestRequest := requests[0]
+	for _, reqTime := range requests {
+		if reqTime.Before(oldestRequest) {
+			oldestRequest = reqTime
+		}
+	}
+	
+	resetTime := oldestRequest.Add(window)
+	return resetTime, nil
 }
 
 func (r *SimpleRateLimiter) SetCustomLimit(userID string, action services.ActionType, limit services.RateLimit) {

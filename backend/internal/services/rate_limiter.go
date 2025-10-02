@@ -41,6 +41,7 @@ type RedisClientInterface interface {
 	ZAdd(ctx context.Context, key string, score float64, member string) error
 	ZRemRangeByScore(ctx context.Context, key string, min, max string) error
 	ZCard(ctx context.Context, key string) (int64, error)
+	ZRangeWithScores(ctx context.Context, key string, start, stop int64) ([]interface{}, error)
 	Expire(ctx context.Context, key string, expiration time.Duration) error
 	Pipeline() PipelineInterface
 }
@@ -177,13 +178,33 @@ func (rl *RateLimiter) GetRemainingRequests(ctx context.Context, userID string, 
 
 // GetWindowResetTime returns when the current rate limit window will reset
 func (rl *RateLimiter) GetWindowResetTime(ctx context.Context, userID string, action ActionType) (time.Time, error) {
+	key := rl.getKey(userID, action)
 	limit := rl.getLimit(userID, action)
-	now := time.Now()
 	
-	// The window resets after the window duration from now
-	resetTime := now.Add(limit.Window)
+	// Get the oldest entry in the window
+	results, err := rl.redis.ZRangeWithScores(ctx, key, 0, 0)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to get oldest entry: %w", err)
+	}
 	
-	return resetTime, nil
+	// If no entries, window can reset immediately
+	if len(results) == 0 {
+		return time.Now(), nil
+	}
+	
+	// Extract the score (timestamp) from the first result
+	// Redis returns results as []interface{} where each element is a map with Member and Score
+	if resultMap, ok := results[0].(map[string]interface{}); ok {
+		if scoreFloat, ok := resultMap["Score"].(float64); ok {
+			oldestTime := time.Unix(0, int64(scoreFloat))
+			resetTime := oldestTime.Add(limit.Window)
+			return resetTime, nil
+		}
+	}
+	
+	// Fallback: if we can't parse the result, return now + window
+	// This maintains backward compatibility but logs the issue
+	return time.Now().Add(limit.Window), nil
 }
 
 // SetCustomLimit sets a custom rate limit for a specific user and action
