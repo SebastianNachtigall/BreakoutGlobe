@@ -536,14 +536,31 @@ export class WebSocketClient {
 
       // Emit event for group call coordination (event-driven approach)
       // The video call store will listen and handle based on its state
+      // Try to get participant info from multiple sources:
+      // 1. joiningUser field (most reliable - always populated by backend)
+      // 2. participants array (may be empty due to timing)
+      // 3. avatar store (fallback for existing users)
+      const joiningUser = (data as any).joiningUser;
       const participantInfo = participants.find((p: any) => p.id === userId);
+      
+      let displayName = joiningUser?.name || participantInfo?.name;
+      let avatarURL = joiningUser?.avatarUrl || participantInfo?.avatarUrl;
+
+      // If still not found, try avatar store as last resort
+      if (!displayName) {
+        const avatar = avatarStore.getState().getAvatarByUserId(userId);
+        if (avatar) {
+          displayName = avatar.displayName;
+          avatarURL = avatar.avatarURL;
+        }
+      }
 
       // Always emit the event, even if participant info is not immediately available
       eventBus.emit(GroupCallEvents.USER_JOINED_POI, {
         poiId,
         userId,
-        displayName: participantInfo?.name || 'Unknown User',
-        avatarURL: participantInfo?.avatarUrl,
+        displayName: displayName || 'Unknown User',
+        avatarURL: avatarURL,
         participants
       } as UserJoinedPOIEvent);
     }

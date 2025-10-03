@@ -91,6 +91,7 @@ type POIJoinedEventWithParticipants struct {
 	SessionID    string           `json:"sessionId"`
 	CurrentCount int              `json:"currentCount"`
 	Participants []POIParticipant `json:"participants"`
+	JoiningUser  POIParticipant   `json:"joiningUser"` // Info about the user who is joining
 	Timestamp    time.Time        `json:"timestamp"`
 }
 

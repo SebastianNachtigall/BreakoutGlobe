@@ -483,6 +483,25 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 		})
 	}
 
+	// Get joining user information separately to ensure it's always available
+	joiningUser := redis.POIParticipant{
+		ID:        userID,
+		Name:      userID, // Fallback to userID
+		AvatarURL: "",
+	}
+
+	// Try to get user details for the joining user
+	if s.userService != nil {
+		user, err := s.userService.GetUser(ctx, userID)
+		if err == nil && user != nil {
+			joiningUser.Name = user.DisplayName
+			if user.AvatarURL != nil {
+				joiningUser.AvatarURL = *user.AvatarURL
+			}
+		}
+		// If user service fails, we continue with fallback values
+	}
+
 	// Publish POI joined event with participant information
 	joinedEvent := redis.POIJoinedEventWithParticipants{
 		POIID:        poiID,
@@ -491,6 +510,7 @@ func (s *POIService) JoinPOI(ctx context.Context, poiID, userID string) error {
 		SessionID:    "", // Will be filled by WebSocket handler if needed
 		CurrentCount: currentCount,
 		Participants: redisParticipants,
+		JoiningUser:  joiningUser, // Always include joining user info
 		Timestamp:    time.Now(),
 	}
 
