@@ -3,6 +3,7 @@ import { WebRTCService, GroupWebRTCService } from '../services/webrtc-service';
 import { avatarStore } from './avatarStore';
 import { poiStore } from './poiStore';
 import { userProfileStore } from './userProfileStore';
+import { eventBus, GroupCallEvents, type UserJoinedPOIEvent, type WebRTCReadyEvent } from '../utils/eventBus';
 
 // Get WebSocket client instance (will be set by App.tsx)
 let wsClient: any = null;
@@ -40,6 +41,7 @@ interface VideoCallState {
   remoteStreams: Map<string, MediaStream>;
   _initializingGroupCall: boolean; // Private lock for race condition prevention
   _initializingWebRTC: boolean; // Private lock for WebRTC initialization race condition prevention
+  _pendingPeers: Map<string, UserJoinedPOIEvent>; // Queue for users who join during WebRTC init
 
   // WebRTC state
   webrtcService: WebRTCService | null;
@@ -88,6 +90,7 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   remoteStreams: new Map(),
   _initializingGroupCall: false,
   _initializingWebRTC: false,
+  _pendingPeers: new Map(),
 
   // WebRTC initial state
   webrtcService: null,
@@ -425,10 +428,10 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
 
     // 5. Start group call
     console.log('🎥 Starting group call for POI:', poiId);
-    
+
     // Set initialization lock with timeout protection
     set({ _initializingGroupCall: true });
-    
+
     // Set timeout to release lock if initialization takes too long
     const timeoutId = setTimeout(() => {
       if (get()._initializingGroupCall) {
@@ -444,23 +447,23 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       // Initialize WebRTC service
       get().initializeGroupWebRTC().then(() => {
         console.log('✅ Group WebRTC initialized successfully');
-        
+
         // Get participants from POI data and add them to group call
         const poiData = poiStore.getState().pois.find(p => p.id === poiId);
         if (poiData && poiData.participants) {
           console.log('👥 Adding existing participants to group call:', poiData.participants.length);
-          
+
           // Use triggerUserId as the most reliable source for current user ID
           // (wsClient.sessionId is a session identifier, not the user's actual ID)
           const currentUserId = triggerUserId;
-          
+
           console.log('👥 Current user ID for participant filtering:', currentUserId);
-          
+
           for (const participant of poiData.participants) {
             // Don't add the current user as a participant - they appear in the selfie area only
             if (participant.id !== currentUserId) {
               console.log('👤 Adding participant:', participant.name, 'ID:', participant.id);
-              
+
               get().addGroupCallParticipant(participant.id, {
                 userId: participant.id,
                 displayName: participant.name || 'Unknown User',
@@ -556,13 +559,13 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       participant
     });
     const { groupCallParticipants } = get();
-    
+
     // Check if participant already exists to prevent duplicates
     if (groupCallParticipants.has(userId)) {
       console.log('👤 Participant already exists, skipping duplicate:', participant.displayName);
       return;
     }
-    
+
     const newParticipants = new Map(groupCallParticipants);
     newParticipants.set(userId, participant);
     set({ groupCallParticipants: newParticipants });
@@ -666,6 +669,41 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
         _initializingWebRTC: false
       });
       console.log('✅ Group WebRTC service initialized');
+
+      // Emit event that WebRTC is ready
+      const currentPOI = get().currentPOI;
+      if (currentPOI) {
+        eventBus.emit(GroupCallEvents.WEBRTC_READY, { poiId: currentPOI } as WebRTCReadyEvent);
+      }
+
+      // Process any pending offers that arrived before WebRTC was ready
+      if (wsClient && wsClient.processPendingOffers) {
+        console.log('🔄 Processing pending offers from WebSocket');
+        wsClient.processPendingOffers();
+      }
+
+      // Process any pending peers that joined during initialization
+      const pendingPeers = get()._pendingPeers;
+      if (pendingPeers.size > 0) {
+        console.log(`🔄 Processing ${pendingPeers.size} pending peers`);
+        pendingPeers.forEach((peerData, userId) => {
+          console.log('➕ Adding pending peer:', userId);
+          get().addGroupCallParticipant(userId, {
+            userId: peerData.userId,
+            displayName: peerData.displayName,
+            avatarURL: peerData.avatarURL
+          });
+          get().addPeerToGroupCall(userId).catch((error) => {
+            console.error('❌ Failed to add pending peer:', userId, error);
+          });
+        });
+        set({ _pendingPeers: new Map() }); // Clear pending peers
+      }
+
+      // Process any pending offers that arrived before WebRTC was ready
+      if (wsClient) {
+        wsClient.processPendingOffers();
+      }
     } catch (error) {
       console.error('❌ Failed to initialize group WebRTC service:', error);
       set({ _initializingWebRTC: false });
@@ -738,3 +776,41 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
     set({ remoteStream: stream });
   }
 }));
+
+// Setup event listeners for group call coordination
+eventBus.on(GroupCallEvents.USER_JOINED_POI, (data: UserJoinedPOIEvent) => {
+  const state = videoCallStore.getState();
+
+  // Only care if we're in an active group call for this POI
+  if (!state.isGroupCallActive || state.currentPOI !== data.poiId) {
+    return;
+  }
+
+  // Don't add ourselves
+  const currentUserProfile = userProfileStore.getState().getProfileOffline();
+  const currentUserId = currentUserProfile?.id;
+  if (data.userId === currentUserId) {
+    return;
+  }
+
+  console.log('📢 Event: User joined our POI during active call:', data.userId);
+
+  // If WebRTC is ready, add peer immediately
+  if (state.groupWebRTCService && !state._initializingWebRTC) {
+    console.log('✅ WebRTC ready, adding peer immediately:', data.userId);
+    videoCallStore.getState().addGroupCallParticipant(data.userId, {
+      userId: data.userId,
+      displayName: data.displayName,
+      avatarURL: data.avatarURL
+    });
+    videoCallStore.getState().addPeerToGroupCall(data.userId).catch((error) => {
+      console.error('❌ Failed to add peer:', data.userId, error);
+    });
+  } else {
+    // Queue for later when WebRTC is ready
+    console.log('⏳ WebRTC not ready, queueing peer:', data.userId);
+    const pendingPeers = new Map(state._pendingPeers);
+    pendingPeers.set(data.userId, data);
+    videoCallStore.setState({ _pendingPeers: pendingPeers });
+  }
+});

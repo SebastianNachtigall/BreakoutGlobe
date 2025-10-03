@@ -4,6 +4,7 @@ import { avatarStore } from '../stores/avatarStore';
 import { videoCallStore } from '../stores/videoCallStore';
 import { userProfileStore } from '../stores/userProfileStore';
 import type { POIData, AvatarData } from '../components/MapContainer';
+import { eventBus, GroupCallEvents, type UserJoinedPOIEvent } from '../utils/eventBus';
 
 export enum ConnectionStatus {
   DISCONNECTED = 'disconnected',
@@ -44,6 +45,7 @@ export class WebSocketClient {
   private messageCallbacks: ((message: WebSocketMessage) => void)[] = [];
   private errorCallbacks: ((error: WebSocketError) => void)[] = [];
   private stateSyncCallbacks: ((data: StateSync) => void)[] = [];
+  private pendingOffers: Map<string, any> = new Map(); // Queue offers that arrive before WebRTC is ready
 
   constructor(url: string, sessionId: string) {
     this.url = url;
@@ -483,7 +485,7 @@ export class WebSocketClient {
   // Real-time POI Event Handlers
   private handlePOICreated(data: any): void {
     console.log('🆕 WebSocket: POI created by another user', data);
-    
+
     // Convert backend POI data to frontend format
     const poi: POIData = {
       id: data.poiId,
@@ -498,7 +500,7 @@ export class WebSocketClient {
 
     // Add the new POI to the store
     poiStore.getState().addPOI(poi);
-    
+
     this.notifyStateSync({
       type: 'poi',
       data: { action: 'created', poi },
@@ -508,7 +510,7 @@ export class WebSocketClient {
 
   private handlePOIJoined(data: any): void {
     console.log('👥 WebSocket: User joined POI', data);
-    
+
     // Update participant count for the POI
     const poiId = data.poiId;
     const userId = data.userId;
@@ -517,44 +519,35 @@ export class WebSocketClient {
 
     // Update the POI in the store with participant information
     poiStore.getState().updatePOIParticipants(poiId, currentCount, participants);
-    
+
     // Hide the avatar for the user who joined the POI
     if (userId) {
       avatarStore.getState().hideAvatarForPOI(userId, poiId);
     }
-    
+
+    // Get current user info for comparison
+    const currentUserProfile = userProfileStore.getState().getProfileOffline();
+    const currentUserId = currentUserProfile?.id || this.sessionId;
+
     // Check if group call should be started using centralized logic
-    if (userId !== this.sessionId) {
+    if (userId !== currentUserId) {
       console.log('🏢 Another user joined POI, checking if group call should start');
-      // Get the current user's actual ID from the user profile store
-      const currentUserProfile = userProfileStore.getState().getProfileOffline();
-      const currentUserId = currentUserProfile?.id || this.sessionId;
-      console.log('🔍 WebSocket: Current user ID for group call:', currentUserId, 'from profile:', currentUserProfile?.displayName);
       videoCallStore.getState().checkAndStartGroupCall(poiId, currentCount, currentUserId);
-      
-      // If this user is already in an active group call for this POI, add the new participant
-      const videoCallState = videoCallStore.getState();
-      if (videoCallState.isGroupCallActive && videoCallState.currentPOI === poiId && videoCallState.groupWebRTCService) {
-        console.log('🔗 Adding new participant to existing group call:', userId);
-        
-        // Find participant info from the participants list
-        const participantInfo = participants.find((p: any) => p.id === userId);
-        if (participantInfo) {
-          // Add participant to the group call
-          videoCallStore.getState().addGroupCallParticipant(userId, {
-            userId: userId,
-            displayName: participantInfo.name || 'Unknown User',
-            avatarURL: participantInfo.avatarUrl || undefined
-          });
-          
-          // Add peer connection for the new participant
-          videoCallStore.getState().addPeerToGroupCall(userId).catch((error) => {
-            console.error('❌ Failed to add peer for new participant:', userId, error);
-          });
-        }
-      }
+
+      // Emit event for group call coordination (event-driven approach)
+      // The video call store will listen and handle based on its state
+      const participantInfo = participants.find((p: any) => p.id === userId);
+
+      // Always emit the event, even if participant info is not immediately available
+      eventBus.emit(GroupCallEvents.USER_JOINED_POI, {
+        poiId,
+        userId,
+        displayName: participantInfo?.name || 'Unknown User',
+        avatarURL: participantInfo?.avatarUrl,
+        participants
+      } as UserJoinedPOIEvent);
     }
-    
+
     // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
@@ -565,7 +558,7 @@ export class WebSocketClient {
 
   private handlePOILeft(data: any): void {
     console.log('👋 WebSocket: User left POI', data);
-    
+
     // Update participant count for the POI
     const poiId = data.poiId;
     const userId = data.userId;
@@ -574,23 +567,23 @@ export class WebSocketClient {
 
     // Update the POI in the store with participant information
     poiStore.getState().updatePOIParticipants(poiId, currentCount, participants);
-    
+
     // Show the avatar for the user who left the POI
     if (userId) {
       avatarStore.getState().showAvatarForPOI(userId, poiId);
     }
-    
+
     // Handle group call cleanup if current user is in this POI
     const currentUserPOI = poiStore.getState().getCurrentUserPOI();
     if (currentUserPOI === poiId && userId !== this.sessionId) {
       console.log('🏢 Participant left POI, updating group call');
-      
+
       const videoStore = videoCallStore.getState();
-      
+
       // Remove participant from group call if active
       if (videoStore.isGroupCallActive && videoStore.currentPOI === poiId) {
         videoStore.removePeerFromGroupCall(userId);
-        
+
         // If only one participant left (current user), end the group call
         if (currentCount <= 1) {
           console.log('🏢 Only one participant left, ending group call');
@@ -598,7 +591,7 @@ export class WebSocketClient {
         }
       }
     }
-    
+
     // Emit state sync event that includes a refresh request
     this.notifyStateSync({
       type: 'poi',
@@ -609,7 +602,7 @@ export class WebSocketClient {
 
   private handlePOIUpdated(data: any): void {
     console.log('📝 WebSocket: POI updated', data);
-    
+
     // Convert backend POI data to frontend format
     const poi: POIData = {
       id: data.poiId,
@@ -624,7 +617,7 @@ export class WebSocketClient {
 
     // Update the POI in the store
     poiStore.getState().handleRealtimeUpdate(poi);
-    
+
     this.notifyStateSync({
       type: 'poi',
       data: { action: 'updated', poi },
@@ -1197,11 +1190,39 @@ export class WebSocketClient {
     });
   }
 
+  // Process pending offers that were queued before WebRTC was ready
+  public processPendingOffers(): void {
+    if (this.pendingOffers.size === 0) {
+      return;
+    }
+
+    console.log(`🔄 Processing ${this.pendingOffers.size} pending offers`);
+    const offers = Array.from(this.pendingOffers.values());
+    this.pendingOffers.clear();
+
+    offers.forEach(offerData => {
+      console.log('📝 Processing queued offer from:', offerData.fromUserId);
+      this.handlePOICallOffer(offerData);
+    });
+  }
+
   // POI Group Call WebRTC Signaling Handlers
   private handlePOICallOffer(data: any): void {
     console.log('📝 WebSocket: Received POI call offer', data);
     const { poiId, fromUserId, displayName, sdp } = data;
     const state = videoCallStore.getState();
+
+    // If WebRTC service doesn't exist yet OR we're not in the POI yet, queue the offer
+    // This handles the race condition where offers arrive before POI join completes
+    if (!state.groupWebRTCService || state.currentPOI !== poiId) {
+      console.log('⏳ WebRTC not ready or POI not set yet, queueing offer from:', fromUserId, {
+        hasWebRTC: !!state.groupWebRTCService,
+        currentPOI: state.currentPOI,
+        offerPOI: poiId
+      });
+      this.pendingOffers.set(fromUserId, data);
+      return;
+    }
 
     if (state.currentPOI === poiId && state.groupWebRTCService) {
       console.log('📝 Processing POI call offer from user:', fromUserId, 'displayName:', displayName);
@@ -1210,11 +1231,11 @@ export class WebSocketClient {
       let peerConnection = state.groupWebRTCService.peerConnections.get(fromUserId);
       if (!peerConnection) {
         console.log('🔗 Creating new peer connection for incoming offer from user:', fromUserId);
-        
+
         // Use display name from the message, fallback to avatar store, then to user ID
         const avatar = avatarStore.getState().getAvatarByUserId(fromUserId);
         const finalDisplayName = displayName || avatar?.displayName || `User ${fromUserId.substring(0, 8)}`;
-        
+
         console.log('🏷️ Display name resolution for POI call offer:', {
           fromUserId,
           displayNameFromMessage: displayName,
@@ -1222,7 +1243,7 @@ export class WebSocketClient {
           finalDisplayName,
           avatarFound: !!avatar
         });
-        
+
         // Add the user as a participant first
         videoCallStore.getState().addGroupCallParticipant(fromUserId, {
           userId: fromUserId,
@@ -1314,6 +1335,22 @@ export class WebSocketClient {
         avatarStore.getState().updateAvatarCallStatus(userId, isInCall);
         console.log(`📞 Updated call status for user ${userId}: ${isInCall ? 'in call' : 'available'}`);
       }
+    });
+  }
+
+  // Process pending offers that arrived before WebRTC was ready
+  public processPendingOffers(): void {
+    if (this.pendingOffers.size === 0) {
+      return;
+    }
+
+    console.log(`🔄 Processing ${this.pendingOffers.size} pending offers`);
+    const offers = Array.from(this.pendingOffers.values());
+    this.pendingOffers.clear();
+
+    offers.forEach(offerData => {
+      console.log('📝 Processing queued offer from:', offerData.fromUserId);
+      this.handlePOICallOffer(offerData);
     });
   }
 }

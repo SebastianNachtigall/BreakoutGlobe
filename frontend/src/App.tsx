@@ -577,8 +577,15 @@ function App() {
       // Check if group call should be started using centralized logic
       const freshPOIState = poiStore.getState()
       const updatedPOI = freshPOIState.pois.find(p => p.id === poiId)
+      console.log('🔍 After joining POI, checking for group call:', { 
+        poiId, 
+        updatedPOI: updatedPOI ? { id: updatedPOI.id, participantCount: updatedPOI.participantCount } : null,
+        currentUserPOI: freshPOIState.currentUserPOI
+      })
       if (updatedPOI) {
         videoCallStore.getState().checkAndStartGroupCall(poiId, updatedPOI.participantCount, userProfile.id)
+      } else {
+        console.log('❌ Could not find updated POI after joining:', poiId)
       }
 
     } catch (error) {
@@ -651,6 +658,19 @@ function App() {
       })
     }
   }, [userProfile, poiState])
+
+  const handleEndGroupCall = useCallback(async () => {
+    const videoState = videoCallStore.getState()
+    const poiId = videoState.currentPOI
+    
+    // End the group call
+    videoState.leavePOICall()
+    
+    // Also leave the POI since there's nothing to do without a call
+    if (poiId && userProfile) {
+      await handleLeavePOI(poiId)
+    }
+  }, [userProfile, handleLeavePOI])
 
   const handleDeletePOI = useCallback(async (poiId: string) => {
     if (!userProfile) return
@@ -1217,7 +1237,7 @@ function App() {
         {videoCallState.isGroupCallActive && videoCallState.currentPOI && (
           <GroupCallModal
             isOpen={true}
-            onClose={() => videoCallStore.getState().leavePOICall()}
+            onClose={handleEndGroupCall}
             callState={videoCallState.callState}
             poiId={videoCallState.currentPOI}
             poiName={poiState.pois.find(p => p.id === videoCallState.currentPOI)?.name}
@@ -1226,7 +1246,7 @@ function App() {
             localStream={videoCallState.localStream}
             isAudioEnabled={videoCallState.isAudioEnabled}
             isVideoEnabled={videoCallState.isVideoEnabled}
-            onEndCall={() => videoCallStore.getState().leavePOICall()}
+            onEndCall={handleEndGroupCall}
             onToggleAudio={() => videoCallStore.getState().toggleAudio()}
             onToggleVideo={() => videoCallStore.getState().toggleVideo()}
           />
