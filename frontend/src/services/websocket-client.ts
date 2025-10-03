@@ -531,6 +531,28 @@ export class WebSocketClient {
       const currentUserId = currentUserProfile?.id || this.sessionId;
       console.log('🔍 WebSocket: Current user ID for group call:', currentUserId, 'from profile:', currentUserProfile?.displayName);
       videoCallStore.getState().checkAndStartGroupCall(poiId, currentCount, currentUserId);
+      
+      // If this user is already in an active group call for this POI, add the new participant
+      const videoCallState = videoCallStore.getState();
+      if (videoCallState.isGroupCallActive && videoCallState.currentPOI === poiId && videoCallState.groupWebRTCService) {
+        console.log('🔗 Adding new participant to existing group call:', userId);
+        
+        // Find participant info from the participants list
+        const participantInfo = participants.find((p: any) => p.id === userId);
+        if (participantInfo) {
+          // Add participant to the group call
+          videoCallStore.getState().addGroupCallParticipant(userId, {
+            userId: userId,
+            displayName: participantInfo.name || 'Unknown User',
+            avatarURL: participantInfo.avatarUrl || undefined
+          });
+          
+          // Add peer connection for the new participant
+          videoCallStore.getState().addPeerToGroupCall(userId).catch((error) => {
+            console.error('❌ Failed to add peer for new participant:', userId, error);
+          });
+        }
+      }
     }
     
     // Emit state sync event that includes a refresh request

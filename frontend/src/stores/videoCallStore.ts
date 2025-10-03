@@ -403,10 +403,10 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       return;
     }
 
-    // 2. Check if group call already active for this POI
+    // 2. Check if THIS USER is already in this group call
     const state = get();
-    if (state.isGroupCallActive && state.currentPOI === poiId) {
-      console.log('✅ Group call already active for this POI, skipping');
+    if (state.isGroupCallActive && state.currentPOI === poiId && state.groupWebRTCService) {
+      console.log('✅ This user already in group call, skipping duplicate initialization');
       return;
     }
 
