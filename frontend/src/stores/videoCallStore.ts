@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { WebRTCService, GroupWebRTCService } from '../services/webrtc-service';
 import { avatarStore } from './avatarStore';
 import { poiStore } from './poiStore';
+import { userProfileStore } from './userProfileStore';
 
 // Get WebSocket client instance (will be set by App.tsx)
 let wsClient: any = null;
@@ -653,8 +654,11 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       const wsClient = (window as any).wsClient;
       if (wsClient) {
         newGroupWebRTCService.setWebSocketClient(wsClient);
-        // Set current user ID for offer coordination
-        newGroupWebRTCService.setCurrentUserId(wsClient.sessionId);
+        // Set current user ID for offer coordination - use actual user ID, not session ID
+        const currentUserProfile = userProfileStore.getState().getProfileOffline();
+        const currentUserId = currentUserProfile?.id || wsClient.sessionId;
+        console.log('🔧 Setting current user ID for WebRTC:', currentUserId, 'from profile:', currentUserProfile?.displayName);
+        newGroupWebRTCService.setCurrentUserId(currentUserId);
       }
 
       set({
