@@ -73,7 +73,13 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	
 	// updateDiscussionTimer call with 1 participant
 	scenario.mockRepo.On("GetByID", mock.Anything, poiID).Return(initialPOI, nil).Once()
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once() // For discussion timer
+	
+	// GetPOIParticipantsWithInfo call for event
+	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once() // For JoinPOI event
+	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
 	// Should not update POI since discussion should remain inactive (no Update call expected)
 	
 	// Note: POI join event is now broadcast directly by WebSocket handler, not via Redis
@@ -99,12 +105,19 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	
 	// updateDiscussionTimer call with 2 participants - should start discussion
 	scenario.mockRepo.On("GetByID", mock.Anything, poiID).Return(poiWith1User, nil).Once()
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(2, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(2, nil).Once() // For discussion timer
 	
 	// Should update POI to start discussion
 	scenario.mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(poi *models.POI) bool {
 		return poi.ID == poiID && poi.IsDiscussionActive && poi.DiscussionStartTime != nil
 	})).Return(nil).Once()
+	
+	// GetPOIParticipantsWithInfo call for event
+	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID, user2ID}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockUserService.On("GetUser", mock.Anything, user2ID).Return(&models.User{ID: user2ID, DisplayName: "User 2"}, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(2, nil).Once() // For JoinPOI event
+	scenario.mockPubsub.On("PublishPOIJoinedWithParticipants", mock.Anything, mock.AnythingOfType("redis.POIJoinedEventWithParticipants")).Return(nil).Once()
 	
 	// Note: POI join event is now broadcast directly by WebSocket handler, not via Redis
 
@@ -129,16 +142,17 @@ func TestPOIService_DiscussionTimer_SimplifiedLogic(t *testing.T) {
 	
 	// updateDiscussionTimer call with 1 participant - should stop discussion
 	scenario.mockRepo.On("GetByID", mock.Anything, poiID).Return(poiWith2Users, nil).Once()
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once() // For discussion timer
 	
 	// Should update POI to stop discussion
 	scenario.mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(poi *models.POI) bool {
 		return poi.ID == poiID && !poi.IsDiscussionActive && poi.DiscussionStartTime == nil
 	})).Return(nil).Once()
 	
-	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once()
+	// GetPOIParticipantsWithInfo call for event
 	scenario.mockParts.On("GetParticipants", mock.Anything, poiID).Return([]string{user1ID}, nil).Once()
 	scenario.mockUserService.On("GetUser", mock.Anything, user1ID).Return(&models.User{ID: user1ID, DisplayName: "User 1"}, nil).Once()
+	scenario.mockParts.On("GetParticipantCount", mock.Anything, poiID).Return(1, nil).Once() // For LeavePOI event
 	scenario.mockPubsub.On("PublishPOILeftWithParticipants", mock.Anything, mock.AnythingOfType("redis.POILeftEventWithParticipants")).Return(nil).Once()
 
 	err = scenario.service.LeavePOI(context.Background(), poiID, user2ID)

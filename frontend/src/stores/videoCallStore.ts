@@ -38,6 +38,7 @@ interface VideoCallState {
   groupCallParticipants: Map<string, GroupCallParticipant>;
   remoteStreams: Map<string, MediaStream>;
   _initializingGroupCall: boolean; // Private lock for race condition prevention
+  _initializingWebRTC: boolean; // Private lock for WebRTC initialization race condition prevention
 
   // WebRTC state
   webrtcService: WebRTCService | null;
@@ -85,6 +86,7 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   groupCallParticipants: new Map(),
   remoteStreams: new Map(),
   _initializingGroupCall: false,
+  _initializingWebRTC: false,
 
   // WebRTC initial state
   webrtcService: null,
@@ -599,12 +601,14 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
   initializeGroupWebRTC: async () => {
     const state = get();
 
-    // Prevent duplicate initialization (only if we have a service AND are active)
-    if (state.groupWebRTCService && state.isGroupCallActive) {
-      console.log('🔗 Group WebRTC service already initialized, skipping');
+    // Prevent duplicate initialization with proper locking
+    if (state._initializingWebRTC || (state.groupWebRTCService && state.isGroupCallActive)) {
+      console.log('🔗 Group WebRTC service already initialized or initializing, skipping');
       return;
     }
 
+    // Set initialization lock
+    set({ _initializingWebRTC: true });
     console.log('🔗 Initializing group WebRTC service');
 
     try {
@@ -654,11 +658,13 @@ export const videoCallStore = create<VideoCallState>((set, get) => ({
       }
 
       set({
-        groupWebRTCService: newGroupWebRTCService
+        groupWebRTCService: newGroupWebRTCService,
+        _initializingWebRTC: false
       });
       console.log('✅ Group WebRTC service initialized');
     } catch (error) {
       console.error('❌ Failed to initialize group WebRTC service:', error);
+      set({ _initializingWebRTC: false });
       throw error;
     }
   },
