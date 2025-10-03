@@ -574,55 +574,11 @@ function App() {
       // Refresh POI data to get updated participant list
       await loadPOIs()
 
-      // Check if POI has other participants and trigger group call
-      // Get fresh state from store (not the stale poiState from function start)
+      // Check if group call should be started using centralized logic
       const freshPOIState = poiStore.getState()
       const updatedPOI = freshPOIState.pois.find(p => p.id === poiId)
-      if (updatedPOI && updatedPOI.participantCount > 1) {
-        console.log('🏢 POI has multiple participants, joining group call')
-
-        // Initialize group call
-        videoCallStore.getState().joinPOICall(poiId)
-
-        // Initialize WebRTC service for group call
-        try {
-          await videoCallStore.getState().initializeGroupWebRTC()
-          console.log('✅ Group WebRTC initialized')
-
-          // Add existing participants from the POI to the group call
-          // Get the participant list from the POI data
-          const poiParticipants = updatedPOI.participants || []
-          const currentUserId = userProfile.id
-
-          console.log('🔍 POI participants data:', poiParticipants)
-          console.log('🔍 Current user ID:', currentUserId)
-
-          // Add all other participants (excluding current user)
-          for (const participant of poiParticipants) {
-            console.log('🔍 Processing participant:', participant)
-
-            if (participant.id !== currentUserId) {
-              console.log('👥 Adding existing participant to group call:', participant.name)
-
-              videoCallStore.getState().addGroupCallParticipant(participant.id, {
-                userId: participant.id,
-                displayName: participant.name || 'Unknown User',
-                avatarURL: participant.avatarUrl || undefined
-              })
-
-              // Add peer connection for the participant
-              try {
-                await videoCallStore.getState().addPeerToGroupCall(participant.id)
-              } catch (error) {
-                console.error('❌ Failed to add peer for participant:', participant.id, error)
-              }
-            }
-          }
-
-        } catch (error) {
-          console.error('❌ Failed to initialize group WebRTC:', error)
-          // Fall back to basic group call UI without video
-        }
+      if (updatedPOI) {
+        videoCallStore.getState().checkAndStartGroupCall(poiId, updatedPOI.participantCount, userProfile.id)
       }
 
     } catch (error) {

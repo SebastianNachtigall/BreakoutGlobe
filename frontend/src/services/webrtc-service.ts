@@ -3,7 +3,7 @@ export interface MediaConstraints {
   audio: boolean;
 }
 
-export interface WebRTCConfig {
+export interface WebRTCConfig extends RTCConfiguration {
   iceServers: RTCIceServer[];
 }
 
@@ -45,7 +45,6 @@ export class WebRTCService {
       }
     ],
     // ICE configuration for better connectivity
-    iceCandidatePoolSize: 10,
     iceTransportPolicy: 'all',
     bundlePolicy: 'max-bundle',
     rtcpMuxPolicy: 'require'
@@ -354,6 +353,15 @@ export class GroupWebRTCService extends WebRTCService {
   }
 
   private wsClient: any = null;
+  private currentUserId: string | null = null;
+
+  public setCurrentUserId(userId: string): void {
+    this.currentUserId = userId;
+  }
+
+  private getCurrentUserId(): string | null {
+    return this.currentUserId;
+  }
 
   public async addPeer(userId: string): Promise<void> {
     if (this.peerConnections.has(userId)) {
@@ -365,7 +373,7 @@ export class GroupWebRTCService extends WebRTCService {
     
     try {
       const peerConnection = new RTCPeerConnection(this.defaultConfig);
-      this.setupPeerConnectionHandlers(peerConnection, userId);
+      this.setupGroupPeerConnectionHandlers(peerConnection, userId);
       
       // Add local stream tracks if available
       const localStream = this.getLocalStream();
@@ -379,22 +387,29 @@ export class GroupWebRTCService extends WebRTCService {
       this.peerConnections.set(userId, peerConnection);
       console.log(`✅ WebRTC: Peer connection created for user: ${userId}`);
       
-      // Automatically create and send offer for the new peer
-      this.createOfferForPeer(userId).then((offer) => {
-        console.log(`📝 WebRTC: Offer created for user: ${userId}, sending via WebSocket`);
-        
-        // Send offer via WebSocket for POI group calls
-        if (this.wsClient && this.wsClient.isConnected()) {
-          import('../stores/videoCallStore').then(({ videoCallStore }) => {
-            const currentPOI = videoCallStore.getState().currentPOI;
-            if (currentPOI) {
-              this.wsClient.sendPOICallOffer(currentPOI, userId, offer);
-            }
-          });
-        }
-      }).catch((error) => {
-        console.error(`❌ WebRTC: Failed to create offer for user ${userId}:`, error);
-      });
+      // Only create offer if current user should be the "caller" (lexicographically smaller ID)
+      // This prevents both peers from creating offers simultaneously
+      const currentUserId = this.getCurrentUserId();
+      if (currentUserId && currentUserId < userId) {
+        console.log(`📝 WebRTC: Current user (${currentUserId}) should initiate call to user (${userId})`);
+        this.createOfferForPeer(userId).then((offer) => {
+          console.log(`📝 WebRTC: Offer created for user: ${userId}, sending via WebSocket`);
+          
+          // Send offer via WebSocket for POI group calls
+          if (this.wsClient && this.wsClient.isConnected()) {
+            import('../stores/videoCallStore').then(({ videoCallStore }) => {
+              const currentPOI = videoCallStore.getState().currentPOI;
+              if (currentPOI) {
+                this.wsClient.sendPOICallOffer(currentPOI, userId, offer);
+              }
+            });
+          }
+        }).catch((error) => {
+          console.error(`❌ WebRTC: Failed to create offer for user ${userId}:`, error);
+        });
+      } else {
+        console.log(`📞 WebRTC: Waiting for offer from user (${userId}) as they should initiate the call`);
+      }
       
     } catch (error) {
       console.error(`❌ WebRTC: Failed to create peer connection for user ${userId}:`, error);
@@ -462,7 +477,7 @@ export class GroupWebRTCService extends WebRTCService {
     }
   }
 
-  private setupPeerConnectionHandlers(peerConnection: RTCPeerConnection, userId: string): void {
+  private setupGroupPeerConnectionHandlers(peerConnection: RTCPeerConnection, userId: string): void {
     // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
