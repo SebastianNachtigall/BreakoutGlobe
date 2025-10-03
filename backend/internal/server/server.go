@@ -186,9 +186,22 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		
 		// Initialize storage configuration
 		storageConfig := storage.GetStorageConfig()
+		log.Printf("📁 Storage config: UploadPath=%s, BaseURL=%s", storageConfig.UploadPath, storageConfig.BaseURL)
+		
 		if err := storage.EnsureUploadDirectories(storageConfig); err != nil {
-			log.Printf("Warning: Failed to create upload directories: %v", err)
+			log.Printf("❌ CRITICAL: Failed to create upload directories: %v", err)
+		} else {
+			log.Println("✅ Upload directories created successfully")
 		}
+		
+		// Verify storage is writable (critical for Railway volume mounts)
+		if err := storage.VerifyStorageWritable(storageConfig); err != nil {
+			log.Printf("❌ CRITICAL: Storage path not writable: %v", err)
+			log.Printf("⚠️ This usually means the Railway volume is not properly mounted!")
+		} else {
+			log.Println("✅ Storage path is writable - volume mount verified")
+		}
+		
 		fileStorage := storage.NewFileStorage(storageConfig)
 		
 		userService := services.NewUserService(userRepo, fileStorage)
@@ -224,7 +237,7 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		// Initialize storage configuration
 		storageConfig := storage.GetStorageConfig()
 		if err := storage.EnsureUploadDirectories(storageConfig); err != nil {
-			log.Printf("Warning: Failed to create upload directories: %v", err)
+			log.Printf("❌ Warning: Failed to create upload directories: %v", err)
 		}
 		fileStorage := storage.NewFileStorage(storageConfig)
 		

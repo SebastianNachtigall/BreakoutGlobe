@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -77,5 +78,21 @@ func EnsureUploadDirectories(config StorageConfig) error {
 		}
 	}
 
+	return nil
+}
+
+// VerifyStorageWritable checks if the storage path is writable
+// This is critical for Railway deployments to ensure the volume is properly mounted
+func VerifyStorageWritable(config StorageConfig) error {
+	testFile := filepath.Join(config.UploadPath, ".write-test")
+	
+	// Try to write a test file
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		return fmt.Errorf("storage path not writable: %w", err)
+	}
+	
+	// Clean up test file
+	os.Remove(testFile)
+	
 	return nil
 }
