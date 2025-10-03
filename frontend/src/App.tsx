@@ -974,6 +974,15 @@ function App() {
 
   // Development helper: Clear all POIs
   const handleNukePOIs = useCallback(async () => {
+    // Password protection
+    const password = prompt('⚠️ Enter password to nuke all POIs:');
+    if (password !== 'boom') {
+      if (password !== null) {
+        alert('❌ Incorrect password');
+      }
+      return;
+    }
+
     if (!confirm('⚠️ This will delete ALL POIs on the map. Are you sure?')) {
       return;
     }
@@ -997,6 +1006,15 @@ function App() {
 
   // Development helper: Clear all users
   const handleNukeUsers = useCallback(async () => {
+    // Password protection
+    const password = prompt('⚠️ Enter password to nuke all users:');
+    if (password !== 'boom') {
+      if (password !== null) {
+        alert('❌ Incorrect password');
+      }
+      return;
+    }
+
     if (!confirm('⚠️ This will delete ALL users from the database and clear local profiles. Are you sure?')) {
       return;
     }
@@ -1171,20 +1189,6 @@ function App() {
                 title="Right-click to clear all users from database and localStorage (Development only)"
               >
                 👥 Nuke Users
-              </button>
-              {/* Test buttons for video call POC */}
-              <button
-                onClick={() => {
-                  videoCallStore.getState().receiveCall(
-                    'test-call-123',
-                    'test-user-456',
-                    'Test User',
-                    undefined
-                  );
-                }}
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs"
-              >
-                Test Incoming Call
               </button>
               <span>
                 {connectionStatus === WSConnectionStatus.CONNECTED
