@@ -33,7 +33,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/server
 FROM alpine:latest AS production
 
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+WORKDIR /app
 
 COPY --from=builder /app/main .
 
