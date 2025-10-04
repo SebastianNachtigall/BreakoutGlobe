@@ -78,7 +78,7 @@ func New(cfg *config.Config) *Server {
 	
 	router := gin.Default()
 	
-	// CORS middleware
+	// CORS middleware with explicit preflight handling
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{
 			"http://localhost:3000",                                    // Local development
@@ -87,7 +87,9 @@ func New(cfg *config.Config) *Server {
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID"},
+		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
+		MaxAge:           12 * time.Hour, // Cache preflight requests for 12 hours
 	}))
 	
 	// Initialize shared rate limiter
