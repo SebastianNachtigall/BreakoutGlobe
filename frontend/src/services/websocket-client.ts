@@ -495,7 +495,10 @@ export class WebSocketClient {
       createdBy: data.createdBy,
       maxParticipants: data.maxParticipants,
       participantCount: data.currentCount || 0,
-      participants: []
+      participants: [],
+      imageUrl: data.imageUrl,
+      thumbnailUrl: data.thumbnailUrl,
+      createdAt: data.timestamp ? new Date(data.timestamp) : new Date()
     };
 
     // Add the new POI to the store

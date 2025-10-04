@@ -227,6 +227,8 @@ func (s *POIService) CreatePOI(ctx context.Context, mapID, name, description str
 		Position:        redis.LatLng{Lat: position.Lat, Lng: position.Lng},
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
+		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		Timestamp:       time.Now(),
 	}
 
@@ -313,6 +315,8 @@ func (s *POIService) CreatePOIWithImage(ctx context.Context, mapID, name, descri
 		Position:        redis.LatLng{Lat: position.Lat, Lng: position.Lng},
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
+		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		Timestamp:       time.Now(),
 	}
 

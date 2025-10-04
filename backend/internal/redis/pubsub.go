@@ -51,6 +51,8 @@ type POICreatedEvent struct {
 	Position        LatLng    `json:"position"`
 	CreatedBy       string    `json:"createdBy"`
 	MaxParticipants int       `json:"maxParticipants"`
+	ImageURL        string    `json:"imageUrl,omitempty"`
+	ThumbnailURL    string    `json:"thumbnailUrl,omitempty"`
 	CurrentCount    int       `json:"currentCount"`
 	Timestamp       time.Time `json:"timestamp"`
 }
