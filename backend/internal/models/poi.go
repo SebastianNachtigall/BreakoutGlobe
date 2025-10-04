@@ -20,6 +20,7 @@ type POI struct {
 	Creator         *User          `json:"creator,omitempty" gorm:"foreignKey:CreatedBy;references:ID"`
 	MaxParticipants int            `json:"maxParticipants" gorm:"default:10;not null"`
 	ImageURL        string         `json:"imageUrl,omitempty" gorm:"type:varchar(500)"` // Optional POI image
+	ThumbnailURL    string         `json:"thumbnailUrl,omitempty" gorm:"type:varchar(500)"` // Optional POI thumbnail (200x200)
 	
 	// Discussion timer fields - backend only tracks when 2+ users are present
 	DiscussionStartTime *time.Time `json:"discussionStartTime,omitempty" gorm:"type:timestamp"`
@@ -88,6 +89,10 @@ func (p POI) Validate() error {
 
 	if len(p.ImageURL) > 500 {
 		return fmt.Errorf("image URL must be 500 characters or less")
+	}
+
+	if len(p.ThumbnailURL) > 500 {
+		return fmt.Errorf("thumbnail URL must be 500 characters or less")
 	}
 
 	return nil

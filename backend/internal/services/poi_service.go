@@ -87,6 +87,12 @@ type ImageUploaderInterface interface {
 	UploadPOIImage(ctx context.Context, imageFile *multipart.FileHeader) (string, error)
 }
 
+// ImageProcessorInterface defines the interface for image processing operations
+type ImageProcessorInterface interface {
+	ProcessPOIImage(ctx context.Context, poiID string, imageFile *multipart.FileHeader) (originalURL, thumbnailURL string, err error)
+	DeletePOIImages(ctx context.Context, poiID string) error
+}
+
 // UserServiceInterface defines the interface for user operations needed by POI service
 type UserServiceInterface interface {
 	GetUser(ctx context.Context, userID string) (*models.User, error)
@@ -96,11 +102,12 @@ type UserServiceInterface interface {
 
 // POIService implements POI management operations
 type POIService struct {
-	poiRepo       POIRepositoryInterface
-	participants  POIParticipantsInterface
-	pubsub        PubSub
-	imageUploader ImageUploaderInterface
-	userService   UserServiceInterface
+	poiRepo        POIRepositoryInterface
+	participants   POIParticipantsInterface
+	pubsub         PubSub
+	imageUploader  ImageUploaderInterface  // Deprecated: use imageProcessor instead
+	imageProcessor ImageProcessorInterface // New: handles both original and thumbnail
+	userService    UserServiceInterface
 }
 
 // POIBounds represents geographic bounds for POI queries
@@ -134,22 +141,37 @@ const (
 // NewPOIService creates a new POIService instance
 func NewPOIService(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, userService UserServiceInterface) *POIService {
 	return &POIService{
-		poiRepo:       poiRepo,
-		participants:  participants,
-		pubsub:        pubsub,
-		imageUploader: nil, // No image uploader by default
-		userService:   userService,
+		poiRepo:        poiRepo,
+		participants:   participants,
+		pubsub:         pubsub,
+		imageUploader:  nil, // Deprecated
+		imageProcessor: nil, // No image processor by default
+		userService:    userService,
 	}
 }
 
 // NewPOIServiceWithImageUploader creates a new POIService instance with image upload support
+// Deprecated: Use NewPOIServiceWithImageProcessor instead
 func NewPOIServiceWithImageUploader(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, imageUploader ImageUploaderInterface, userService UserServiceInterface) *POIService {
 	return &POIService{
-		poiRepo:       poiRepo,
-		participants:  participants,
-		pubsub:        pubsub,
-		imageUploader: imageUploader,
-		userService:   userService,
+		poiRepo:        poiRepo,
+		participants:   participants,
+		pubsub:         pubsub,
+		imageUploader:  imageUploader,
+		imageProcessor: nil,
+		userService:    userService,
+	}
+}
+
+// NewPOIServiceWithImageProcessor creates a new POIService instance with image processing support
+func NewPOIServiceWithImageProcessor(poiRepo POIRepositoryInterface, participants POIParticipantsInterface, pubsub PubSub, imageProcessor ImageProcessorInterface, userService UserServiceInterface) *POIService {
+	return &POIService{
+		poiRepo:        poiRepo,
+		participants:   participants,
+		pubsub:         pubsub,
+		imageUploader:  nil,
+		imageProcessor: imageProcessor,
+		userService:    userService,
 	}
 }
 
@@ -237,18 +259,30 @@ func (s *POIService) CreatePOIWithImage(ctx context.Context, mapID, name, descri
 		return nil, fmt.Errorf("POI already exists at this location (lat: %f, lng: %f)", position.Lat, position.Lng)
 	}
 
-	// Upload image if provided
-	var imageURL string
-	if imageFile != nil && s.imageUploader != nil {
-		imageURL, err = s.imageUploader.UploadPOIImage(ctx, imageFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to upload POI image: %w", err)
+	// Create POI ID first (needed for image processing)
+	poiID := uuid.New().String()
+
+	// Process image if provided (generates both original and thumbnail)
+	var imageURL, thumbnailURL string
+	if imageFile != nil {
+		if s.imageProcessor != nil {
+			// Use new image processor (generates thumbnail)
+			imageURL, thumbnailURL, err = s.imageProcessor.ProcessPOIImage(ctx, poiID, imageFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to process POI image: %w", err)
+			}
+		} else if s.imageUploader != nil {
+			// Fallback to old uploader (no thumbnail)
+			imageURL, err = s.imageUploader.UploadPOIImage(ctx, imageFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to upload POI image: %w", err)
+			}
 		}
 	}
 
 	// Create new POI
 	poi := &models.POI{
-		ID:              uuid.New().String(),
+		ID:              poiID,
 		MapID:           mapID,
 		Name:            name,
 		Description:     description,
@@ -256,6 +290,7 @@ func (s *POIService) CreatePOIWithImage(ctx context.Context, mapID, name, descri
 		CreatedBy:       createdBy,
 		MaxParticipants: maxParticipants,
 		ImageURL:        imageURL,
+		ThumbnailURL:    thumbnailURL,
 		CreatedAt:       time.Now(),
 	}
 
@@ -407,6 +442,14 @@ func (s *POIService) DeletePOI(ctx context.Context, poiID string) error {
 	// Remove all participants first
 	if err := s.participants.RemoveAllParticipants(ctx, poiID); err != nil {
 		return fmt.Errorf("failed to remove POI participants: %w", err)
+	}
+
+	// Delete POI images if image processor is available
+	if s.imageProcessor != nil {
+		if err := s.imageProcessor.DeletePOIImages(ctx, poiID); err != nil {
+			// Log error but don't fail the deletion
+			fmt.Printf("Warning: failed to delete POI images: %v\n", err)
+		}
 	}
 
 	// Delete POI from database

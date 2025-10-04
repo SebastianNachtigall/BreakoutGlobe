@@ -23,7 +23,6 @@ import (
 	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
-	"breakoutglobe/internal/services/uploads"
 	"breakoutglobe/internal/storage"
 	"breakoutglobe/internal/websocket"
 )
@@ -248,11 +247,11 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		
 		userService := services.NewUserService(userRepo, fileStorage)
 		
-		// Create image uploader with storage system
-		imageUploader := uploads.NewImageUploader(fileStorage)
+		// Create image processor with storage system (handles thumbnails)
+		imageProcessor := storage.NewImageProcessor(fileStorage)
 		
-		// Create POI service with image uploader and user service
-		s.poiService = services.NewPOIServiceWithImageUploader(poiRepo, poiParticipants, pubsub, imageUploader, userService)
+		// Create POI service with image processor and user service
+		s.poiService = services.NewPOIServiceWithImageProcessor(poiRepo, poiParticipants, pubsub, imageProcessor, userService)
 		
 		// Create POI handler with user service for participant names
 		poiHandler := handlers.NewPOIHandler(s.poiService, userService, s.rateLimiter)

@@ -72,17 +72,17 @@ export function POISidebar({ pois, onPOIClick, currentUserPOI }: POISidebarProps
                   >
                     <div className="flex items-start gap-2">
                       {/* POI Image or Icon */}
-                      {poi.imageUrl ? (
+                      {(poi.thumbnailUrl || poi.imageUrl) ? (
                         <img
-                          src={poi.imageUrl}
+                          src={poi.thumbnailUrl || poi.imageUrl}
                           alt={poi.name}
-                          className="w-10 h-10 rounded object-cover flex-shrink-0"
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                           }}
                         />
                       ) : (
-                        <div className="w-10 h-10 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                           <span className="text-lg">📍</span>
                         </div>
                       )}

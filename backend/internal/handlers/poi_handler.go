@@ -99,6 +99,7 @@ type CreatePOIResponse struct {
 	CreatedBy       string        `json:"createdBy"`
 	MaxParticipants int           `json:"maxParticipants"`
 	ImageURL        string        `json:"imageUrl,omitempty"`
+	ThumbnailURL    string        `json:"thumbnailUrl,omitempty"`
 	CreatedAt       time.Time     `json:"createdAt"`
 }
 
@@ -112,6 +113,7 @@ type GetPOIResponse struct {
 	CreatedBy       string        `json:"createdBy"`
 	MaxParticipants int           `json:"maxParticipants"`
 	ImageURL        string        `json:"imageUrl,omitempty"`
+	ThumbnailURL    string        `json:"thumbnailUrl,omitempty"`
 	CreatedAt       time.Time     `json:"createdAt"`
 }
 
@@ -127,6 +129,7 @@ type POIInfo struct {
 	ParticipantCount int               `json:"participantCount"`
 	Participants    []ParticipantInfo  `json:"participants"`
 	ImageURL        string             `json:"imageUrl,omitempty"`
+	ThumbnailURL    string             `json:"thumbnailUrl,omitempty"`
 	
 	// Discussion timer fields - backend only tracks when 2+ users are present
 	DiscussionStartTime *time.Time `json:"discussionStartTime,omitempty"`
@@ -166,6 +169,7 @@ type UpdatePOIResponse struct {
 	CreatedBy       string        `json:"createdBy"`
 	MaxParticipants int           `json:"maxParticipants"`
 	ImageURL        string        `json:"imageUrl,omitempty"`
+	ThumbnailURL    string        `json:"thumbnailUrl,omitempty"`
 	CreatedAt       time.Time     `json:"createdAt"`
 }
 
@@ -298,6 +302,7 @@ func (h *POIHandler) GetPOIs(c *gin.Context) {
 			ParticipantCount: participantCount,
 			Participants:     participants,
 			ImageURL:         poi.ImageURL,
+			ThumbnailURL:     poi.ThumbnailURL,
 			
 			// Discussion timer fields - backend only tracks when 2+ users are present
 			DiscussionStartTime: poi.DiscussionStartTime,
@@ -392,6 +397,7 @@ func (h *POIHandler) CreatePOI(c *gin.Context) {
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
 		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		CreatedAt:       poi.CreatedAt,
 	}
 	
@@ -472,6 +478,7 @@ func (h *POIHandler) createPOIFromForm(c *gin.Context) {
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
 		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		CreatedAt:       poi.CreatedAt,
 	}
 	
@@ -518,6 +525,7 @@ func (h *POIHandler) GetPOI(c *gin.Context) {
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
 		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		CreatedAt:       poi.CreatedAt,
 	}
 	
@@ -581,6 +589,7 @@ func (h *POIHandler) UpdatePOI(c *gin.Context) {
 		CreatedBy:       poi.CreatedBy,
 		MaxParticipants: poi.MaxParticipants,
 		ImageURL:        poi.ImageURL,
+		ThumbnailURL:    poi.ThumbnailURL,
 		CreatedAt:       poi.CreatedAt,
 	}
 	

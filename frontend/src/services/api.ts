@@ -24,6 +24,7 @@ export interface POIResponse {
   participantCount?: number;
   participants?: Array<{ id: string; name: string; avatarUrl: string }>;
   imageUrl?: string;
+  thumbnailUrl?: string; // Thumbnail for map display (200x200)
   
   // Discussion timer fields
   discussionStartTime?: string;
@@ -402,6 +403,7 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
   maxParticipants: number;
   participants?: Array<{ id: string; name: string }>;
   imageUrl?: string;
+  thumbnailUrl?: string;
   createdBy: string;
   createdAt: Date;
   // Discussion timer fields
@@ -417,6 +419,7 @@ export function transformFromPOIResponse(apiResponse: POIResponse): {
     maxParticipants: apiResponse.maxParticipants,
     participants: apiResponse.participants,
     imageUrl: apiResponse.imageUrl,
+    thumbnailUrl: apiResponse.thumbnailUrl,
     createdBy: apiResponse.createdBy,
     createdAt: new Date(apiResponse.createdAt),
     // Transform discussion timer fields - backend only tracks when 2+ users are present

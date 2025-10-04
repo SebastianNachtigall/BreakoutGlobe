@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { AvatarImageUpload } from './AvatarImageUpload';
 
 interface POICreationData {
     name: string;
@@ -97,23 +98,6 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
         return undefined;
     };
 
-    const validateImage = (image?: File): string | undefined => {
-        if (!image) return undefined; // Image is optional
-        
-        // Check file size (max 5MB)
-        if (image.size > 5 * 1024 * 1024) {
-            return 'Image must be smaller than 5MB';
-        }
-        
-        // Check file type
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        if (!allowedTypes.includes(image.type)) {
-            return 'Image must be JPEG, PNG, or WebP format';
-        }
-        
-        return undefined;
-    };
-
     // Validate form
     const validateForm = useCallback((): FormErrors => {
         return {
@@ -122,7 +106,7 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
             maxParticipants: validateMaxParticipants(formData.maxParticipants),
             latitude: validateLatitude(formData.latitude),
             longitude: validateLongitude(formData.longitude),
-            image: validateImage(formData.image)
+            // Image validation is handled by AvatarImageUpload component
         };
     }, [formData]);
 
@@ -131,14 +115,13 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
         setFormData(newFormData);
         setTouched(prev => ({ ...prev, [field]: true }));
         
-        // Validate with the new form data
+        // Validate with the new form data (image validation handled by AvatarImageUpload)
         const newErrors = {
             name: validateName(newFormData.name),
             description: validateDescription(newFormData.description),
             maxParticipants: validateMaxParticipants(newFormData.maxParticipants),
             latitude: validateLatitude(newFormData.latitude),
             longitude: validateLongitude(newFormData.longitude),
-            image: validateImage(newFormData.image)
         };
         setErrors(newErrors);
     };
@@ -146,14 +129,13 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
     const handleBlur = (field: keyof FormData) => {
         setTouched(prev => ({ ...prev, [field]: true }));
         
-        // Validate on blur
+        // Validate on blur (image validation handled by AvatarImageUpload)
         const newErrors = {
             name: validateName(formData.name),
             description: validateDescription(formData.description),
             maxParticipants: validateMaxParticipants(formData.maxParticipants),
             latitude: validateLatitude(formData.latitude),
             longitude: validateLongitude(formData.longitude),
-            image: validateImage(formData.image)
         };
         setErrors(newErrors);
     };
@@ -294,35 +276,17 @@ export const POICreationModal: React.FC<POICreationModalProps> = ({
                     </div>
 
                     <div className="space-y-2">
-                        <label htmlFor="poi-image" className="block text-sm font-medium text-gray-700">
+                        <label className="block text-sm font-medium text-gray-700">
                             Image (Optional)
                         </label>
-                        <input
-                            id="poi-image"
-                            type="file"
-                            accept="image/jpeg,image/jpg,image/png,image/webp"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                    handleInputChange('image', file);
-                                }
+                        <AvatarImageUpload
+                            onImageSelected={(file) => handleInputChange('image', file)}
+                            onError={(error) => {
+                                setErrors(prev => ({ ...prev, image: error }));
+                                setTouched(prev => ({ ...prev, image: true }));
                             }}
-                            onBlur={() => handleBlur('image')}
-                            className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                errors.image && touched.image 
-                                    ? 'border-red-500 bg-red-50' 
-                                    : 'border-gray-300'
-                            }`}
                             disabled={isLoading}
                         />
-                        <div className="text-xs text-gray-500">
-                            Supported formats: JPEG, PNG, WebP. Max size: 5MB
-                        </div>
-                        {formData.image && (
-                            <div className="text-sm text-green-600">
-                                Selected: {formData.image.name} ({(formData.image.size / 1024 / 1024).toFixed(2)} MB)
-                            </div>
-                        )}
                         {errors.image && touched.image && (
                             <div className="text-sm text-red-600">{errors.image}</div>
                         )}

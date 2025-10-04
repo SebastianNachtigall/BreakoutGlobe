@@ -40,6 +40,7 @@ export interface POIData {
   maxParticipants: number;
   participants?: POIParticipant[];
   imageUrl?: string;
+  thumbnailUrl?: string; // Thumbnail for map display (200x200)
   createdBy: string;
   createdAt: Date;
   // Discussion timer fields - backend only tracks when 2+ users are present

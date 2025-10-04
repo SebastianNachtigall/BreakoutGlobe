@@ -121,7 +121,8 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
   };
 
   // If POI has an image, render it as circular image with name underneath and red badge
-  if (poi.imageUrl) {
+  const imageUrl = poi.thumbnailUrl || poi.imageUrl;
+  if (imageUrl) {
     return (
       <div
         data-testid="poi-marker"
@@ -131,14 +132,14 @@ export const POIMarker: React.FC<POIMarkerProps> = ({ poi, onPOIClick }) => {
       >
         <div className="relative p-1">
           <img
-            src={poi.imageUrl}
+            src={imageUrl}
             alt={poi.name}
             className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
             onError={(e) => {
               // Fallback to default marker if image fails to load
               const target = e.target as HTMLImageElement;
               target.style.display = 'none';
-              console.error(`❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}`);
+              console.error(`❌ Image failed to load for POI ${poi.name}: ${imageUrl}`);
             }}
             onLoad={() => {
               console.log(`✅ Image loaded successfully for POI ${poi.name}`);
@@ -260,13 +261,14 @@ const createAvatarBadgesHTML = (participants: POIParticipant[]): string => {
 
 // Utility function to create a DOM element using the same logic as the React component
 export const createPOIMarkerElement = (poi: POIData, onPOIClick?: (poiId: string) => void): HTMLElement => {
-  console.log(`🖼️ Creating POI marker for "${poi.name}" with imageUrl:`, poi.imageUrl);
+  const imageUrl = poi.thumbnailUrl || poi.imageUrl;
+  console.log(`🖼️ Creating POI marker for "${poi.name}" with imageUrl:`, imageUrl);
 
   const markerElement = document.createElement('div');
   const isFull = poi.participantCount >= poi.maxParticipants;
 
   // If POI has an image, create circular image-based marker
-  if (poi.imageUrl) {
+  if (imageUrl) {
     markerElement.className = `
       flex flex-col items-center cursor-pointer hover:scale-105 transition-transform duration-200 relative
       ${isFull ? 'cursor-not-allowed' : ''}
@@ -280,10 +282,10 @@ export const createPOIMarkerElement = (poi: POIData, onPOIClick?: (poiId: string
     markerElement.innerHTML = `
       <div class="relative p-1">
         <img 
-          src="${poi.imageUrl}" 
+          src="${imageUrl}" 
           alt="${poi.name}"
           class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-lg"
-          onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${poi.imageUrl}');"
+          onerror="this.style.display='none'; console.error('❌ Image failed to load for POI ${poi.name}: ${imageUrl}');"
           onload="console.log('✅ Image loaded successfully for POI ${poi.name}');"
         />
         <div class="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-md">
