@@ -138,6 +138,9 @@ func (s *Server) setupRoutes() {
 		s.setupUserRoutes(api)
 		log.Println("setupUserRoutes call completed")
 		
+		// Setup feedback routes
+		s.setupFeedbackRoutes()
+		
 		// Serve uploaded avatar files
 		api.GET("/users/avatar/:filename", s.serveAvatar)
 		
@@ -610,4 +613,14 @@ func (s *Server) setupFileServing() {
 	s.router.Static("/uploads", storageConfig.UploadPath)
 	
 	log.Printf("📁 File serving setup: /uploads -> %s", storageConfig.UploadPath)
+}
+
+// setupFeedbackRoutes configures feedback submission routes
+func (s *Server) setupFeedbackRoutes() {
+	log.Println("🔧 Setting up feedback routes...")
+	
+	feedbackHandler := handlers.NewFeedbackHandler()
+	feedbackHandler.RegisterRoutes(s.router)
+	
+	log.Println("✅ Feedback routes setup complete")
 }

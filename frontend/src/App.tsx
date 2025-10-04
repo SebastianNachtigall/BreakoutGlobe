@@ -12,6 +12,7 @@ import { AvatarTooltip } from './components/AvatarTooltip'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
 import WelcomeScreen from './components/WelcomeScreen'
+import { FeedbackModal } from './components/FeedbackModal'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
@@ -67,6 +68,9 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
+  
+  // Feedback modal state
+  const [showFeedback, setShowFeedback] = useState(false)
 
   // Avatar tooltip state
   const [avatarTooltip, setAvatarTooltip] = useState<{
@@ -1216,6 +1220,13 @@ function App() {
               >
                 👥 Nuke Users
               </button>
+              <button
+                onClick={() => setShowFeedback(true)}
+                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-xs font-medium"
+                title="Share your ideas and feedback"
+              >
+                💡 Feature Idea
+              </button>
               <span>
                 {connectionStatus === WSConnectionStatus.CONNECTED
                   ? 'Click avatar for video call • Right-click to create POI'
@@ -1281,6 +1292,12 @@ function App() {
             onToggleVideo={() => videoCallStore.getState().toggleVideo()}
           />
         )}
+
+        {/* Feedback Modal */}
+        <FeedbackModal
+          isOpen={showFeedback}
+          onClose={() => setShowFeedback(false)}
+        />
 
         {/* Avatar Tooltip */}
         {avatarTooltip.avatar && (() => {
