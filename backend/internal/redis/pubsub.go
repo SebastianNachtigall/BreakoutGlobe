@@ -479,6 +479,8 @@ func (ps *PubSub) SubscribePOIEvents(ctx context.Context, callback func(eventTyp
 							"position":        poiEvent.Position,
 							"createdBy":       poiEvent.CreatedBy,
 							"maxParticipants": poiEvent.MaxParticipants,
+							"imageUrl":        poiEvent.ImageURL,
+							"thumbnailUrl":    poiEvent.ThumbnailURL,
 							"currentCount":    poiEvent.CurrentCount,
 							"timestamp":       poiEvent.Timestamp,
 						}

@@ -485,6 +485,7 @@ export class WebSocketClient {
   // Real-time POI Event Handlers
   private handlePOICreated(data: any): void {
     console.log('🆕 WebSocket: POI created by another user', data);
+    console.log('🖼️ Image URLs from event:', { imageUrl: data.imageUrl, thumbnailUrl: data.thumbnailUrl });
 
     // Convert backend POI data to frontend format
     const poi: POIData = {
@@ -500,6 +501,8 @@ export class WebSocketClient {
       thumbnailUrl: data.thumbnailUrl,
       createdAt: data.timestamp ? new Date(data.timestamp) : new Date()
     };
+
+    console.log('📦 POI object being added to store:', poi);
 
     // Add the new POI to the store
     poiStore.getState().addPOI(poi);

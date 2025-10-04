@@ -320,6 +320,9 @@ func (s *POIService) CreatePOIWithImage(ctx context.Context, mapID, name, descri
 		Timestamp:       time.Now(),
 	}
 
+	// Debug logging
+	fmt.Printf("🔍 Publishing POI created event with images: ImageURL=%s, ThumbnailURL=%s\n", poi.ImageURL, poi.ThumbnailURL)
+
 	if err := s.pubsub.PublishPOICreated(ctx, createdEvent); err != nil {
 		// Log error but don't fail the operation
 		fmt.Printf("Warning: failed to publish POI created event: %v\n", err)
