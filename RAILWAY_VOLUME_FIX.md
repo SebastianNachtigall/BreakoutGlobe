@@ -12,14 +12,14 @@ Images were not persisting because:
 ### What Was Fixed
 
 1. **Updated `Dockerfile`** (root, used by Railway):
-   - Changed WORKDIR from `/root/` to `/app`
-   - Added `VOLUME ["/app/uploads"]` declaration
+   - Changed WORKDIR from `/root/` to `/app` (CRITICAL FIX)
    - Added health check
-   - Now matches the `backend/Dockerfile` pattern
+   - **NOTE:** Railway BANS the `VOLUME` keyword in Dockerfiles - use `railway.toml` instead
 
 2. **Clarified Volume Strategy**:
-   - Use `railway.toml` for automatic volume creation (recommended)
-   - Remove manual volume from Railway UI to avoid conflicts
+   - Use `railway.toml` for automatic volume creation (REQUIRED for Railway)
+   - Railway handles volume mounting automatically via TOML config
+   - No VOLUME declaration needed in Dockerfile (Railway bans it)
 
 ## Action Steps
 
@@ -72,13 +72,11 @@ mountPath = "/app/uploads"
 - Mounts it to `/app/uploads` in your container
 - Survives redeploys and restarts
 
-### Dockerfile VOLUME Declaration
-```dockerfile
-VOLUME ["/app/uploads"]
-```
-- Tells Docker this is a mount point
-- Ensures Railway's volume mount takes precedence
-- Prevents files from being written to container filesystem
+### Railway Volume Handling
+**IMPORTANT:** Railway BANS the `VOLUME` keyword in Dockerfiles.
+- Railway handles volume mounting automatically via `railway.toml`
+- No Dockerfile changes needed for volume declaration
+- The TOML config is sufficient for persistent storage
 
 ### Storage Configuration
 The Go code automatically detects Railway environment:

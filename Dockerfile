@@ -24,10 +24,6 @@ WORKDIR /app
 
 COPY --from=builder /app/main .
 
-# Declare volume mount point for persistent storage
-# This ensures Railway's volume mount takes precedence
-VOLUME ["/app/uploads"]
-
 # Add health check endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
