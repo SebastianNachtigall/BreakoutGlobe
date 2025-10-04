@@ -529,10 +529,13 @@ function App() {
   // Handle POI sidebar click - pan to POI and select it
   const handlePOISidebarClick = useCallback((poi: POIData) => {
     if (mapInstance) {
+      const currentZoom = mapInstance.getZoom()
       mapInstance.flyTo({
         center: [poi.position.lng, poi.position.lat],
-        zoom: 14,
-        duration: 1500
+        zoom: currentZoom,
+        duration: 1500,
+        curve: 1.5, // Controls the arc of the flight path (higher = more arc)
+        speed: 1.2, // Speed of the animation
       })
     }
     setSelectedPOI(poi)
