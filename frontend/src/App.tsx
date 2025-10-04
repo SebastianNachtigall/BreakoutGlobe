@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { MapContainer, AvatarData, POIData } from './components/MapContainer'
-import { ConnectionStatus } from './components/ConnectionStatus'
+import { ToastContainer } from './components/Toast'
 import { NotificationCenter } from './components/NotificationCenter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
@@ -18,6 +18,7 @@ import { poiStore } from './stores/poiStore'
 import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
+import { toastStore } from './stores/toastStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { SessionService } from './services/session-service'
 import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs, clearAllUsers } from './services/api'
@@ -40,6 +41,7 @@ function App() {
   // const errorState = errorStore() // Not used in current implementation
   const avatarState = avatarStore()
   const videoCallState = videoCallStore()
+  const toastState = toastStore()
 
   // Discussion timer is now handled directly in POIDetailsPanel component
 
@@ -263,7 +265,31 @@ function App() {
 
         // Set up WebSocket event handlers
         client.onStatusChange((status) => {
-          setConnectionStatus(status)
+          const previousStatus = connectionStatus;
+          setConnectionStatus(status);
+          
+          // Show toast notifications for connection state changes (skip initial connection)
+          if (previousStatus !== WSConnectionStatus.DISCONNECTED || status !== WSConnectionStatus.CONNECTING) {
+            if (status === WSConnectionStatus.DISCONNECTED) {
+              toastStore.getState().addToast({
+                message: 'Connection lost. Reconnecting...',
+                type: 'warning',
+                duration: 5000
+              });
+            } else if (status === WSConnectionStatus.RECONNECTING) {
+              toastStore.getState().addToast({
+                message: 'Reconnecting to server...',
+                type: 'info',
+                duration: 3000
+              });
+            } else if (status === WSConnectionStatus.CONNECTED && previousStatus !== WSConnectionStatus.CONNECTING) {
+              toastStore.getState().addToast({
+                message: 'Connected!',
+                type: 'success',
+                duration: 3000
+              });
+            }
+          }
         })
 
         client.onError((error) => {
@@ -795,7 +821,31 @@ function App() {
 
         // Set up WebSocket event handlers
         client.onStatusChange((status) => {
-          setConnectionStatus(status)
+          const previousStatus = connectionStatus;
+          setConnectionStatus(status);
+          
+          // Show toast notifications for connection state changes (skip initial connection)
+          if (previousStatus !== WSConnectionStatus.DISCONNECTED || status !== WSConnectionStatus.CONNECTING) {
+            if (status === WSConnectionStatus.DISCONNECTED) {
+              toastStore.getState().addToast({
+                message: 'Connection lost. Reconnecting...',
+                type: 'warning',
+                duration: 5000
+              });
+            } else if (status === WSConnectionStatus.RECONNECTING) {
+              toastStore.getState().addToast({
+                message: 'Reconnecting to server...',
+                type: 'info',
+                duration: 3000
+              });
+            } else if (status === WSConnectionStatus.CONNECTED && previousStatus !== WSConnectionStatus.CONNECTING) {
+              toastStore.getState().addToast({
+                message: 'Connected!',
+                type: 'success',
+                duration: 3000
+              });
+            }
+          }
         })
 
         client.onError((error) => {
@@ -1139,10 +1189,6 @@ function App() {
               <p className="text-blue-100">Interactive Workshop Platform</p>
             </div>
             <div className="flex items-center space-x-4">
-              <ConnectionStatus
-                status={connectionStatus}
-                sessionId={sessionState.sessionId}
-              />
               {userProfile && (
                 <ProfileMenu userProfile={userProfile} />
               )}
@@ -1228,10 +1274,7 @@ function App() {
                 💡 Feature Idea
               </button>
               <span>
-                {connectionStatus === WSConnectionStatus.CONNECTED
-                  ? 'Click avatar for video call • Right-click to create POI'
-                  : 'Click avatar for video call (WebSocket connecting...)'
-                }
+                Click avatar for video call • Right-click to create POI
               </span>
             </div>
           </div>
@@ -1318,6 +1361,13 @@ function App() {
 
         {/* Notifications */}
         <NotificationCenter />
+        
+        {/* Toast Notifications */}
+        <ToastContainer
+          toasts={toastState.toasts}
+          onDismiss={toastState.removeToast}
+          position="top-right"
+        />
       </div>
     </ErrorBoundary>
   )
