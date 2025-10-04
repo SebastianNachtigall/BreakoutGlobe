@@ -5,6 +5,7 @@ import { NotificationCenter } from './components/NotificationCenter'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { POICreationModal } from './components/POICreationModal'
 import { POIDetailsPanel } from './components/POIDetailsPanel'
+import { POISidebar } from './components/POISidebar'
 import { VideoCallModal } from './components/VideoCallModal'
 import { GroupCallModal } from './components/GroupCallModal'
 import { AvatarTooltip } from './components/AvatarTooltip'
@@ -20,6 +21,7 @@ import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './servi
 import { SessionService } from './services/session-service'
 import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs, clearAllUsers } from './services/api'
 import { userProfileStore } from './stores/userProfileStore'
+import type { Map } from 'maplibre-gl'
 
 import type { UserProfile } from './types/models'
 
@@ -58,6 +60,7 @@ function App() {
   const [selectedPOI, setSelectedPOI] = useState<POIData | null>(null)
   const [showPOICreation, setShowPOICreation] = useState(false)
   const [poiCreationPosition, setPOICreationPosition] = useState<{ lat: number; lng: number } | null>(null)
+  const [mapInstance, setMapInstance] = useState<Map | null>(null)
 
   // Profile system state
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
@@ -523,6 +526,18 @@ function App() {
     }
   }, [poiState.pois])
 
+  // Handle POI sidebar click - pan to POI and select it
+  const handlePOISidebarClick = useCallback((poi: POIData) => {
+    if (mapInstance) {
+      mapInstance.flyTo({
+        center: [poi.position.lng, poi.position.lat],
+        zoom: 14,
+        duration: 1500
+      })
+    }
+    setSelectedPOI(poi)
+  }, [mapInstance])
+
   // Update selectedPOI when POI data changes in the store
   useEffect(() => {
     if (selectedPOI) {
@@ -577,8 +592,8 @@ function App() {
       // Check if group call should be started using centralized logic
       const freshPOIState = poiStore.getState()
       const updatedPOI = freshPOIState.pois.find(p => p.id === poiId)
-      console.log('🔍 After joining POI, checking for group call:', { 
-        poiId, 
+      console.log('🔍 After joining POI, checking for group call:', {
+        poiId,
         updatedPOI: updatedPOI ? { id: updatedPOI.id, participantCount: updatedPOI.participantCount } : null,
         currentUserPOI: freshPOIState.currentUserPOI
       })
@@ -662,10 +677,10 @@ function App() {
   const handleEndGroupCall = useCallback(async () => {
     const videoState = videoCallStore.getState()
     const poiId = videoState.currentPOI
-    
+
     // End the group call
     videoState.leavePOICall()
-    
+
     // Also leave the POI since there's nothing to do without a call
     if (poiId && userProfile) {
       await handleLeavePOI(poiId)
@@ -1136,10 +1151,18 @@ function App() {
             avatars={avatars}
             pois={poiState.pois || []}
             onMapClick={handleMapClick}
+            onMapReady={setMapInstance}
             onAvatarMove={handleAvatarMove}
             onPOIClick={handlePOIClick}
             onPOICreate={handlePOICreate}
             onAvatarClick={handleAvatarClick}
+          />
+
+          {/* POI Sidebar */}
+          <POISidebar
+            pois={poiState.pois || []}
+            onPOIClick={handlePOISidebarClick}
+            currentUserPOI={poiState.currentUserPOI}
           />
 
           {/* POI Details Panel */}
