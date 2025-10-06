@@ -1149,6 +1149,7 @@ function App() {
           onCreateProfile={handleGetStarted}
           onSignup={() => setShowSignup(true)}
           onLogin={() => setShowLogin(true)}
+          hideContent={showSignup || showLogin}
         />
         
         {/* Auth Modals */}

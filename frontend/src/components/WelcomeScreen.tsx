@@ -6,16 +6,17 @@ interface WelcomeScreenProps {
   onCreateProfile: () => void;
   onSignup?: () => void;
   onLogin?: () => void;
+  hideContent?: boolean; // Hide content when modals are open
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted, onCreateProfile, onSignup, onLogin }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted, onCreateProfile, onSignup, onLogin, hideContent = false }) => {
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-50 z-[9999] overflow-y-auto">
-      <div className="min-h-full flex items-center justify-center p-4 sm:p-6">
+    <div className={`fixed inset-0 bg-gray-50 overflow-y-auto ${hideContent ? 'z-0' : 'z-[9999]'}`}>
+      <div className={`min-h-full flex items-center justify-center p-4 sm:p-6 ${hideContent ? 'invisible' : ''}`}>
         <div className="max-w-md w-full text-center py-8 sm:py-12">
           {/* Welcome Title - Responsive sizing */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-6 sm:mb-8">
