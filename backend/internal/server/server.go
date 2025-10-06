@@ -695,6 +695,21 @@ func parseRedisURL(redisURL string) (redis.Config, error) {
 func (s *Server) setupFileServing() {
 	storageConfig := storage.GetStorageConfig()
 	
+	// Add CORS headers for static file serving
+	s.router.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/uploads") {
+			c.Header("Access-Control-Allow-Origin", "*") // Allow all origins for static files
+			c.Header("Access-Control-Allow-Methods", "GET, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type")
+			
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
+		}
+		c.Next()
+	})
+	
 	// Serve uploaded files
 	s.router.Static("/uploads", storageConfig.UploadPath)
 	
