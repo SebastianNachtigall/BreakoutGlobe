@@ -22,6 +22,7 @@ type UpdateProfileRequest struct {
 type UserService struct {
 	userRepo    interfaces.UserRepositoryInterface
 	fileStorage storage.FileStorage
+	authService *AuthService
 }
 
 // NewUserService creates a new UserService instance
@@ -30,6 +31,11 @@ func NewUserService(userRepo interfaces.UserRepositoryInterface, fileStorage sto
 		userRepo:    userRepo,
 		fileStorage: fileStorage,
 	}
+}
+
+// SetAuthService sets the auth service for password operations
+func (s *UserService) SetAuthService(authService *AuthService) {
+	s.authService = authService
 }
 
 // CreateGuestProfile creates a new guest user profile
@@ -216,4 +222,145 @@ func extractFileKeyFromURL(url string) string {
 // ClearAllUsers removes all users from the database - Development helper method
 func (s *UserService) ClearAllUsers(ctx context.Context) error {
 	return s.userRepo.ClearAllUsers(ctx)
+}
+
+
+// ValidatePassword validates password strength requirements
+func ValidatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+
+	var (
+		hasUpper   bool
+		hasLower   bool
+		hasNumber  bool
+		hasSpecial bool
+	)
+
+	for _, char := range password {
+		switch {
+		case 'A' <= char && char <= 'Z':
+			hasUpper = true
+		case 'a' <= char && char <= 'z':
+			hasLower = true
+		case '0' <= char && char <= '9':
+			hasNumber = true
+		case strings.ContainsRune("!@#$%^&*()_+-=[]{}|;:,.<>?", char):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper {
+		return fmt.Errorf("password must contain at least one uppercase letter")
+	}
+	if !hasLower {
+		return fmt.Errorf("password must contain at least one lowercase letter")
+	}
+	if !hasNumber {
+		return fmt.Errorf("password must contain at least one number")
+	}
+	if !hasSpecial {
+		return fmt.Errorf("password must contain at least one special character")
+	}
+
+	return nil
+}
+
+// CreateFullAccount creates a new full account with email and password
+func (s *UserService) CreateFullAccount(ctx context.Context, email, password, displayName, aboutMe string) (*models.User, error) {
+	// Validate email format
+	if email == "" {
+		return nil, fmt.Errorf("email is required")
+	}
+	// Basic email validation (more thorough validation in models.User.Validate)
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+		return nil, fmt.Errorf("invalid email format")
+	}
+
+	// Check email uniqueness
+	existingUser, err := s.userRepo.GetByEmail(ctx, email)
+	if err == nil && existingUser != nil {
+		return nil, fmt.Errorf("email already in use")
+	}
+
+	// Validate password strength
+	if err := ValidatePassword(password); err != nil {
+		return nil, err
+	}
+
+	// Validate display name
+	if err := models.ValidateDisplayName(displayName); err != nil {
+		return nil, err
+	}
+
+	// Hash password
+	if s.authService == nil {
+		return nil, fmt.Errorf("auth service not configured")
+	}
+	passwordHash, err := s.authService.HashPassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Create full account user
+	user, err := models.NewUser(displayName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Set full account fields
+	user.Email = &email
+	user.PasswordHash = &passwordHash
+	user.AccountType = models.AccountTypeFull
+	user.Role = models.UserRoleUser
+
+	// Set aboutMe if provided
+	if aboutMe != "" {
+		user.AboutMe = &aboutMe
+	}
+
+	// Validate user
+	if err := user.Validate(); err != nil {
+		return nil, fmt.Errorf("user validation failed: %w", err)
+	}
+
+	// Save to repository
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		return nil, fmt.Errorf("failed to save user: %w", err)
+	}
+
+	return user, nil
+}
+
+// GetUserByEmail retrieves a user by email
+func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+	if email == "" {
+		return nil, fmt.Errorf("email cannot be empty")
+	}
+
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	return user, nil
+}
+
+// VerifyPassword verifies a user's password
+func (s *UserService) VerifyPassword(ctx context.Context, userID, password string) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	if user.PasswordHash == nil || *user.PasswordHash == "" {
+		return fmt.Errorf("user has no password set")
+	}
+
+	if s.authService == nil {
+		return fmt.Errorf("auth service not configured")
+	}
+
+	return s.authService.VerifyPassword(password, *user.PasswordHash)
 }

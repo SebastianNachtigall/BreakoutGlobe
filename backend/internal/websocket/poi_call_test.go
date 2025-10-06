@@ -247,31 +247,34 @@ func (suite *POICallTestSuite) TestPOICallICECandidate() {
 	suite.mockSessionService.On("GetSession", mock.Anything, "session-user1").Return(session1, nil)
 	suite.mockSessionService.On("GetSession", mock.Anything, "session-user2").Return(session2, nil)
 	
-	// Connect both clients
+	// Connect first client
 	conn1, _, err := ws.DefaultDialer.Dial(suite.wsURL+"?sessionId=session-user1", nil)
 	suite.Require().NoError(err)
 	defer conn1.Close()
 	
-	conn2, _, err := ws.DefaultDialer.Dial(suite.wsURL+"?sessionId=session-user2", nil)
-	suite.Require().NoError(err)
-	defer conn2.Close()
-	
-	// Read welcome messages
-	var welcomeMsg1, welcomeMsg2 Message
+	// Read welcome and initial_users for conn1
+	var welcomeMsg1 Message
 	err = conn1.ReadJSON(&welcomeMsg1)
 	suite.Require().NoError(err)
 	suite.Require().Equal("welcome", welcomeMsg1.Type)
 	
-	err = conn2.ReadJSON(&welcomeMsg2)
-	suite.Require().NoError(err)
-	suite.Require().Equal("welcome", welcomeMsg2.Type)
-	
-	// Read initial_users messages (sent automatically)
-	var initialUsersMsg1, initialUsersMsg2 Message
+	var initialUsersMsg1 Message
 	err = conn1.ReadJSON(&initialUsersMsg1)
 	suite.Require().NoError(err)
 	suite.Require().Equal("initial_users", initialUsersMsg1.Type)
 	
+	// Connect second client
+	conn2, _, err := ws.DefaultDialer.Dial(suite.wsURL+"?sessionId=session-user2", nil)
+	suite.Require().NoError(err)
+	defer conn2.Close()
+	
+	// Read welcome and initial_users for conn2
+	var welcomeMsg2 Message
+	err = conn2.ReadJSON(&welcomeMsg2)
+	suite.Require().NoError(err)
+	suite.Require().Equal("welcome", welcomeMsg2.Type)
+	
+	var initialUsersMsg2 Message
 	err = conn2.ReadJSON(&initialUsersMsg2)
 	suite.Require().NoError(err)
 	suite.Require().Equal("initial_users", initialUsersMsg2.Type)

@@ -41,18 +41,27 @@ func NewSessionHandler(sessionService SessionServiceInterface, rateLimiter servi
 }
 
 // RegisterRoutes registers session-related routes
-func (h *SessionHandler) RegisterRoutes(router *gin.Engine) {
+// authMiddleware is optional - if provided, it will be applied to all session operations
+func (h *SessionHandler) RegisterRoutes(router *gin.Engine, authMiddleware ...gin.HandlerFunc) {
 	api := router.Group("/api")
 	{
-		// Session management
-		api.POST("/sessions", h.CreateSession)
-		api.GET("/sessions/:sessionId", h.GetSession)
-		api.PUT("/sessions/:sessionId/avatar", h.UpdateAvatarPosition)
-		api.POST("/sessions/:sessionId/heartbeat", h.SessionHeartbeat)
-		api.DELETE("/sessions/:sessionId", h.EndSession)
-		
-		// Map-related session queries
-		api.GET("/maps/:mapId/sessions", h.GetActiveSessionsForMap)
+		// Session management - all operations require authentication if middleware provided
+		if len(authMiddleware) > 0 {
+			api.POST("/sessions", append(authMiddleware, h.CreateSession)...)
+			api.GET("/sessions/:sessionId", append(authMiddleware, h.GetSession)...)
+			api.PUT("/sessions/:sessionId/avatar", append(authMiddleware, h.UpdateAvatarPosition)...)
+			api.POST("/sessions/:sessionId/heartbeat", append(authMiddleware, h.SessionHeartbeat)...)
+			api.DELETE("/sessions/:sessionId", append(authMiddleware, h.EndSession)...)
+			api.GET("/maps/:mapId/sessions", append(authMiddleware, h.GetActiveSessionsForMap)...)
+		} else {
+			// Fallback for backward compatibility (no auth)
+			api.POST("/sessions", h.CreateSession)
+			api.GET("/sessions/:sessionId", h.GetSession)
+			api.PUT("/sessions/:sessionId/avatar", h.UpdateAvatarPosition)
+			api.POST("/sessions/:sessionId/heartbeat", h.SessionHeartbeat)
+			api.DELETE("/sessions/:sessionId", h.EndSession)
+			api.GET("/maps/:mapId/sessions", h.GetActiveSessionsForMap)
+		}
 	}
 }
 

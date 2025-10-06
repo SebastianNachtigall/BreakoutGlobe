@@ -3,8 +3,10 @@ package database
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"breakoutglobe/internal/models"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +30,11 @@ func RunMigrations(db *gorm.DB) error {
 	// Create custom indexes
 	if err := CreateIndexes(db); err != nil {
 		return fmt.Errorf("failed to create indexes: %w", err)
+	}
+
+	// Create super admin account if it doesn't exist
+	if err := CreateSuperAdminIfNotExists(db); err != nil {
+		return fmt.Errorf("failed to create super admin: %w", err)
 	}
 
 	return nil
@@ -201,4 +208,59 @@ func GetMigrationStatus(db *gorm.DB) (map[string]bool, error) {
 	status["idx_maps_created_by"] = db.Migrator().HasIndex(&models.Map{}, "idx_maps_created_by")
 
 	return status, nil
+}
+
+
+// CreateSuperAdminIfNotExists creates the super admin account if it doesn't exist
+func CreateSuperAdminIfNotExists(db *gorm.DB) error {
+	if db == nil {
+		return fmt.Errorf("database connection is nil")
+	}
+
+	// Check if super admin already exists
+	var count int64
+	if err := db.Model(&models.User{}).Where("role = ?", models.UserRoleSuperAdmin).Count(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for super admin: %w", err)
+	}
+
+	// If super admin already exists, skip creation
+	if count > 0 {
+		log.Printf("ℹ️  Super admin account already exists")
+		return nil
+	}
+
+	// Get super admin credentials from environment
+	email := os.Getenv("SUPERADMIN_EMAIL")
+	password := os.Getenv("SUPERADMIN_PASSWORD")
+
+	if email == "" || password == "" {
+		log.Printf("⚠️  SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD not set, skipping super admin creation")
+		return nil
+	}
+
+	// Hash password
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return fmt.Errorf("failed to hash super admin password: %w", err)
+	}
+
+	// Create super admin user
+	passwordHashStr := string(passwordHash)
+	superAdmin := &models.User{
+		ID:           "superadmin",
+		Email:        &email,
+		DisplayName:  "Super Admin",
+		PasswordHash: &passwordHashStr,
+		AccountType:  models.AccountTypeFull,
+		Role:         models.UserRoleSuperAdmin,
+		IsActive:     true,
+	}
+
+	// Create super admin
+	if err := db.Create(superAdmin).Error; err != nil {
+		return fmt.Errorf("failed to create super admin: %w", err)
+	}
+
+	log.Printf("✅ Created super admin account: %s", email)
+	return nil
 }

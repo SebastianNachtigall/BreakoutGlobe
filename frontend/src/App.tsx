@@ -12,6 +12,8 @@ import { AvatarTooltip } from './components/AvatarTooltip'
 import ProfileCreationModal from './components/ProfileCreationModal'
 import ProfileMenu from './components/ProfileMenu'
 import WelcomeScreen from './components/WelcomeScreen'
+import SignupModal from './components/SignupModal'
+import LoginModal from './components/LoginModal'
 import { FeedbackModal } from './components/FeedbackModal'
 import { sessionStore } from './stores/sessionStore'
 import { poiStore } from './stores/poiStore'
@@ -19,6 +21,7 @@ import { errorStore } from './stores/errorStore'
 import { avatarStore } from './stores/avatarStore'
 import { videoCallStore, setWebSocketClient } from './stores/videoCallStore'
 import { toastStore } from './stores/toastStore'
+import { authStore } from './stores/authStore'
 import { WebSocketClient, ConnectionStatus as WSConnectionStatus } from './services/websocket-client'
 import { SessionService } from './services/session-service'
 import { getCurrentUserProfile, createPOI, transformToCreatePOIRequest, transformFromPOIResponse, joinPOI, leavePOI, deletePOI, getPOIs, clearAllPOIs, clearAllUsers } from './services/api'
@@ -70,6 +73,10 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(false)
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
+  
+  // Auth modal state
+  const [showSignup, setShowSignup] = useState(false)
+  const [showLogin, setShowLogin] = useState(false)
   
   // Feedback modal state
   const [showFeedback, setShowFeedback] = useState(false)
@@ -1139,6 +1146,40 @@ function App() {
         <WelcomeScreen
           isOpen={true}
           onGetStarted={handleGetStarted}
+          onCreateProfile={handleGetStarted}
+          onSignup={() => setShowSignup(true)}
+          onLogin={() => setShowLogin(true)}
+        />
+        
+        {/* Auth Modals */}
+        <SignupModal
+          isOpen={showSignup}
+          onClose={() => setShowSignup(false)}
+          onSignup={async (data) => {
+            await authStore.getState().signup(data);
+            setShowSignup(false);
+            setShowWelcome(false);
+            // Profile will be loaded from auth store
+          }}
+          onSwitchToLogin={() => {
+            setShowSignup(false);
+            setShowLogin(true);
+          }}
+        />
+        
+        <LoginModal
+          isOpen={showLogin}
+          onClose={() => setShowLogin(false)}
+          onLogin={async (email, password) => {
+            await authStore.getState().login(email, password);
+            setShowLogin(false);
+            setShowWelcome(false);
+            // Profile will be loaded from auth store
+          }}
+          onSwitchToSignup={() => {
+            setShowLogin(false);
+            setShowSignup(true);
+          }}
         />
       </ErrorBoundary>
     )

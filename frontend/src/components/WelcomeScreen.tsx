@@ -2,10 +2,13 @@ import React from 'react';
 
 interface WelcomeScreenProps {
   isOpen: boolean;
-  onGetStarted: () => void;
+  onGetStarted?: () => void;
+  onCreateProfile: () => void;
+  onSignup?: () => void;
+  onLogin?: () => void;
 }
 
-const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted }) => {
+const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted, onCreateProfile, onSignup, onLogin }) => {
   if (!isOpen) {
     return null;
   }
@@ -38,13 +41,46 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ isOpen, onGetStarted }) =
             </p>
           </div>
 
-          {/* Get Started Button - Mobile optimized */}
-          <button
-            onClick={onGetStarted}
-            className="w-full bg-blue-600 text-white text-base sm:text-lg font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-lg touch-manipulation"
-          >
-            Get Started
-          </button>
+          {/* Authentication Options - Mobile optimized */}
+          <div className="space-y-3 sm:space-y-4">
+            {/* Primary: Create Full Account */}
+            {onSignup && (
+              <button
+                onClick={onSignup}
+                className="w-full bg-blue-600 text-white text-base sm:text-lg font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-lg touch-manipulation"
+              >
+                Create Full Account
+              </button>
+            )}
+            
+            {/* Secondary: Login */}
+            {onLogin && (
+              <button
+                onClick={onLogin}
+                className="w-full bg-gray-600 text-white text-base sm:text-lg font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl hover:bg-gray-700 active:bg-gray-800 transition-colors duration-200 shadow-lg touch-manipulation"
+              >
+                Login
+              </button>
+            )}
+            
+            {/* Tertiary: Continue as Guest */}
+            <button
+              onClick={onCreateProfile}
+              className="w-full border-2 border-gray-300 text-gray-700 text-base sm:text-lg font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl hover:bg-gray-50 active:bg-gray-100 transition-colors duration-200 touch-manipulation"
+            >
+              Continue as Guest
+            </button>
+            
+            {/* Fallback for old onGetStarted prop */}
+            {!onSignup && !onLogin && onGetStarted && (
+              <button
+                onClick={onGetStarted}
+                className="w-full bg-blue-600 text-white text-base sm:text-lg font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-lg sm:rounded-xl hover:bg-blue-700 active:bg-blue-800 transition-colors duration-200 shadow-lg touch-manipulation"
+              >
+                Get Started
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

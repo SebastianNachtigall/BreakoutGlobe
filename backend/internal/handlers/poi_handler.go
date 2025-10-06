@@ -57,20 +57,32 @@ func NewPOIHandler(poiService POIServiceInterface, userService POIUserServiceInt
 }
 
 // RegisterRoutes registers POI-related routes
-func (h *POIHandler) RegisterRoutes(router *gin.Engine) {
+// authMiddleware is optional - if provided, it will be applied to write operations
+func (h *POIHandler) RegisterRoutes(router *gin.Engine, authMiddleware ...gin.HandlerFunc) {
 	api := router.Group("/api")
 	{
-		// POI management
+		// POI management - read operations are public
 		api.GET("/pois", h.GetPOIs)
-		api.POST("/pois", h.CreatePOI)
 		api.GET("/pois/:poiId", h.GetPOI)
-		api.PUT("/pois/:poiId", h.UpdatePOI)
-		api.DELETE("/pois/:poiId", h.DeletePOI)
-		
-		// POI participation
-		api.POST("/pois/:poiId/join", h.JoinPOI)
-		api.POST("/pois/:poiId/leave", h.LeavePOI)
 		api.GET("/pois/:poiId/participants", h.GetPOIParticipants)
+		
+		// POI management - write operations require authentication
+		if len(authMiddleware) > 0 {
+			api.POST("/pois", append(authMiddleware, h.CreatePOI)...)
+			api.PUT("/pois/:poiId", append(authMiddleware, h.UpdatePOI)...)
+			api.DELETE("/pois/:poiId", append(authMiddleware, h.DeletePOI)...)
+			
+			// POI participation requires authentication
+			api.POST("/pois/:poiId/join", append(authMiddleware, h.JoinPOI)...)
+			api.POST("/pois/:poiId/leave", append(authMiddleware, h.LeavePOI)...)
+		} else {
+			// Fallback for backward compatibility (no auth)
+			api.POST("/pois", h.CreatePOI)
+			api.PUT("/pois/:poiId", h.UpdatePOI)
+			api.DELETE("/pois/:poiId", h.DeletePOI)
+			api.POST("/pois/:poiId/join", h.JoinPOI)
+			api.POST("/pois/:poiId/leave", h.LeavePOI)
+		}
 		
 		// Development endpoints (TODO: Remove in production)
 		api.DELETE("/pois/dev/clear-all", h.ClearAllPOIs)

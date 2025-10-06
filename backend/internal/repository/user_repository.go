@@ -51,6 +51,23 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*models.User, 
 	return &user, nil
 }
 
+// GetByEmail retrieves a user by their email address
+func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
+	if email == "" {
+		return nil, fmt.Errorf("email cannot be empty")
+	}
+
+	var user models.User
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+	return &user, nil
+}
+
 // Update updates an existing user in the database
 func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 	if user == nil {

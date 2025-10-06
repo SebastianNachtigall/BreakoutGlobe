@@ -458,6 +458,14 @@ func (m *MockUserRepository) ClearAllUsers(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockUserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.User), args.Error(1)
+}
+
 func TestUserService_CreateGuestProfile_WithAboutMe(t *testing.T) {
 	// This test demonstrates the current limitation - aboutMe is not supported
 	// Following TDD, this test should fail first, then we implement the feature

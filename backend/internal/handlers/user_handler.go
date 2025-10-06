@@ -39,14 +39,24 @@ func NewUserHandler(userService UserServiceInterface, rateLimiter services.RateL
 }
 
 // RegisterRoutes registers user-related routes
-func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
+// authMiddleware is optional - if provided, it will be applied to profile updates
+func (h *UserHandler) RegisterRoutes(router *gin.Engine, authMiddleware ...gin.HandlerFunc) {
 	api := router.Group("/api")
 	{
 		// User profile management
+		// Guest profile creation is public (no auth required)
 		api.POST("/users/profile", h.CreateProfile)
 		api.GET("/users/profile", h.GetProfile)
-		api.PUT("/users/profile", h.UpdateProfile)
-		api.POST("/users/avatar", h.UploadAvatar)
+		
+		// Profile updates and avatar uploads require authentication
+		if len(authMiddleware) > 0 {
+			api.PUT("/users/profile", append(authMiddleware, h.UpdateProfile)...)
+			api.POST("/users/avatar", append(authMiddleware, h.UploadAvatar)...)
+		} else {
+			// Fallback for backward compatibility (no auth)
+			api.PUT("/users/profile", h.UpdateProfile)
+			api.POST("/users/avatar", h.UploadAvatar)
+		}
 		
 		// Development endpoints (TODO: Remove in production)
 		api.DELETE("/users/dev/clear-all", h.ClearAllUsers)

@@ -20,6 +20,7 @@ import (
 	"breakoutglobe/internal/config"
 	"breakoutglobe/internal/database"
 	"breakoutglobe/internal/handlers"
+	"breakoutglobe/internal/middleware"
 	"breakoutglobe/internal/redis"
 	"breakoutglobe/internal/repository"
 	"breakoutglobe/internal/services"
@@ -36,6 +37,8 @@ type Server struct {
 	poiService *services.POIService
 	// Shared rate limiter for all handlers
 	rateLimiter services.RateLimiterInterface
+	// Auth service for middleware
+	authService *services.AuthService
 }
 
 func New(cfg *config.Config) *Server {
@@ -128,6 +131,9 @@ func (s *Server) setupRoutes() {
 			})
 		})
 		
+		// Setup authentication routes
+		s.setupAuthRoutes(api)
+		
 		// Setup session routes with proper handlers
 		s.setupSessionRoutes(api)
 		
@@ -168,13 +174,70 @@ func (s *Server) setupSessionRoutes(api *gin.RouterGroup) {
 		// Create session handler with shared rate limiter
 		sessionHandler := handlers.NewSessionHandler(sessionService, s.rateLimiter)
 		
-		// Register session routes (this includes the heartbeat endpoint)
-		sessionHandler.RegisterRoutes(s.router)
+		// Create auth middleware if auth service is available
+		var authMiddleware gin.HandlerFunc
+		if s.authService != nil {
+			authMiddleware = middleware.OptionalAuth(s.authService)
+			log.Println("✅ Session routes will use optional authentication")
+		}
+		
+		// Register session routes with optional auth middleware
+		if authMiddleware != nil {
+			sessionHandler.RegisterRoutes(s.router, authMiddleware)
+		} else {
+			sessionHandler.RegisterRoutes(s.router)
+		}
 		
 		log.Println("✅ Session routes setup complete with proper handlers including heartbeat")
 	} else {
 		log.Println("⚠️ Database or Redis not available, session endpoints not available in test mode")
 		// No fallback handlers - proper service-backed handlers only
+	}
+}
+
+func (s *Server) setupAuthRoutes(api *gin.RouterGroup) {
+	log.Printf("🔧 setupAuthRoutes called, db is nil: %v", s.db == nil)
+	
+	// Only setup auth routes if database is available (not in test mode)
+	if s.db != nil {
+		log.Println("📊 Database available, setting up authentication routes")
+		
+		// Setup dependencies
+		userRepo := repository.NewUserRepository(s.db)
+		
+		// Initialize storage configuration
+		storageConfig := storage.GetStorageConfig()
+		fileStorage := storage.NewFileStorage(storageConfig)
+		
+		// Create user service
+		userService := services.NewUserService(userRepo, fileStorage)
+		
+		// Create auth service
+		jwtExpiry, err := time.ParseDuration(s.config.JWTExpiry)
+		if err != nil {
+			log.Printf("⚠️  Invalid JWT_EXPIRY, using default 24h: %v", err)
+			jwtExpiry = 24 * time.Hour
+		}
+		s.authService = services.NewAuthService(s.config.JWTSecret, jwtExpiry)
+		
+		// Link auth service to user service for password operations
+		userService.SetAuthService(s.authService)
+		
+		// Create auth handler
+		authHandler := handlers.NewAuthHandler(s.authService, userService, s.rateLimiter)
+		
+		// Register auth routes
+		auth := api.Group("/auth")
+		{
+			auth.POST("/signup", authHandler.Signup)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+			// Note: /auth/me will be added with middleware in next step
+		}
+		
+		log.Println("✅ Authentication routes setup complete")
+	} else {
+		log.Println("⚠️ Database not available, auth endpoints not available in test mode")
 	}
 }
 
@@ -213,8 +276,19 @@ func (s *Server) setupUserRoutes(api *gin.RouterGroup) {
 		// Use the shared rate limiter instance
 		userHandler := handlers.NewUserHandler(userService, s.rateLimiter)
 		
-		// Register user routes
-		userHandler.RegisterRoutes(s.router)
+		// Create auth middleware if auth service is available
+		var authMiddleware gin.HandlerFunc
+		if s.authService != nil {
+			authMiddleware = middleware.OptionalAuth(s.authService)
+			log.Println("✅ User routes will use optional authentication for profile updates")
+		}
+		
+		// Register user routes with optional auth middleware
+		if authMiddleware != nil {
+			userHandler.RegisterRoutes(s.router, authMiddleware)
+		} else {
+			userHandler.RegisterRoutes(s.router)
+		}
 		
 		// Setup WebSocket handler for multi-user functionality
 		s.setupWebSocketHandler(userService, s.rateLimiter, s.poiService)
@@ -256,8 +330,19 @@ func (s *Server) setupPOIRoutes(api *gin.RouterGroup) {
 		// Create POI handler with user service for participant names
 		poiHandler := handlers.NewPOIHandler(s.poiService, userService, s.rateLimiter)
 		
-		// Register POI routes
-		poiHandler.RegisterRoutes(s.router)
+		// Create auth middleware if auth service is available
+		var authMiddleware gin.HandlerFunc
+		if s.authService != nil {
+			authMiddleware = middleware.OptionalAuth(s.authService)
+			log.Println("✅ POI routes will use optional authentication for write operations")
+		}
+		
+		// Register POI routes with optional auth middleware
+		if authMiddleware != nil {
+			poiHandler.RegisterRoutes(s.router, authMiddleware)
+		} else {
+			poiHandler.RegisterRoutes(s.router)
+		}
 		
 		log.Println("✅ POI routes setup complete with database-backed handlers")
 	} else {
