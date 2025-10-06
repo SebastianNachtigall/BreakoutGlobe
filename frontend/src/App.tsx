@@ -74,6 +74,21 @@ function App() {
   const [showProfileCreation, setShowProfileCreation] = useState(false)
   const [profileCheckComplete, setProfileCheckComplete] = useState(false)
   
+  // Subscribe to profile changes from the store
+  useEffect(() => {
+    const unsubscribe = userProfileStore.subscribe((state) => {
+      if (state.profile) {
+        console.log('🔄 App: Profile updated from store:', {
+          displayName: state.profile.displayName,
+          avatarURL: state.profile.avatarURL,
+          fullProfile: state.profile
+        });
+        setUserProfile(state.profile);
+      }
+    });
+    return unsubscribe;
+  }, [])
+  
   // Auth modal state
   const [showSignup, setShowSignup] = useState(false)
   const [showLogin, setShowLogin] = useState(false)
@@ -108,18 +123,44 @@ function App() {
         const authUser = authStore.getState().user;
         if (authUser) {
           console.info('✅ Authenticated user found:', authUser.displayName);
-          // Convert auth user to profile format
-          const profile: UserProfile = {
-            id: authUser.id,
-            displayName: authUser.displayName,
-            email: authUser.email,
-            avatarURL: authUser.avatarUrl,
-            aboutMe: authUser.aboutMe,
-            createdAt: new Date(authUser.createdAt),
-            updatedAt: new Date(authUser.createdAt),
-          };
-          userProfileStore.getState().setProfile(profile);
-          setUserProfile(profile);
+          
+          // Fetch the full profile from backend to get latest data (including avatar)
+          try {
+            const backendProfile = await getCurrentUserProfile(authUser.id);
+            if (backendProfile) {
+              console.info('✅ Full profile loaded from backend with avatar:', backendProfile.avatarURL);
+              userProfileStore.getState().setProfile(backendProfile);
+              setUserProfile(backendProfile);
+            } else {
+              // Fallback to auth user data if backend fetch fails
+              const profile: UserProfile = {
+                id: authUser.id,
+                displayName: authUser.displayName,
+                email: authUser.email,
+                avatarURL: authUser.avatarUrl,
+                aboutMe: authUser.aboutMe,
+                createdAt: new Date(authUser.createdAt),
+                updatedAt: new Date(authUser.createdAt),
+              };
+              userProfileStore.getState().setProfile(profile);
+              setUserProfile(profile);
+            }
+          } catch (error) {
+            console.warn('Failed to fetch full profile from backend, using auth data:', error);
+            // Fallback to auth user data
+            const profile: UserProfile = {
+              id: authUser.id,
+              displayName: authUser.displayName,
+              email: authUser.email,
+              avatarURL: authUser.avatarUrl,
+              aboutMe: authUser.aboutMe,
+              createdAt: new Date(authUser.createdAt),
+              updatedAt: new Date(authUser.createdAt),
+            };
+            userProfileStore.getState().setProfile(profile);
+            setUserProfile(profile);
+          }
+          
           setProfileCheckComplete(true);
           // Continue with session initialization
         } else {
@@ -970,6 +1011,8 @@ function App() {
   // Convert session state to avatar data for MapContainer
   // CRITICAL: Memoize avatars array to prevent unnecessary re-renders and marker recreation
   const avatars: AvatarData[] = useMemo(() => {
+    console.log('🎯 App: Recalculating avatars array, userProfile.avatarURL:', userProfile?.avatarURL);
+    
     const currentUserAvatar: AvatarData = {
       sessionId: sessionState.sessionId || 'current-user',
       userId: userProfile?.id,
@@ -980,6 +1023,8 @@ function App() {
       isMoving: sessionState.isMoving,
       role: userProfile?.role
     };
+    
+    console.log('👤 App: Current user avatar:', currentUserAvatar);
 
     // Get other users' avatars from avatarStore
     const otherUsersAvatars = avatarState.getAvatarsForCurrentMap();
@@ -1181,9 +1226,8 @@ function App() {
           onClose={() => setShowSignup(false)}
           onSignup={async (data) => {
             await authStore.getState().signup(data);
-            setShowSignup(false);
-            setShowWelcome(false);
-            // Profile will be loaded from auth store
+            // Reload page to trigger full initialization with new auth state
+            window.location.reload();
           }}
           onSwitchToLogin={() => {
             setShowSignup(false);
@@ -1196,9 +1240,8 @@ function App() {
           onClose={() => setShowLogin(false)}
           onLogin={async (email, password) => {
             await authStore.getState().login(email, password);
-            setShowLogin(false);
-            setShowWelcome(false);
-            // Profile will be loaded from auth store
+            // Reload page to trigger full initialization with new auth state
+            window.location.reload();
           }}
           onSwitchToSignup={() => {
             setShowLogin(false);

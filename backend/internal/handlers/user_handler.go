@@ -180,8 +180,14 @@ func (h *UserHandler) CreateProfile(c *gin.Context) {
 
 // UploadAvatar handles POST /api/users/avatar
 func (h *UserHandler) UploadAvatar(c *gin.Context) {
-	// Get user ID from header (temporary - will be from auth middleware later)
-	userID := c.GetHeader("X-User-ID")
+	// Get user ID from context (set by auth middleware) or header (for guest users)
+	var userID string
+	if contextUserID, exists := c.Get("userID"); exists {
+		userID = contextUserID.(string)
+	} else {
+		userID = c.GetHeader("X-User-ID")
+	}
+	
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    "UNAUTHORIZED",
@@ -279,6 +285,7 @@ func (h *UserHandler) UploadAvatar(c *gin.Context) {
 		IsActive:    user.IsActive,
 		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
 		AvatarURL:   stringPtrToString(user.AvatarURL),
+		AboutMe:     user.AboutMe,
 	}
 	
 	c.JSON(http.StatusOK, response)
@@ -334,8 +341,14 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 
 // UpdateProfile handles PUT /api/users/profile
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
-	// Get user ID from header (temporary - will be from auth middleware later)
-	userID := c.GetHeader("X-User-ID")
+	// Get user ID from context (set by auth middleware) or header (for guest users)
+	var userID string
+	if contextUserID, exists := c.Get("userID"); exists {
+		userID = contextUserID.(string)
+	} else {
+		userID = c.GetHeader("X-User-ID")
+	}
+	
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    "UNAUTHORIZED",

@@ -104,7 +104,11 @@ const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({ isOpen, onC
         setIsUploadingAvatar(true);
         try {
           const updatedProfileWithAvatar = await uploadAvatar(avatarFile, profile.id);
+          console.log('✅ Avatar upload response:', updatedProfileWithAvatar);
+          console.log('🔍 Avatar URL in response:', updatedProfileWithAvatar.avatarURL);
+          console.log('📞 Calling setProfile with:', updatedProfileWithAvatar);
           setProfile(updatedProfileWithAvatar);
+          console.log('✅ setProfile called successfully');
           setAvatarFile(null); // Clear the pending avatar file
         } catch (avatarError) {
           console.error('Avatar upload failed:', avatarError);

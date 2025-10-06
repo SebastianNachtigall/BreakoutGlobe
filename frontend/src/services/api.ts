@@ -176,8 +176,12 @@ export async function updateUserProfile(updates: Partial<Pick<UserProfile, 'disp
     'Content-Type': 'application/json',
   };
   
-  // Add user ID header if provided
-  if (userID) {
+  // Check for JWT token first (for full account users)
+  const authToken = localStorage.getItem('authToken');
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  } else if (userID) {
+    // Fallback to X-User-ID header for guest users
     headers['X-User-ID'] = userID;
   }
 
@@ -198,8 +202,12 @@ export async function uploadAvatar(avatarFile: File, userId?: string): Promise<U
 
   const headers: Record<string, string> = {};
   
-  // Add user ID header if provided
-  if (userId) {
+  // Check for JWT token first (for full account users)
+  const authToken = localStorage.getItem('authToken');
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  } else if (userId) {
+    // Fallback to X-User-ID header for guest users
     headers['X-User-ID'] = userId;
   }
 
@@ -211,7 +219,10 @@ export async function uploadAvatar(avatarFile: File, userId?: string): Promise<U
   });
 
   const apiProfile = await handleResponse<UserProfileAPI>(response);
-  return transformUserProfileFromAPI(apiProfile);
+  console.log('📦 API: Raw avatar upload response:', apiProfile);
+  const transformed = transformUserProfileFromAPI(apiProfile);
+  console.log('🔄 API: Transformed avatar upload response:', transformed);
+  return transformed;
 }
 
 // POI API Functions

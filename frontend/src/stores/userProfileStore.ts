@@ -56,6 +56,7 @@ export const userProfileStore = create<UserProfileState>((set, get) => ({
       displayName: profile.displayName,
       aboutMe: profile.aboutMe,
       aboutMeType: typeof profile.aboutMe,
+      avatarURL: profile.avatarURL,
     });
     
     set({

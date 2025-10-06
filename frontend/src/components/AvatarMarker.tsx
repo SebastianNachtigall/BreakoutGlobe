@@ -67,7 +67,11 @@ export const AvatarMarker: React.FC<AvatarMarkerProps> = ({ avatar, onAvatarClic
           src={avatar.avatarURL}
           alt={avatar.displayName || avatar.sessionId}
           className="w-full h-full object-cover rounded-full"
+          onLoad={() => {
+            console.log('✅ AvatarMarker: Image loaded successfully:', avatar.avatarURL);
+          }}
           onError={(e) => {
+            console.error('❌ AvatarMarker: Image failed to load:', avatar.avatarURL);
             // Fallback to initials if image fails to load
             const target = e.target as HTMLImageElement;
             target.style.display = 'none';

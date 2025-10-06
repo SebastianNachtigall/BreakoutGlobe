@@ -34,6 +34,33 @@ export const AvatarImageUpload: React.FC<AvatarImageUploadProps> = ({
     error: null,
   });
 
+  // Log when currentAvatarUrl changes and clear preview if upload was successful
+  useEffect(() => {
+    console.log('🖼️ AvatarImageUpload: currentAvatarUrl changed:', currentAvatarUrl);
+    
+    // If currentAvatarUrl changed and we have a preview, it means the upload was successful
+    // Clear the preview state to show the uploaded avatar
+    if (currentAvatarUrl && state.previewUrl) {
+      console.log('✅ AvatarImageUpload: Upload successful, clearing preview state');
+      if (state.previewUrl) {
+        cleanupImagePreviewUrl(state.previewUrl);
+      }
+      setState({
+        selectedFile: null,
+        originalFile: null,
+        previewUrl: null,
+        isProcessing: false,
+        showCropEditor: false,
+        cropData: null,
+        error: null,
+      });
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [currentAvatarUrl]);
+
   // Cleanup preview URLs on unmount
   useEffect(() => {
     return () => {
