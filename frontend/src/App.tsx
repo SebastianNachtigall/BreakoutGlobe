@@ -101,13 +101,35 @@ function App() {
 
     const initializeApp = async () => {
       try {
-        // Check if user has a profile first - try localStorage first, then backend
-        let profile = userProfileStore.getState().getProfileOffline()
+        // Load auth from localStorage first
+        authStore.getState().loadAuthFromStorage();
+        
+        // First, check if user is authenticated via authStore (full account)
+        const authUser = authStore.getState().user;
+        if (authUser) {
+          console.info('✅ Authenticated user found:', authUser.displayName);
+          // Convert auth user to profile format
+          const profile: UserProfile = {
+            id: authUser.id,
+            displayName: authUser.displayName,
+            email: authUser.email,
+            avatarURL: authUser.avatarUrl,
+            aboutMe: authUser.aboutMe,
+            createdAt: new Date(authUser.createdAt),
+            updatedAt: new Date(authUser.createdAt),
+          };
+          userProfileStore.getState().setProfile(profile);
+          setUserProfile(profile);
+          setProfileCheckComplete(true);
+          // Continue with session initialization
+        } else {
+          // Check if user has a profile first - try localStorage first, then backend
+          let profile = userProfileStore.getState().getProfileOffline()
 
-        if (profile) {
-          console.info('✅ User profile loaded from localStorage:', profile.displayName)
-          setUserProfile(profile)
-          setProfileCheckComplete(true)
+          if (profile) {
+            console.info('✅ User profile loaded from localStorage:', profile.displayName)
+            setUserProfile(profile)
+            setProfileCheckComplete(true)
 
           // Try to sync with backend in the background (don't block UI)
           try {
@@ -163,6 +185,7 @@ function App() {
             return // Don't continue initialization until profile is created
           }
         }
+        } // End of authUser check
 
         // Create or restore session
         let sessionId = sessionState.sessionId
